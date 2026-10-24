@@ -49,4 +49,4 @@ export const ELITE = { hp: 3, speed: 1.1, contact: 1.5, scrap: 4, rifleSpreadSho
 
 /** design.md 13.5: px pushed back per player bullet hit. */
 export const KNOCKBACK_PX = 4;
-export const ENEMY_BULLET_RADIUS = 4; // design.md 15.1: 1 px bigger, drawn with a dark outline
+export const ENEMY_BULLET_RADIUS = 3; // goes to 4 with the outlined 8x8 sprite once Esteban okays it

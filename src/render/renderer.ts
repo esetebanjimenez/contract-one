@@ -74,7 +74,6 @@ export class Renderer {
   private tex = {} as Record<ArtId, Texture>;
   private eliteTex = {} as Record<string, Texture>;
   private flashTex = {} as Record<string, Texture>;
-  private enemyBulletTex!: Texture;
   private ground!: TilingSprite;
   private world = new Container();
   private pickups!: Pool;
@@ -100,7 +99,6 @@ export class Renderer {
       t.source.scaleMode = 'nearest';
       this.tex[id] = t;
     }
-    this.enemyBulletTex = outlined(this.tex.bullet_enemy_00, '#1a0d08');
     const enemyArt = new Set<ArtId>([...Object.values(ENEMY_ART), ...Object.values(ENEMY_WALK).flatMap((a) => a.frames)]);
     for (const id of enemyArt) {
       this.eliteTex[id] = outlined(this.tex[id], BONE_WHITE);
@@ -182,7 +180,7 @@ export class Renderer {
     });
     this.enemies.hideFrom(w.enemies.length);
 
-    w.enemyBullets.forEach((b, i) => this.enemyBullets.get(i, this.enemyBulletTex).position.set(Math.round(b.x), Math.round(b.y)));
+    w.enemyBullets.forEach((b, i) => this.enemyBullets.get(i, this.tex.bullet_enemy_00).position.set(Math.round(b.x), Math.round(b.y)));
     this.enemyBullets.hideFrom(w.enemyBullets.length);
     w.bullets.forEach((b, i) => this.bullets.get(i, this.tex.bullet_player_00).position.set(Math.round(b.x), Math.round(b.y)));
     this.bullets.hideFrom(w.bullets.length);
