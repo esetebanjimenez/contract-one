@@ -441,3 +441,24 @@ A standing rule for every weapon we add from here on. Each extra weapon is one o
 **Sim:** the PR touches `src/data/`, so the sim table posts itself. Drones get much stronger with gun builds. If kite-smart's boss HP or fights move a lot, the first lever is drone base damage (5), not the rule.
 
 **Art:** a FAST HANDS icon (Artist, for Esteban's okay). Drones firing multishot use the gun's spread pattern, so no new effects are needed.
+
+### 16.10 Damage numbers (Esteban, 2026-10-24)
+Looks only. Damage, crit rolls and the sim are unchanged.
+
+**What gets a number:** every hit that deals damage to an enemy or the boss. That covers gun bullets (including ricochet and pierce hits), drone bullets, HE explosions and FRAG OUT grenades. Enemy damage to the player does not get a number (the player's hit flash stays as it is).
+
+**Look:**
+- Shown as a whole number, rounded (never 0; minimum 1). Over 9,999 shows as "10.2k".
+- Spawns above the enemy's head with a small random sideways offset (±6px), rises about 16px and fades out over 0.6s.
+- **Normal:** white.
+- **Crit:** 1.5× size, a short pop (scale 1.3 → 1.0 over the first 0.1s), a "!" after the number, and a crit colour the Artist picks. It must not be red-orange (enemy danger), cyan (Scrap) or pale yellow (player and drone bullets). Gold or amber is the suggestion.
+- Drawn above enemies and effects, below the HUD.
+
+**Clutter rules:**
+1. **Merge:** hits on the same enemy within 0.15s add into one number instead of spawning new ones. The live number updates and restarts its fade. A merged number is a crit if any hit in it was a crit.
+2. **Cap:** at most 40 numbers on screen. When full, the oldest is removed first.
+3. **Boss:** the same rules, with a separate merge window of 0.25s so a boss under heavy fire shows a steady rolling total rather than a stream.
+4. **Area hits:** an HE or grenade blast that hits many enemies gives each enemy its own number, still under the merge and cap rules.
+
+**Done when:** a busy late-run fight with HE and drones stays readable in the CI screenshot, and normal and crit hits are easy to tell apart at a glance.
+
