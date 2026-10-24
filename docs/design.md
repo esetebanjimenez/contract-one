@@ -137,12 +137,17 @@ When enemies are at the cap, each new spawn replaces the **farthest Grunt** with
 
 Ranged cap: at most 30 Riflemen alive, so bullets stay readable.
 
+Replacement order at the cap: the farthest off-screen non-elite Grunt first; if none, the farthest off-screen non-elite enemy of any type. Spawning never stops at the cap.
+
 ### 12.3 Pressure waves (from §6) become the spike
-Every 60 s: a 5 s burst from one direction, which may exceed the cap by up to 40 for its duration. From 5:00, the ring includes Heavies.
+Every 60 s: a 5 s burst, which may exceed the cap by up to 40 for its duration. From 5:00, the ring includes Heavies.
+- **Anti-flee:** the burst spawns in a 90° arc **centred on the player's current move direction** (ahead of them). If the player is standing still, the direction is random.
+- **Encirclement:** from 3:00, every second wave (3:00, 5:00, 7:00, 9:00) is a **full ring** of Grunts spawned just off-screen all around the player. The player must break through it, not outrun it.
 
 ### 12.4 M2 tuning targets
-- Kite bot (random perks) reaches 10:00 in **60–80%** of runs; kite-smart in **80–95%**.
-- Median level at 10:00 for kite-smart: 22–30.
+- **Reference bot = collector** (fights and collects, the way real players play): reaches 10:00 in **60–80%** of runs.
+- **Exploit check = kite / kite-smart** (pure fleeing): must reach 10:00 in **≤50%** of runs. Pure running away should not be a winning strategy.
+- Median level at 10:00 for the collector: 25–35.
 - Idle still dies before 2:00.
 - Scrap collected ≥70% for a **collector** bot (kites in small loops, sweeps back through drops). Judge this value only with that bot; a wide-circling bot is not the reference.
 
