@@ -286,7 +286,7 @@ Tier odds by player level (Common / Rare / Epic / Mythic):
 | 16+ | 40 / 33 / 20 / 7 |
 
 - The card shows the tier name above the perk name and the scaled value ("Hollow Points — Epic — +30% damage").
-- The attack, defence and utility category moves from the border to a small corner mark on the icon tile.
+- Tier colour goes on the card frame and title bar (approved: Common `#9AA0A6`, Rare `#3D6BFF`, Epic `#A44DFF`, Mythic `#FFC233` with a slow twinkle). The attack, defence and utility category stays as the coloured border on the icon tile (approved by Esteban).
 - Later: `explosive`, `drone` and `grenade` can enter as Mythic-only perks.
 
 ### 15.3 Scrap persistence
