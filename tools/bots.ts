@@ -173,7 +173,7 @@ export interface RunResult {
   bot: Bot;
   survivedSec: number;
   reachedBoss: boolean;
-  levelAt10: number; // level when the contract timer hit 10:00 (or at death before it)
+  levelAtBoss: number; // level when the contract timer hit 0 (5:00) (or at death before it)
   bossKilled: boolean;
   fightSec: number; // arrival to kill, or to death/timeout
   bossHp: number; // Warlord HP at spawn (0 if he never came)
@@ -192,9 +192,9 @@ export function runBot(seed: number, bot: Bot, maxSec = RUN.contractSec + 60 + R
   const w = createWorld(seed);
   const maxTicks = Math.round(maxSec / DT);
   const t0 = performance.now();
-  let levelAt10 = 0;
+  let levelAtBoss = 0;
   while (w.tick < maxTicks && w.phase !== 'dead' && !w.won) {
-    if (w.time < RUN.contractSec) levelAt10 = w.level;
+    if (w.time < RUN.contractSec) levelAtBoss = w.level;
     if (w.phase === 'levelup') {
       pick(w, bot);
       continue;
@@ -207,7 +207,7 @@ export function runBot(seed: number, bot: Bot, maxSec = RUN.contractSec + 60 + R
     bot,
     survivedSec: w.time,
     reachedBoss: w.time >= RUN.contractSec,
-    levelAt10,
+    levelAtBoss,
     bossKilled: w.won,
     bossHp: w.boss ? w.boss.maxHp : 0,
     bossDamage: w.bossDamage,

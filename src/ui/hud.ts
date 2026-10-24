@@ -56,7 +56,7 @@ export class Hud {
     this.banner.className = `banner ${cls}`;
   }
 
-  /** Contract timer before 10:00, then the Warlord's HP bar; banners for inbound, warning, win and KIA. */
+  /** Contract timer before 5:00, then the Warlord's HP bar; banners for inbound, warning, win and KIA. */
   private updateContract(w: World, outroSec: number): void {
     const left = RUN.contractSec - w.time;
     const boss = w.boss;

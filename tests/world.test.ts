@@ -244,14 +244,14 @@ describe('sim', () => {
   it('keeps at most 30 Riflemen and replaces Grunts at the cap late in the run', () => {
     const w = createWorld(9);
     w.player.hp = w.stats.maxHp = 1e9;
-    w.tick = 540 * 60;
+    w.tick = 240 * 60;
     for (let i = 0; i < 1800; i++) step(w, { mx: 0, my: 0 });
     expect(riflemenAlive(w)).toBeLessThanOrEqual(SPAWN.maxRiflemen);
     expect(w.enemies.some((e) => e.elite)).toBe(true);
     expect(w.enemies.some((e) => e.def.id === 'heavy')).toBe(true);
   });
-  it('makes every second wave from 3:00 a full ring', () => {
-    expect([120, 180, 240, 300, 420, 540].map((t) => isRingWave(t + 1))).toEqual([false, true, false, true, true, true]);
+  it('makes every second wave from 2:00 a full ring (2:00 and 4:00)', () => {
+    expect([60, 120, 180, 240].map((t) => isRingWave(t + 1))).toEqual([false, true, false, true]);
   });
 });
 
@@ -275,14 +275,14 @@ describe('M3 contract', () => {
     expect(bossHp({ damage: 20, fireRate: 10, projectiles: 4, crit: 0.5 }, 2)).toBe(40 * 20 * 10 * 2.5 * 1.5);
     expect(bossHp({ damage: 1000, fireRate: 10, projectiles: 10, crit: 1 }, 2)).toBe(40 * 1000 * 10 * 5.5 * 2);
   });
-  it('stops pressure waves from 9:30', () => {
-    expect(inPressureWave(541)).toBe(true);
-    expect(inPressureWave(571)).toBe(false);
-    expect(inPressureWave(661)).toBe(false);
+  it('stops pressure waves from 4:30', () => {
+    expect(inPressureWave(241)).toBe(true);
+    expect(inPressureWave(271)).toBe(false);
+    expect(inPressureWave(301)).toBe(false);
   });
   it('spawns the Warlord after the 3 s warning, off-screen and undamageable until he is in view', () => {
     const w = godMode(3);
-    w.tick = Math.round(602.9 / DT);
+    w.tick = Math.round(302.9 / DT);
     run(w, 0.05);
     expect(w.boss).toBeNull();
     run(w, 0.2);
@@ -290,7 +290,7 @@ describe('M3 contract', () => {
     expect(w.boss!.damageable).toBe(false);
     run(w, 10);
     expect(w.boss!.damageable).toBe(true);
-    expect(w.bossArrivedAt).toBeGreaterThan(603);
+    expect(w.bossArrivedAt).toBeGreaterThan(303);
   });
   it('staggers and clears enemy bullets on a phase change', () => {
     const w = godMode(4);
@@ -333,9 +333,9 @@ describe('M3 contract', () => {
     expect(w.enemies.length).toBe(0);
     expect(w.kills).toBe(kills);
   });
-  it('locks the arena at 10:00: enemies flee and despawn, spawns stop, the player is walled in', () => {
+  it('locks the arena at 5:00: enemies flee and despawn, spawns stop, the player is walled in', () => {
     const w = godMode(6);
-    w.tick = Math.round(599.9 / DT);
+    w.tick = Math.round(299.9 / DT);
     run(w, 0.05);
     expect(w.arena).toBeNull();
     run(w, 0.1);

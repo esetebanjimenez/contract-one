@@ -203,7 +203,7 @@ export function spawnRate(t: number): number {
 }
 
 export function inPressureWave(t: number): boolean {
-  // No waves or rings from 9:30, so the Warlord's arrival isn't buried (design.md 14.1).
+  // No waves or rings from 4:30, so the Warlord's arrival isn't buried (design.md 14.1).
   if (t >= RUN.inboundAtSec) return false;
   return t >= SPAWN.pressureEverySec && t % SPAWN.pressureEverySec < SPAWN.pressureDurationSec;
 }
@@ -300,10 +300,10 @@ function farthest(w: World, ok: (e: Enemy, offscreen: boolean) => boolean): numb
   return slot;
 }
 
-/** From 3:00, every second pressure wave (3:00, 5:00, 7:00, 9:00) is a full ring (design.md 12.3). */
+/** From 2:00, every second pressure wave (2:00, 4:00) is a full ring (design.md 12.3, 16.8). */
 export function isRingWave(t: number): boolean {
   const n = Math.floor(t / SPAWN.pressureEverySec);
-  return t >= SPAWN.ringFromSec && n % SPAWN.ringEveryNthWave === 1;
+  return t >= SPAWN.ringFromSec && n % SPAWN.ringEveryNthWave === SPAWN.ringWavePhase;
 }
 
 function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef): Enemy | undefined {
@@ -901,7 +901,7 @@ function bossHost(w: World): BossHost {
   };
 }
 
-/** At 10:00: freeze the camera on the current view and turn every enemy into a harmless runner. */
+/** At 5:00: freeze the camera on the current view and turn every enemy into a harmless runner. */
 function lockArena(w: World): void {
   const p = w.player;
   const camX = Math.round(p.x - NATIVE_WIDTH / 2);
