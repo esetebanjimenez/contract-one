@@ -1,11 +1,8 @@
 /** The Warlord (design.md 14.3). */
 export const BOSS = {
   name: 'THE WARLORD',
-  hpBase: 2000,
-  hpPerLevel: 0, // flat 2000 at every level (design.md 14.3, rerun 2); formula kept for later tuning
-  hpLevelRef: 20,
-  hpMin: 2000,
-  hpMax: 5000,
+  hpDpsSec: 60, // HP = 60 x the player's single-target sheet DPS at spawn (design.md 16.5)
+  hpMin: 2000, // no upper clamp
   radius: 30,
   speed: 35,
   contactDamage: 20, // not scaled by 12.1
@@ -19,7 +16,18 @@ export const BOSS = {
   enrage: { ringEverySec: 1.0, speedMul: 1.5 },
 };
 
-export function bossHp(level: number): number {
-  const hp = BOSS.hpBase * (1 + BOSS.hpPerLevel * (level - BOSS.hpLevelRef));
-  return Math.min(BOSS.hpMax, Math.max(BOSS.hpMin, hp));
+export interface DpsStats {
+  damage: number;
+  fireRate: number; // shots/s
+  projectiles: number;
+  crit: number; // chance, 0..1
+}
+
+/** Single-target sheet DPS: damage x shots/s x bullets x crit factor. Pierce and ricochet don't count. */
+export function sheetDps(s: DpsStats, critMultiplier: number): number {
+  return s.damage * s.fireRate * s.projectiles * (1 + Math.min(1, s.crit) * (critMultiplier - 1));
+}
+
+export function bossHp(s: DpsStats, critMultiplier: number): number {
+  return Math.max(BOSS.hpMin, Math.round(BOSS.hpDpsSec * sheetDps(s, critMultiplier)));
 }

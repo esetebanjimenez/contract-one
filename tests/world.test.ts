@@ -7,6 +7,7 @@ import { PERKS } from '../src/data/perks';
 import { computeStats, drawOffer, softMove, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
 import { bossHp } from '../src/data/boss';
+import { PLAYER } from '../src/data/player';
 import { checkPhase } from '../src/sim/boss';
 import {
   choosePerk,
@@ -268,11 +269,10 @@ describe('M3 contract', () => {
       step(w, { mx: 0, my: 0 });
     }
   };
-  it('keeps boss HP at a flat 2000 inside the clamp', () => {
-    expect(bossHp(20)).toBe(2000);
-    expect(bossHp(30)).toBe(2000);
-    expect(bossHp(5)).toBe(2000);
-    expect(bossHp(60)).toBe(2000);
+  it('sets boss HP to 60x sheet DPS at spawn, minimum 2000, no upper clamp', () => {
+    expect(bossHp({ damage: PLAYER.damage, fireRate: PLAYER.fireRate, projectiles: 1, crit: 0 }, 2)).toBe(2000);
+    expect(bossHp({ damage: 20, fireRate: 10, projectiles: 4, crit: 0.5 }, 2)).toBe(60 * 20 * 10 * 4 * 1.5);
+    expect(bossHp({ damage: 1000, fireRate: 10, projectiles: 10, crit: 1 }, 2)).toBe(60 * 1000 * 10 * 10 * 2);
   });
   it('stops pressure waves from 9:30', () => {
     expect(inPressureWave(541)).toBe(true);
@@ -300,6 +300,7 @@ describe('M3 contract', () => {
     b.hp = b.maxHp * 0.6;
     checkPhase(b, {
       time: w.time,
+      stats: w.stats,
       level: w.level,
       player: w.player,
       enemyBullets: w.enemyBullets,

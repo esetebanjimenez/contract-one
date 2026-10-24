@@ -1,4 +1,5 @@
-import { BOSS, bossHp } from '../data/boss';
+import { BOSS, bossHp, type DpsStats } from '../data/boss';
+import { PERK_RULES } from '../data/perks';
 import { MAX_VIEW_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { PLAYER } from '../data/player';
 import { CAPS, DT } from '../data/sim';
@@ -32,6 +33,7 @@ export interface Boss {
 export interface BossHost {
   time: number;
   level: number;
+  stats: DpsStats;
   player: { x: number; y: number };
   enemyBullets: {
     x: number;
@@ -54,7 +56,7 @@ const HALF_W = NATIVE_WIDTH / 2;
 const HALF_H = MAX_VIEW_HEIGHT / 2;
 
 export function createBoss(h: BossHost): Boss {
-  const hp = bossHp(h.level);
+  const hp = bossHp(h.stats, PERK_RULES.critMultiplier);
   return {
     // Walks in from the top edge, 120 px off-screen (design.md 14.2).
     x: h.arena ? (h.arena.x0 + h.arena.x1) / 2 : h.player.x,

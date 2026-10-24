@@ -707,6 +707,7 @@ function bossHost(w: World): BossHost {
   return {
     time: w.time,
     level: w.level,
+    stats: w.stats,
     player: w.player,
     enemyBullets: w.enemyBullets,
     arena: w.arena,
