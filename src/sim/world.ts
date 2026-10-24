@@ -4,6 +4,8 @@ import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, GRUNT_WEAPONS, KNOCKBACK_PX, SCALI
 
 const GRUNT_SWING_SEC = (GRUNT_WEAPONS.windupMs + GRUNT_WEAPONS.strikeMs) / 1000;
 import { LEVELS, scrapForLevel } from '../data/levels';
+import { DAMAGE_NUMBERS } from '../data/damage-numbers';
+import { BOSS_KEY, addDamageNumber, pruneDamageNumbers, type DamageNumber } from './damage-numbers';
 import { DRONE, EXPLOSIVE, GRENADE, PERK_RULES, addStack, overflow, perkDef, type PerkId } from '../data/perks';
 import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
@@ -149,6 +151,7 @@ export interface World {
   drones: Drone[];
   grenades: Grenade[];
   blasts: Blast[];
+  damageNumbers: DamageNumber[]; // design.md 16.10, effects only
   nextVolleyAt: number; // run time of the next FRAG OUT volley
 }
 
@@ -197,6 +200,7 @@ export function createWorld(seed: number): World {
     drones: [],
     grenades: [],
     blasts: [],
+    damageNumbers: [],
     nextVolleyAt: 0,
   };
 }
@@ -428,10 +432,11 @@ function addBlast(w: World, kind: Blast['kind'], x: number, y: number): void {
 }
 
 /** Damage the Warlord (capped at his HP); handles the kill and phase changes. */
-function damageBoss(w: World, dmg: number): void {
+function damageBoss(w: World, dmg: number, crit: boolean): void {
   const wb = w.boss;
   if (!wb || !wb.damageable || wb.hp <= 0 || w.won) return;
   const d = Math.min(wb.hp, dmg);
+  addDamageNumber(w, BOSS_KEY, wb.x, wb.y - BOSS.radius - DAMAGE_NUMBERS.abovePx, d, crit);
   wb.hp -= d;
   w.bossDamage += d;
   if (wb.state !== 'stagger') wb.flash = DT;
@@ -439,19 +444,34 @@ function damageBoss(w: World, dmg: number): void {
   else checkPhase(wb, bossHost(w));
 }
 
-/** Damage every living enemy (and the Warlord) touching the circle; newly dead indices go to `dead`. */
-function areaDamage(w: World, x: number, y: number, r: number, dmg: number, dead: number[]): void {
+/**
+ * Damage every living enemy (and the Warlord) touching the circle; newly dead indices go to `dead`.
+ * One number per blast (design.md 16.10): on the Warlord if he's caught, else the enemy nearest the centre.
+ */
+function areaDamage(w: World, x: number, y: number, r: number, dmg: number, crit: boolean, dead: number[]): void {
+  let shown: Enemy | undefined;
+  let shownD2 = Infinity;
   w.grid.query(x, y, r + 16, (i) => {
     const e = w.enemies[i];
     if (!e || e.hp <= 0 || e.fleeing) return;
     const rr = r + e.def.radius;
-    if ((e.x - x) ** 2 + (e.y - y) ** 2 > rr * rr) return;
+    const d2 = (e.x - x) ** 2 + (e.y - y) ** 2;
+    if (d2 > rr * rr) return;
     e.hp -= dmg;
     if (e.def.knockbackImmune) e.flash = DT;
     if (e.hp <= 0) dead.push(i);
+    if (d2 < shownD2) {
+      shown = e;
+      shownD2 = d2;
+    }
   });
   const b = w.boss;
-  if (b && b.damageable && b.hp > 0 && Math.hypot(b.x - x, b.y - y) <= r + BOSS.radius) damageBoss(w, dmg);
+  if (b && b.damageable && b.hp > 0 && Math.hypot(b.x - x, b.y - y) <= r + BOSS.radius) damageBoss(w, dmg, crit);
+  else if (shown) showHit(w, shown, dmg, crit);
+}
+
+function showHit(w: World, e: Enemy, dmg: number, crit: boolean): void {
+  addDamageNumber(w, e.id, e.x, e.y - e.def.radius - DAMAGE_NUMBERS.abovePx, dmg, crit);
 }
 
 /**
@@ -536,7 +556,7 @@ function updateGrenades(w: World, dead: number[]): void {
     g.y = g.sy + (g.ty - g.sy) * k;
     if (k < 1) continue;
     const crit = w.stats.crit > 0 && w.rng() < w.stats.crit;
-    areaDamage(w, g.tx, g.ty, GRENADE.radius, g.damage * (crit ? PERK_RULES.critMultiplier : 1), dead);
+    areaDamage(w, g.tx, g.ty, GRENADE.radius, g.damage * (crit ? PERK_RULES.critMultiplier : 1), crit, dead);
     addBlast(w, 'frag', g.tx, g.ty);
     w.grenades[i] = w.grenades[w.grenades.length - 1];
     w.grenades.pop();
@@ -791,6 +811,7 @@ export function step(w: World, input: Input): void {
         const crit = w.stats.crit > 0 && w.rng() < w.stats.crit;
         hitDmg = bl.damage * (crit ? PERK_RULES.critMultiplier : 1);
         e.hp -= hitDmg;
+        showHit(w, e, hitDmg, crit);
         bl.hit.push(e.id);
         if (e.def.knockbackImmune) e.flash = DT;
         else {
@@ -809,17 +830,17 @@ export function step(w: World, input: Input): void {
         const dmg = bl.damage * (crit ? PERK_RULES.critMultiplier : 1);
         bl.hit.push(-1);
         spent = true; // pierce and ricochet stop on the Warlord
-        damageBoss(w, dmg);
+        damageBoss(w, dmg, crit);
         if (bl.explodes && w.stats.explosive > 0 && w.rng() < w.stats.explosive) {
           // The blast is centred on the hit, so the Warlord takes it too, plus any adds beside him.
-          areaDamage(w, bl.x, bl.y, EXPLOSIVE.radius, dmg * EXPLOSIVE.damageShare, dead);
+          areaDamage(w, bl.x, bl.y, EXPLOSIVE.radius, dmg * EXPLOSIVE.damageShare, false, dead);
           addBlast(w, 'he', bl.x, bl.y);
         }
       }
     }
     if (hitEnemy && bl.explodes && w.stats.explosive > 0 && w.rng() < w.stats.explosive) {
       // HE ROUNDS: half the hit's damage to everything within 32 px, the target included (design.md 16.7).
-      areaDamage(w, hitEnemy.x, hitEnemy.y, EXPLOSIVE.radius, hitDmg * EXPLOSIVE.damageShare, dead);
+      areaDamage(w, hitEnemy.x, hitEnemy.y, EXPLOSIVE.radius, hitDmg * EXPLOSIVE.damageShare, false, dead);
       addBlast(w, 'he', hitEnemy.x, hitEnemy.y);
     }
     if (hitEnemy) {
@@ -835,6 +856,7 @@ export function step(w: World, input: Input): void {
   updateGrenades(w, dead);
   dead.sort((a, b) => b - a);
   for (const i of dead) killEnemy(w, i);
+  pruneDamageNumbers(w);
   if (w.blasts.length && w.time - w.blasts[0].at > BLAST_LIFE_SEC) w.blasts = w.blasts.filter((x) => w.time - x.at <= BLAST_LIFE_SEC);
 
   // Enemy bullets.

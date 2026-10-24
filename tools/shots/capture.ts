@@ -49,6 +49,15 @@ const checks: Check[] = [
     },
   },
   {
+    scene: 'numbers',
+    waitMs: 300,
+    ok: async (p) => {
+      const ns = await p.evaluate(() => (window as unknown as { __world: { damageNumbers: { crit: boolean }[] } }).__world.damageNumbers);
+      if (ns.length < 8) return `expected a busy fight, saw ${ns.length} damage numbers`;
+      return ns.some((n) => n.crit) ? null : 'no crit number on screen';
+    },
+  },
+  {
     scene: 'results',
     waitMs: 4000, // slow-mo, then the results delay
     ok: async (p) => ((await p.$('.modal:not([hidden]) .results.won')) ? null : 'no CONTRACT COMPLETE results screen'),
