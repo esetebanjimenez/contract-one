@@ -392,7 +392,7 @@ These replace the "Mythic-only" note in §15.2. They roll tiers like every other
 - **HE Rounds:** each hit has {total}% chance to explode, 32 px radius, 50% of the hit's damage. It stops at 100% and then leaves the draw, the same as crit.
 - **Drone Buddy:** each drone orbits at 28 px and fires at the nearest enemy, 5 damage twice a second. Drones are evenly spaced. Past 8 drones, each extra one adds +12.5% damage to all drones instead of a new body, for performance.
 - **Frag Out:** every 4 s, throws {total} grenades at the densest enemy clusters on screen. Each does 40 damage in 48 px. Past 8 grenades per volley, extra ones add +12.5% damage instead.
-- Drone and grenade damage scale with HOLLOW POINTS and crit, but not with fire rate.
+- ~~Drone and grenade damage scale with HOLLOW POINTS and crit, but not with fire rate.~~ Superseded by §16.9.
 - Drone and grenade are whole-number perks, so a Rare roll becomes Common (§15.2).
 - **Boss HP (§16.5):** sheet DPS adds drone DPS and grenade DPS in full, and multiplies bullet DPS by (1 + 0.5 × HE chance).
 - Art (Artist, needs Esteban's okay): a small explosion, a drone sprite, a grenade, and a 48 px blast. Category tiles: HE and FRAG OUT are attack, DRONE BUDDY is utility.
@@ -421,3 +421,23 @@ Esteban's run 3 (win at 11:13, level 53, 96,962 boss damage) showed the build ou
 - **Levers if it's off:** boss HP multiplier (40) first, then Scrap per level, then the enemy bands.
 
 **Step 2 (parked until we add bosses):** three bosses per contract at 4:00, 8:00 and 12:00. The first two are lieutenants: arena fight, then the run carries on (camera unlocks, spawns resume). The Warlord is last and ends the contract.
+
+### 16.9 Secondary shooters and special attacks (Esteban, 2026-10-24)
+A standing rule for every weapon we add from here on. Each extra weapon is one of two kinds.
+
+**Secondary shooters** (now: DRONE BUDDY; later, e.g. turrets) fire bullets just like the gun, so they take **every gun stat**:
+- Damage (HOLLOW POINTS), crit (MARKSMAN) and fire rate (TRIGGER JOB). A drone fires 2 × the player's fire-rate multiplier shots per second.
+- Bullet effects: HE ROUNDS explode chance, RICOCHET bounces, pierce, EXTRA BARREL extra bullets (the same spread as the gun), and HOT LOADS speed and range.
+- The base stays 5 damage and 2 shots a second at 28 px orbit. Past 8 drones, the +12.5% damage per extra drone still applies.
+- Drone bullets look like player bullets (pale yellow), so they share the §16.1 on-screen bullet limit. If the limit is reached, drones skip a shot before the gun does.
+
+**Special attacks** (now: FRAG OUT; later, e.g. airstrikes or mines) run on their own **cooldown** and don't take fire rate or bullet effects:
+- They do take damage (HOLLOW POINTS) and crit, so damage builds still help them.
+- FRAG OUT's cooldown is 4 s (was "every 4 s"). The rest of §16.7 is unchanged.
+- **New perk, FAST HANDS** (`cooldown`): "−{v}% cooldown", Common 10, Rare 15, Epic 20, Mythic 30, weight 0.6. It's offered only once the player has at least one special attack. Picks multiply: each pick sets cooldown × (1 − v). The total shown is the combined cut (two 20% picks show "−36%"). It never reaches zero, so there's no cap and it never leaves the draw. Category: utility.
+
+**Boss HP (§16.5):** drone DPS now uses the same formula as the gun: count × 5 × damage × 2 × fire rate × (1 + 0.5 × extra bullets) × (1 + 0.5 × HE chance) × (1 + crit). Grenade DPS is count × 40 × damage × (1 + crit) ÷ cooldown.
+
+**Sim:** the PR touches `src/data/`, so the sim table posts itself. Drones get much stronger with gun builds. If kite-smart's boss HP or fights move a lot, the first lever is drone base damage (5), not the rule.
+
+**Art:** a FAST HANDS icon (Artist, for Esteban's okay). Drones firing multishot use the gun's spread pattern, so no new effects are needed.
