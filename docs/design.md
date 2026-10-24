@@ -344,8 +344,9 @@ Tier odds by player level (Common / Rare / Epic / Mythic):
 ### 16.1 No perk caps
 - Every perk stacks with no upper limit. Ignore the Max total column in §15.2.
 - Guards: armor never reduces a hit below 1 damage. Crit stops at 100% and then leaves the draw.
-- FIELD RATIONS (§15.5) stays as the fallback for an empty draw.
-- Perf watch: uncapped `multishot`, `pierce` and `ricochet` raise the bullet count. Programmer flags it if the frame rate dips, and then we add a soft limit on bullets on screen, not a perk cap.
+- Move speed: gains past +60% count at half value, so it keeps growing but stays steerable with a thumb.
+- FIELD RATIONS (§15.5) is dropped. With no caps the draw is never empty, and its icon no longer needs an okay.
+- Perf watch: uncapped `multishot`, `pierce` and `ricochet` raise the bullet count. These three stay fully open. If the frame rate dips, add a limit on player bullets on screen (oldest bullets go first), not smaller gains per pick.
 
 ### 16.2 Four cards per level-up
 - 4 cards, not 3, in a 2×2 grid, centred, same 104×124 card. Each card still rolls its tier independently, and no perk appears twice in one offer.
