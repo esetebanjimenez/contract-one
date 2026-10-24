@@ -420,8 +420,8 @@ function shoot(w: World, x: number, y: number, aim: number, damage: number, rang
   }
 }
 
-const MAX_BLASTS = 64; // effect sprites only; damage always applies
-const BLAST_LIFE_SEC = 0.4;
+const MAX_BLASTS = 128; // effect sprites only; damage always applies
+const BLAST_LIFE_SEC = 0.7; // covers the longest effect (frag, 0.66 s)
 
 function addBlast(w: World, kind: Blast['kind'], x: number, y: number): void {
   if (w.blasts.length < MAX_BLASTS) w.blasts.push({ kind, x, y, at: w.time });
