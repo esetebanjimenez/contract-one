@@ -18,6 +18,18 @@ const ART = [
   'merc_t1_walkA_00',
   'merc_t1_walkB_00',
   'grunt_t1_walk_00',
+  'grunt_shovel_walkA_00',
+  'grunt_shovel_walkB_00',
+  'grunt_shovel_windup_00',
+  'grunt_shovel_strike_00',
+  'grunt_baton_walkA_00',
+  'grunt_baton_walkB_00',
+  'grunt_baton_windup_00',
+  'grunt_baton_strike_00',
+  'grunt_sledge_walkA_00',
+  'grunt_sledge_walkB_00',
+  'grunt_sledge_windup_00',
+  'grunt_sledge_strike_00',
   'runner_t1_walk_00',
   'heavy_t1_walk_00',
   'heavy_t1_walkA_00',
@@ -75,12 +87,12 @@ const ENEMY_WALK: Record<string, { frames: ArtId[]; frameMs: number }> = {
 };
 /**
  * Grunt weapon frames (§13.1 grunt, Esteban 2026-10-24): two walk frames, a wind-up and a strike per weapon,
- * 40x40 with the body centred. Stand-ins: today's grunt frame until the Artist's frames are merged.
+ * 40x40 with the body centred (Artist, PR #11, okayed by Esteban 2026-10-24).
  */
 const GRUNT_FRAMES: Record<GruntWeapon, { walk: [ArtId, ArtId]; windup: ArtId; strike: ArtId }> = {
-  shovel: { walk: ['grunt_t1_walk_00', 'grunt_t1_walk_00'], windup: 'grunt_t1_walk_00', strike: 'grunt_t1_walk_00' },
-  baton: { walk: ['grunt_t1_walk_00', 'grunt_t1_walk_00'], windup: 'grunt_t1_walk_00', strike: 'grunt_t1_walk_00' },
-  sledge: { walk: ['grunt_t1_walk_00', 'grunt_t1_walk_00'], windup: 'grunt_t1_walk_00', strike: 'grunt_t1_walk_00' },
+  shovel: { walk: ['grunt_shovel_walkA_00', 'grunt_shovel_walkB_00'], windup: 'grunt_shovel_windup_00', strike: 'grunt_shovel_strike_00' },
+  baton: { walk: ['grunt_baton_walkA_00', 'grunt_baton_walkB_00'], windup: 'grunt_baton_windup_00', strike: 'grunt_baton_strike_00' },
+  sledge: { walk: ['grunt_sledge_walkA_00', 'grunt_sledge_walkB_00'], windup: 'grunt_sledge_windup_00', strike: 'grunt_sledge_strike_00' },
 };
 
 /** Which grunt frame shows now: the touch swing (wind-up, then strike) if one is playing, else the walk. */

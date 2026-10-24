@@ -1,6 +1,6 @@
 /**
  * Builds nothing: serves dist-shots (pnpm shots:build) and saves the level-up, boss and results screens
- * to shots/ at the phone viewport. Fails on a page error or when a screen is missing what it must show.
+ * (and a grunt crowd) to shots/ at the phone viewport. Fails on a page error or when a screen is missing what it must show.
  */
 import { mkdirSync } from 'node:fs';
 import puppeteer, { type Page } from 'puppeteer-core';
@@ -35,6 +35,18 @@ const checks: Check[] = [
       (await p.evaluate(() => (window as unknown as { __world: { boss: { damageable: boolean } | null } }).__world.boss?.damageable))
         ? null
         : 'the Warlord is not in the fight',
+  },
+  {
+    scene: 'grunts',
+    waitMs: 300,
+    ok: async (p) => {
+      const n = await p.evaluate(
+        () =>
+          (window as unknown as { __world: { enemies: { def: { id: string } }[] } }).__world.enemies.filter((e) => e.def.id === 'grunt')
+            .length,
+      );
+      return n >= 12 ? null : `expected the 12-grunt ring, saw ${n}`;
+    },
   },
   {
     scene: 'results',
