@@ -10,6 +10,8 @@ import { BONE_WHITE, outlined, silhouette } from './bake';
 const ART = [
   'ground_sand_00',
   'merc_t1_idle_00',
+  'merc_t1_walkA_00',
+  'merc_t1_walkB_00',
   'grunt_t1_walk_00',
   'rifleman_t1_idle_00',
   'bullet_player_00',
@@ -69,6 +71,9 @@ export class Renderer {
   private merc!: Sprite;
   private shadow = new Graphics();
   private facing = 0;
+  private walkMs = 0;
+  private lastX = 0;
+  private lastY = 0;
   private fx = new Graphics();
   private stick = new Graphics();
 
@@ -159,6 +164,13 @@ export class Renderer {
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
     const maxTurn = MERC_ART.turnRadPerSec * dtSec;
     this.facing += Math.abs(diff) <= maxTurn ? diff : Math.sign(diff) * maxTurn;
+    const moving = Math.hypot(p.x - this.lastX, p.y - this.lastY) > 0.01;
+    this.lastX = p.x;
+    this.lastY = p.y;
+    this.walkMs = moving ? this.walkMs + dtSec * 1000 : 0;
+    const walk = [this.tex.merc_t1_walkA_00, this.tex.merc_t1_idle_00, this.tex.merc_t1_walkB_00, this.tex.merc_t1_idle_00];
+    const frame = moving ? walk[Math.floor(this.walkMs / MERC_ART.walkFrameMs) % walk.length] : this.tex.merc_t1_idle_00;
+    if (this.merc.texture !== frame) this.merc.texture = frame;
     this.merc.position.set(Math.round(p.x), Math.round(p.y));
     this.shadow.position.set(Math.round(p.x), Math.round(p.y) + MERC_ART.shadow.offsetY);
     this.merc.rotation = this.facing;
