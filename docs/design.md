@@ -52,7 +52,7 @@ All enemies spawn 24–48 px outside the visible area, from a random edge direct
 | `grunt` | Grunt | 10 | 45 | 8 | none | 1 | 0:00 |
 | `runner` | Runner | 6 | 85 | 6 | none | 1 | 1:30 |
 | `heavy` | Heavy | 60 | 30 | 15 | none | 5 | 3:00 |
-| `rifleman` | Rifleman | 25 | 40 | 8 | 1 shot every 2.0 s, 10 dmg, 140 px/s, stops at ~140 px | 3 | 4:30 |
+| `rifleman` | Rifleman | 25 | 40 | 8 | 1 shot every 2.0 s, 10 dmg, 95 px/s, stops at ~140 px | 3 | 4:30 |
 | `elite_*` | Elite variant | x3 HP | x1.1 | x1.5 | same as base | x4 | 7:00 |
 
 Enemy bullets must be dodgeable on a phone: they fire slowly, and every shot is telegraphed by a 0.3 s muzzle flash.
@@ -66,7 +66,7 @@ HP scaling: see §12 (M2).
 - Soft caps: 250 enemies and 400 bullets (Programmer's numbers). Past the cap, spawns pause and the farthest enemies are recycled.
 
 ## 7. Scrap and levels
-- Kills drop Scrap pickups (pure cyan; no other cyan on screen). Pickups despawn after 45 s (balance lever: 30 s starved kite-smart, 60 s overfed it). Magnet 70 px; inside it, pickups fly to the player at 300 px/s.
+- Kills drop Scrap pickups (pure cyan; no other cyan on screen). Pickups **never despawn** (Esteban, 2026-10-24). Above 300 pickups on the ground, a new pickup merges its value into the nearest existing one. Magnet 70 px; inside it, pickups fly to the player at 300 px/s.
 - Scrap needed for the next level: `5 + 6 × (level − 1)`. That means 5, 11, 17 and so on, and a typical run reaches level ~25–30 by 10:00.
 - A level-up pauses the game and shows **3 perk cards**. Tapping one picks it. There is no reroll in v1.
 - Overflow Scrap carries into the next level.
@@ -85,7 +85,7 @@ Rules: perks are drawn without duplicates per offer, each stacks up to the liste
 | `magnet` | Scrap Magnet | +30% pickup radius | 3 |
 | `crit` | Marksman | +5% crit chance | 5 |
 | `bspeed` | Hot Loads | +15% bullet speed and range | 3 |
-| `regen` | Medkit | +1 HP every 5 s | 3 |
+| `regen` | Medkit | +1 HP every 2 s, with a tick on the HP bar | 3 |
 | `ricochet` | Ricochet | bullets bounce to +1 target | 2 |
 | `explosive` | HE Rounds | 20% of hits explode (32 px, 50% dmg) | 3 |
 | `drone` | Drone Buddy | an orbiting drone, 5 dmg at 2/s | 2 (weight 0.6) |
@@ -135,7 +135,7 @@ When enemies are at the cap, each new spawn replaces the **farthest Grunt** with
 | 4:30–7:00 | 40 | 20 | 20 | 20 | – |
 | 7:00–10:00 | 25 | 20 | 20 | 20 | 15 |
 
-**Live tuning (M2, `d74a8f2`):** HP slope 0.12, contact slope 0.03, Runner speed 95, Elite share 10% in the 7:00–10:00 band, Scrap lifetime 45 s. These override the starting values above; `src/data/` is the source of truth.
+**Live tuning (M2, `d74a8f2`):** HP slope 0.12, contact slope 0.03, Runner speed 95, Elite share 10% in the 7:00–10:00 band, Scrap no longer despawns. These override the starting values above; `src/data/` is the source of truth.
 
 Ranged cap: at most 30 Riflemen alive, so bullets stay readable.
 
@@ -200,7 +200,7 @@ New in M2, all numbers only, with no new visuals beyond the card icon:
 | `magnet` | Scrap Magnet | +30% pickup radius | 3 |
 | `crit` | Marksman | +5% crit chance (×2 damage) | 5 |
 | `bspeed` | Hot Loads | +15% bullet speed and range | 3 |
-| `regen` | Medkit | +1 HP every 5 s | 3 |
+| `regen` | Medkit | +1 HP every 2 s, with a tick on the HP bar | 3 |
 | `armor` | Ceramic Plates | −1 damage taken per hit (min 1) | 3 |
 | `ricochet` | Ricochet | bullets bounce to +1 target within 80 px | 2 |
 
@@ -231,7 +231,7 @@ Goal: a run has a real ending. You survive to 10:00, kill the Warlord, and get a
 | Walk speed | 35 px/s toward the player |
 | Contact damage | 20 (not scaled by §12) |
 | Charge | every 5 s; 0.8 s telegraph line, then a 300 px dash at 140 px/s; 25 dmg |
-| Phase 2 ring (below 66%) | 16 bullets every 3 s, one rotating gap of 2 bullets, 120 px/s, 10 dmg |
+| Phase 2 ring (below 66%) | 16 bullets every 3 s, one rotating gap of 2 bullets, 90 px/s, 10 dmg |
 | Phase 3 adds (below 33%) | 12 Grunts in a ring every 8 s; ring every 2 s; charge every 3.5 s |
 | Knockback | immune |
 | Phase change | 1 s stagger: he can't attack, flashes white, and every enemy bullet on screen is cleared |
@@ -259,4 +259,41 @@ At 0 HP: a 0.5 s freeze, the banner "KIA", then the results screen. If the boss 
 ### 14.8 Needs
 - **Art:** the boss sprite (top-down, 96 px canvas, walk and charge pose), a telegraph line in red-orange, and the banner and results-screen look.
 - **Data:** every value above goes in `src/data/boss.ts`, with the timer and banner times in `src/data/run.ts`.
+
+## 15. Playtest changes (Esteban, 2026-10-24)
+
+### 15.1 Enemy bullets
+- Rifleman bullets 95 px/s (were 140); boss ring bullets 90 px/s (were 120). The player moves at 90, so bullets can be sidestepped.
+- Enemy bullets get 1 px larger, with a 1 px dark outline. Still red-orange.
+
+### 15.2 Perk tiers
+Each offered card rolls a tier independently.
+
+| Tier | Colour (card border) | Effect multiplier | Whole-number perks |
+|---|---|---|---|
+| Common | grey | ×1 | +1 |
+| Rare | blue | ×1.5 | +1 |
+| Epic | purple | ×2 | +2 |
+| Mythic | gold (deep gold, not the pale yellow of player bullets) | ×3 | +3 |
+
+Whole-number perks are `pierce`, `multishot`, `ricochet`, `armor`, `regen`. Each perk's max applies to the **total effect**, not the number of picks, and the excess is lost.
+
+Tier odds by player level (Common / Rare / Epic / Mythic):
+| Level | Odds |
+|---|---|
+| 1–5 | 70 / 25 / 5 / 0 |
+| 6–15 | 55 / 30 / 12 / 3 |
+| 16+ | 40 / 33 / 20 / 7 |
+
+- The card shows the tier name above the perk name and the scaled value ("Hollow Points — Epic — +30% damage").
+- The attack, defence and utility category moves from the border to a small corner mark on the icon tile.
+- Later: `explosive`, `drone` and `grenade` can enter as Mythic-only perks.
+
+### 15.3 Scrap persistence
+- Pickups never despawn. The merge rule above keeps at most 300 on the ground.
+- Balance: with no despawn and with tiers, the player gets stronger. The rerun uses the enemy HP slope as the main lever, aiming at the §12.4 targets.
+
+### 15.4 Regen
+- Reported as not working in the playtest; Programmer to check.
+- New value: +1 HP every 2 s per stack, with a brief tick on the HP bar when it heals.
 
