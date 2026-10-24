@@ -226,7 +226,7 @@ Goal: a run has a real ending. You survive to 10:00, kill the Warlord, and get a
 ### 14.3 Boss numbers (refines §9)
 | Value | Start |
 |---|---|
-| HP | **60 × the player's single-target sheet DPS when the boss spawns, minimum 2000, no upper clamp** (§16.5). Was 2000 flat. With uncapped perks (§16.1), sim `24e8464` showed 2000 HP dying in 2–13 s. |
+| HP | **40 × the player's single-target sheet DPS when the boss spawns, minimum 2000, no upper clamp** (§16.5). Was 2000 flat. With uncapped perks (§16.1), sim `24e8464` showed 2000 HP dying in 2–13 s. |
 | Body | about 80 px on a 96 px canvas, hitbox radius 30 |
 | Walk speed | 35 px/s toward the player |
 | Contact damage | 20 (not scaled by §12) |
@@ -365,10 +365,10 @@ Applies to the Rifleman and the Elite Rifleman. Replaces the fixed fire interval
 
 ### 16.5 Boss HP follows player damage
 - With no perk caps, power grows multiplicatively and no level formula can keep up. The sim at `24e8464` showed boss fights of 0:02–0:13 and kite-smart at level 50 by 10:00.
-- **Boss HP = 60 × the player's single-target sheet DPS when the boss spawns, minimum 2000, no upper clamp.** It's set once, at spawn.
-- Sheet DPS is worked out from the player's stats, not from damage dealt, because damage dealt is limited by how many enemies are around. It's bullet damage × shots per second × bullets per shot × (1 + crit chance), with crit doing double damage. Pierce and ricochet don't count, since there's only one target.
+- **Boss HP = 40 × the player's single-target sheet DPS when the boss spawns, minimum 2000, no upper clamp.** It's set once, at spawn.
+- Sheet DPS is worked out from the player's stats, not from damage dealt, because damage dealt is limited by how many enemies are around. It's bullet damage × shots per second × (1 + 0.5 × extra bullets per shot) × (1 + crit chance), with crit doing double damage. Extra bullets count half because many miss a single target. Pierce and ricochet don't count, since there's only one target.
 - Levels stop during the arena (§14.9), so sheet DPS holds through the fight. Landing about 60–70% of shots while dodging gives roughly 85–100 s, inside the 60–120 s target, for any build.
-- Lever if fights miss: the 60 multiplier.
+- Lever if fights miss: the multiplier (60 at `cd8fba6` gave kite-smart 380k HP and 0% kills; now 40 with extra bullets at half). Tune it from Esteban's playtest, not from the bots, which handle the walled arena badly.
 - Level 50 at 10:00 for kite-smart: wait for Esteban's next run. If it holds for a human, the first lever is the Scrap needed per level.
 
 ### 16.6 Current kit on the level-up screen (Esteban, 2026-10-24)
