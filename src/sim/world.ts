@@ -356,7 +356,20 @@ function killEnemy(w: World, i: number): void {
   const scrap = e.def.scrap * (e.elite ? ELITE.scrap : 1);
   w.scrapDropped += scrap;
   if (w.pickups.length < CAPS.pickups) w.pickups.push({ x: e.x, y: e.y, value: scrap, age: 0, flying: false, cache: e.elite });
-  else addScrap(w, scrap);
+  else {
+    // Scrap never despawns; past the cap a drop merges into the nearest piece on the ground (design.md 15.3).
+    let best = w.pickups[0];
+    let bd = Infinity;
+    for (const k of w.pickups) {
+      const d = (k.x - e.x) ** 2 + (k.y - e.y) ** 2;
+      if (!k.flying && d < bd) {
+        bd = d;
+        best = k;
+      }
+    }
+    if (best) best.value += scrap;
+    else addScrap(w, scrap);
+  }
   w.enemies[i] = w.enemies[w.enemies.length - 1];
   w.enemies.pop();
 }

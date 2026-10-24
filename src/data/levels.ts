@@ -1,7 +1,7 @@
 /** design.md section 7. */
 export const LEVELS = {
   perkChoices: 3,
-  pickupLifetimeSec: 30,
+  pickupLifetimeSec: Infinity, // Scrap never despawns (Esteban, 2026-10-24)
 };
 
 /** Scrap needed to go from `level` to `level + 1`: 5, 11, 17, ... */

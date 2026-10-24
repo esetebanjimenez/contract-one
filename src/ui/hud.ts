@@ -29,7 +29,16 @@ export class Hud {
     this.modal = root.querySelector('.modal')!;
   }
 
+  private lastHp = 0;
+
   update(w: World): void {
+    // Short white tick on the HP bar whenever HP goes up (regen, Plate Carrier).
+    if (w.player.hp > this.lastHp && this.lastHp > 0) {
+      this.hp.classList.remove('tick');
+      void this.hp.offsetWidth;
+      this.hp.classList.add('tick');
+    }
+    this.lastHp = w.player.hp;
     this.hp.style.width = `${(100 * w.player.hp) / w.stats.maxHp}%`;
     this.xp.style.width = `${(100 * w.scrap) / scrapForLevel(w.level)}%`;
     const t = Math.floor(w.time);

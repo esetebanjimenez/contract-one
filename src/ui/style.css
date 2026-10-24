@@ -38,6 +38,17 @@
 .fill.hp {
   background: #c94a3a;
 }
+.fill.hp.tick {
+  animation: hp-tick 0.2s steps(1);
+}
+@keyframes hp-tick {
+  0% {
+    background: #ffffff;
+  }
+  100% {
+    background: #c94a3a;
+  }
+}
 .fill.xp {
   background: #3fe0b0;
 }

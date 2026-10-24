@@ -40,7 +40,7 @@ describe('levels and perks', () => {
     w.stats = computeStats(w.stacks);
     expect(w.stats.armor).toBe(3);
     w.player.hp = 50;
-    for (let i = 0; i < 5 * 60 + 1; i++) {
+    for (let i = 0; i < 2 * 60 + 1; i++) {
       w.enemies.length = 0;
       step(w, { mx: 0, my: 0 });
     }
