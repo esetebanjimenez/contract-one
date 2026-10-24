@@ -226,7 +226,7 @@ Goal: a run has a real ending. You survive to 10:00, kill the Warlord, and get a
 ### 14.3 Boss numbers (refines §9)
 | Value | Start |
 |---|---|
-| HP | 2000 flat (level slope 0; was 0.1). Keep inside the 2000–5000 clamp. M3 sim `4131b07` showed 3:30 fights at ~3400 HP. |
+| HP | **60 × the player's single-target sheet DPS when the boss spawns, minimum 2000, no upper clamp** (§16.5). Was 2000 flat. With uncapped perks (§16.1), sim `24e8464` showed 2000 HP dying in 2–13 s. |
 | Body | about 80 px on a 96 px canvas, hitbox radius 30 |
 | Walk speed | 35 px/s toward the player |
 | Contact damage | 20 (not scaled by §12) |
@@ -362,3 +362,11 @@ Applies to the Rifleman and the Elite Rifleman. Replaces the fixed fire interval
 - Cycle: stop for **0.6 s** with a red-orange muzzle glint (the telegraph), fire (1 shot, or the Elite's 3-shot spread), then move for at least **2.0 s** before they can stop again.
 - Late-game scaling: the move time drops by 0.05 s per minute, to a minimum of 1.4 s. The telegraph never shortens.
 - Lever if shooters are too weak: the move time first, then the share of Riflemen in the band mix.
+
+### 16.5 Boss HP follows player damage
+- With no perk caps, power grows multiplicatively and no level formula can keep up. The sim at `24e8464` showed boss fights of 0:02–0:13 and kite-smart at level 50 by 10:00.
+- **Boss HP = 60 × the player's single-target sheet DPS when the boss spawns, minimum 2000, no upper clamp.** It's set once, at spawn.
+- Sheet DPS is worked out from the player's stats, not from damage dealt, because damage dealt is limited by how many enemies are around. It's bullet damage × shots per second × bullets per shot × (1 + crit chance), with crit doing double damage. Pierce and ricochet don't count, since there's only one target.
+- Levels stop during the arena (§14.9), so sheet DPS holds through the fight. Landing about 60–70% of shots while dodging gives roughly 85–100 s, inside the 60–120 s target, for any build.
+- Lever if fights miss: the 60 multiplier.
+- Level 50 at 10:00 for kite-smart: wait for Esteban's next run. If it holds for a human, the first lever is the Scrap needed per level.
