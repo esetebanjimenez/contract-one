@@ -33,6 +33,21 @@ const ART = [
   'warlord_t1_windup_00',
   'warlord_t1_phase2_00',
   'warlord_t1_phase3_00',
+  'fx/drone_00',
+  'fx/drone_01',
+  'fx/grenade_00',
+  'fx/grenade_01',
+  'fx/fx_he_00',
+  'fx/fx_he_01',
+  'fx/fx_he_02',
+  'fx/fx_he_03',
+  'fx/fx_he_04',
+  'fx/fx_frag_00',
+  'fx/fx_frag_01',
+  'fx/fx_frag_02',
+  'fx/fx_frag_03',
+  'fx/fx_frag_04',
+  'fx/fx_frag_05',
 ] as const;
 type ArtId = (typeof ART)[number];
 
@@ -65,6 +80,16 @@ const TELEGRAPH_COLOR = 0xff4a1c;
 /** Enrage tell: red-orange outline pulsing every 0.5 s (Artist, M3). */
 const ENRAGE_OUTLINE = '#FF4A1C';
 const ENRAGE_PULSE_SEC = 0.5;
+/** design.md 16.7 effects (Artist): frame times, centred on the hit or landing point, last smoke frame fades. */
+const BLAST_ANIM = {
+  he: { frames: ['fx/fx_he_00', 'fx/fx_he_01', 'fx/fx_he_02', 'fx/fx_he_03', 'fx/fx_he_04'] as ArtId[], frameMs: 50 },
+  frag: {
+    frames: ['fx/fx_frag_00', 'fx/fx_frag_01', 'fx/fx_frag_02', 'fx/fx_frag_03', 'fx/fx_frag_04', 'fx/fx_frag_05'] as ArtId[],
+    frameMs: 60,
+  },
+};
+const DRONE_ROTOR_MS = 60;
+const GRENADE_BLINK_MS = 100;
 const CACHE_SCALE = 1.5; // 12 px Scrap cache from the 8 px Scrap sprite (design.md 13.4)
 
 /** Grows a list of sprites on demand and hides the unused tail each frame. */
@@ -99,6 +124,9 @@ export class Renderer {
   private enemies!: Pool;
   private enemyBullets!: Pool;
   private bullets!: Pool;
+  private blasts!: Pool;
+  private drones!: Pool;
+  private grenades!: Pool;
   private merc!: Sprite;
   private warlord!: Sprite;
   private shadow = new Graphics();
@@ -132,11 +160,12 @@ export class Renderer {
       this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
     }
     this.ground = new TilingSprite({ texture: this.tex.ground_sand_00, width: NATIVE_WIDTH, height: this.viewH });
-    const layers = [new Container(), new Container(), new Container(), new Container(), new Container()];
+    const layers = [new Container(), new Container(), new Container(), new Container(), new Container(), new Container()];
     this.pickups = new Pool(layers[0]);
     this.enemies = new Pool(layers[1]);
     this.enemyBullets = new Pool(layers[3]);
     this.bullets = new Pool(layers[4]);
+    this.blasts = new Pool(layers[5]);
     this.merc = new Sprite(this.tex.merc_t1_idle_00);
     this.merc.anchor.set(MERC_ART.bodyCenter.x / MERC_ART.size.w, MERC_ART.bodyCenter.y / MERC_ART.size.h);
     // Soft shadow under the merc so the coyote helmet separates from the sand (Artist, M2).
@@ -146,7 +175,12 @@ export class Renderer {
     this.warlord.visible = false;
     layers[1].addChild(this.warlord);
     layers[2].addChild(this.shadow, this.merc);
-    this.world.addChild(layers[0], layers[1], this.fx, layers[2], layers[3], layers[4]);
+    const drones = new Container();
+    const grenades = new Container();
+    this.drones = new Pool(drones);
+    this.grenades = new Pool(grenades);
+    // Blasts draw above enemies (Artist, 16.7); drones fly over the merc; grenades arc over everything on the ground.
+    this.world.addChild(layers[0], layers[1], this.fx, layers[5], layers[2], drones, grenades, layers[3], layers[4]);
     // Hazard-tape arena edge (Artist, design.md 14.9): 4 px diagonal stripes, red-orange and dark.
     const tape = Texture.from(hazardTape());
     tape.source.scaleMode = 'nearest';
@@ -291,6 +325,30 @@ export class Renderer {
     this.enemyBullets.hideFrom(w.enemyBullets.length);
     w.bullets.forEach((b, i) => this.bullets.get(i, this.tex.bullet_player_00).position.set(Math.round(b.x), Math.round(b.y)));
     this.bullets.hideFrom(w.bullets.length);
+
+    let nb = 0;
+    for (const b of w.blasts) {
+      const anim = BLAST_ANIM[b.kind];
+      const ms = (w.time - b.at) * 1000;
+      const f = Math.floor(ms / anim.frameMs);
+      if (f >= anim.frames.length) continue;
+      const s = this.blasts.get(nb++, this.tex[anim.frames[f]]);
+      s.position.set(Math.round(b.x), Math.round(b.y));
+      s.alpha = f === anim.frames.length - 1 ? 1 - (ms - f * anim.frameMs) / anim.frameMs : 1;
+    }
+    this.blasts.hideFrom(nb);
+    const rotor: ArtId = Math.floor((w.time * 1000) / DRONE_ROTOR_MS) % 2 ? 'fx/drone_01' : 'fx/drone_00';
+    w.drones.forEach((d, i) => {
+      const s = this.drones.get(i, this.tex[rotor]);
+      s.position.set(Math.round(d.x), Math.round(d.y));
+      s.rotation = d.aim; // faces its target like the merc
+    });
+    this.drones.hideFrom(w.drones.length);
+    w.grenades.forEach((g, i) => {
+      const art: ArtId = Math.floor((g.t * 1000) / GRENADE_BLINK_MS) % 2 ? 'fx/grenade_01' : 'fx/grenade_00';
+      this.grenades.get(i, this.tex[art]).position.set(Math.round(g.x), Math.round(g.y));
+    });
+    this.grenades.hideFrom(w.grenades.length);
 
     // Merc: whole sprite turns toward the aim target, or the move direction when nothing is targeted.
     let diff = p.facing - this.facing;

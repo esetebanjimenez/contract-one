@@ -1,3 +1,5 @@
+import { DRONE, EXPLOSIVE, GRENADE, overflow } from './perks';
+
 /** The Warlord (design.md 14.3). */
 export const BOSS = {
   name: 'THE WARLORD',
@@ -22,14 +24,27 @@ export interface DpsStats {
   fireRate: number; // shots/s
   projectiles: number;
   crit: number; // chance, 0..1
+  explosive?: number; // HE chance, 0..1
+  drones?: number;
+  grenades?: number;
+  damageMul?: number; // HOLLOW POINTS factor for drones and grenades
 }
 
 /**
- * Single-target sheet DPS (design.md 16.5): damage x shots/s x (1 + 0.5 x extra bullets) x crit factor.
+ * Single-target sheet DPS (design.md 16.5, 16.7): gun DPS = damage x shots/s x (1 + 0.5 x extra bullets)
+ * x (1 + HE share x HE chance), plus drone and grenade DPS in full, all times the crit factor.
  * Extra bullets count half since many miss one target. Pierce and ricochet don't count.
  */
 export function sheetDps(s: DpsStats, critMultiplier: number): number {
-  return s.damage * s.fireRate * (1 + BOSS.hpExtraBulletWeight * (s.projectiles - 1)) * (1 + Math.min(1, s.crit) * (critMultiplier - 1));
+  const crit = 1 + Math.min(1, s.crit) * (critMultiplier - 1);
+  const he = 1 + EXPLOSIVE.damageShare * Math.min(1, s.explosive ?? 0);
+  const gun = s.damage * s.fireRate * (1 + BOSS.hpExtraBulletWeight * (s.projectiles - 1)) * he;
+  const mul = s.damageMul ?? 1;
+  const d = overflow(s.drones ?? 0, DRONE.maxBodies, DRONE.overflowBonus);
+  const g = overflow(s.grenades ?? 0, GRENADE.maxPerVolley, GRENADE.overflowBonus);
+  const drones = d.count * DRONE.damage * DRONE.shotsPerSec * d.mul * mul;
+  const grenades = (g.count * GRENADE.damage * g.mul * mul) / GRENADE.everySec;
+  return (gun + drones + grenades) * crit;
 }
 
 export function bossHp(s: DpsStats, critMultiplier: number): number {

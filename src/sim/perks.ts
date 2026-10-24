@@ -29,6 +29,10 @@ export interface PlayerStats {
   regenPerTick: number; // HP per regen interval
   armor: number;
   ricochet: number;
+  explosive: number; // HE chance, 0..1
+  drones: number; // DRONE BUDDY total
+  grenades: number; // FRAG OUT total per volley
+  damageMul: number; // HOLLOW POINTS factor, also applied to drones and grenades
 }
 
 /** Effective move % after the soft limit (design.md 16.1). */
@@ -52,6 +56,10 @@ export function computeStats(s: PerkStacks): PlayerStats {
     regenPerTick: p('regen'),
     armor: p('armor'),
     ricochet: p('ricochet'),
+    explosive: Math.min(1, p('explosive')),
+    drones: p('drone'),
+    grenades: p('grenade'),
+    damageMul: 1 + p('dmg'),
   };
 }
 

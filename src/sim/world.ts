@@ -2,7 +2,7 @@ import { BOSS } from '../data/boss';
 import { MAX_VIEW_HEIGHT, NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 import { LEVELS, scrapForLevel } from '../data/levels';
-import { PERK_RULES, perkDef, type PerkId } from '../data/perks';
+import { DRONE, EXPLOSIVE, GRENADE, PERK_RULES, overflow, perkDef, type PerkId } from '../data/perks';
 import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { RUN } from '../data/run';
@@ -50,6 +50,35 @@ export interface Bullet {
   pierceLeft: number;
   bounces: number;
   hit: number[]; // enemy ids already hit (for pierce)
+  explodes?: boolean; // the merc's gun bullets can roll HE ROUNDS; drone shots can't (design.md 16.7)
+}
+
+/** DRONE BUDDY body: orbits the merc, faces and shoots its own nearest target. */
+export interface Drone {
+  x: number;
+  y: number;
+  aim: number;
+  cd: number;
+}
+
+/** FRAG OUT grenade in flight from the merc to its landing point. */
+export interface Grenade {
+  sx: number;
+  sy: number;
+  tx: number;
+  ty: number;
+  x: number;
+  y: number;
+  t: number;
+  damage: number;
+}
+
+/** Explosion effect for the renderer (damage is applied when it is created). */
+export interface Blast {
+  kind: 'he' | 'frag';
+  x: number;
+  y: number;
+  at: number; // run time
 }
 
 export interface Pickup {
@@ -114,6 +143,10 @@ export interface World {
   wonAt: number; // run time of the kill
   bossArrivedAt: number; // run time he became damageable (-1 before)
   nextClumpAt: number; // run time of the next Scrap clumping pass
+  drones: Drone[];
+  grenades: Grenade[];
+  blasts: Blast[];
+  nextVolleyAt: number; // run time of the next FRAG OUT volley
 }
 
 const HALF_W = NATIVE_WIDTH / 2;
@@ -158,6 +191,10 @@ export function createWorld(seed: number): World {
     wonAt: 0,
     bossArrivedAt: -1,
     nextClumpAt: CLUMP.everySec,
+    drones: [],
+    grenades: [],
+    blasts: [],
+    nextVolleyAt: 0,
   };
 }
 
@@ -318,13 +355,13 @@ function updateSpawns(w: World, input: Input): void {
   }
 }
 
-function nearestEnemy(w: World, range: number): { x: number; y: number } | undefined {
+function nearestEnemy(w: World, range: number, from: { x: number; y: number } = w.player): { x: number; y: number } | undefined {
   let best: { x: number; y: number } | undefined;
   let bd = range * range;
   const b = w.boss;
   if (b && b.damageable && b.hp > 0) {
     // Measured to his edge, so the big body gets targeted when he is close.
-    const d = Math.max(0, Math.hypot(b.x - w.player.x, b.y - w.player.y) - BOSS.radius) ** 2;
+    const d = Math.max(0, Math.hypot(b.x - from.x, b.y - from.y) - BOSS.radius) ** 2;
     if (d < bd) {
       bd = d;
       best = b;
@@ -332,7 +369,7 @@ function nearestEnemy(w: World, range: number): { x: number; y: number } | undef
   }
   for (const e of w.enemies) {
     if (e.fleeing) continue;
-    const d = (e.x - w.player.x) ** 2 + (e.y - w.player.y) ** 2;
+    const d = (e.x - from.x) ** 2 + (e.y - from.y) ** 2;
     if (d < bd) {
       bd = d;
       best = e;
@@ -367,7 +404,132 @@ function fire(w: World): void {
       pierceLeft: w.stats.pierce,
       bounces: w.stats.ricochet,
       hit: [],
+      explodes: true,
     });
+  }
+}
+
+const MAX_BLASTS = 64; // effect sprites only; damage always applies
+const BLAST_LIFE_SEC = 0.4;
+
+function addBlast(w: World, kind: Blast['kind'], x: number, y: number): void {
+  if (w.blasts.length < MAX_BLASTS) w.blasts.push({ kind, x, y, at: w.time });
+}
+
+/** Damage the Warlord (capped at his HP); handles the kill and phase changes. */
+function damageBoss(w: World, dmg: number): void {
+  const wb = w.boss;
+  if (!wb || !wb.damageable || wb.hp <= 0 || w.won) return;
+  const d = Math.min(wb.hp, dmg);
+  wb.hp -= d;
+  w.bossDamage += d;
+  if (wb.state !== 'stagger') wb.flash = DT;
+  if (wb.hp <= 0) winContract(w);
+  else checkPhase(wb, bossHost(w));
+}
+
+/** Damage every living enemy (and the Warlord) touching the circle; newly dead indices go to `dead`. */
+function areaDamage(w: World, x: number, y: number, r: number, dmg: number, dead: number[]): void {
+  w.grid.query(x, y, r + 16, (i) => {
+    const e = w.enemies[i];
+    if (!e || e.hp <= 0 || e.fleeing) return;
+    const rr = r + e.def.radius;
+    if ((e.x - x) ** 2 + (e.y - y) ** 2 > rr * rr) return;
+    e.hp -= dmg;
+    if (e.def.knockbackImmune) e.flash = DT;
+    if (e.hp <= 0) dead.push(i);
+  });
+  const b = w.boss;
+  if (b && b.damageable && b.hp > 0 && Math.hypot(b.x - x, b.y - y) <= r + BOSS.radius) damageBoss(w, dmg);
+}
+
+/** DRONE BUDDY: up to 8 evenly spaced bodies orbit the merc, each firing 5 dmg twice a second. */
+function updateDrones(w: World): void {
+  const { count, mul } = overflow(w.stats.drones, DRONE.maxBodies, DRONE.overflowBonus);
+  while (w.drones.length < count)
+    w.drones.push({ x: w.player.x, y: w.player.y, aim: 0, cd: w.drones.length / (count * DRONE.shotsPerSec) });
+  w.drones.length = count;
+  const p = w.player;
+  for (let i = 0; i < count; i++) {
+    const d = w.drones[i];
+    const a = w.time * DRONE.orbitRadPerSec + (i / count) * Math.PI * 2;
+    d.x = p.x + Math.cos(a) * DRONE.orbitPx;
+    d.y = p.y + Math.sin(a) * DRONE.orbitPx;
+    d.cd -= DT;
+    const t = nearestEnemy(w, DRONE.range, d);
+    if (!t) {
+      if (d.cd < 0) d.cd = 0;
+      continue;
+    }
+    d.aim = Math.atan2(t.y - d.y, t.x - d.x);
+    if (d.cd > 0 || w.bullets.length >= CAPS.playerBullets) continue;
+    d.cd += 1 / DRONE.shotsPerSec;
+    w.bullets.push({
+      x: d.x,
+      y: d.y,
+      vx: Math.cos(d.aim) * w.stats.bulletSpeed,
+      vy: Math.sin(d.aim) * w.stats.bulletSpeed,
+      rangeLeft: DRONE.range + 40,
+      damage: DRONE.damage * mul * w.stats.damageMul,
+      pierceLeft: 0,
+      bounces: 0,
+      hit: [],
+      explodes: false,
+    });
+  }
+}
+
+/** Landing points for a volley: the densest on-screen clusters, spaced a blast apart; repeats if short. */
+export function volleyTargets(w: World, count: number): { x: number; y: number }[] {
+  const cands: { x: number; y: number; score: number }[] = [];
+  const step = Math.max(1, Math.floor(w.enemies.length / 80)); // sample big crowds
+  for (let i = 0; i < w.enemies.length; i += step) {
+    const e = w.enemies[i];
+    if (e.hp <= 0 || e.fleeing || !fullyOnScreen(w, e)) continue;
+    let score = 0;
+    w.grid.query(e.x, e.y, GRENADE.radius, (j) => {
+      const o = w.enemies[j];
+      if (o && !o.fleeing && (o.x - e.x) ** 2 + (o.y - e.y) ** 2 <= GRENADE.radius ** 2) score++;
+    });
+    cands.push({ x: e.x, y: e.y, score });
+  }
+  const b = w.boss;
+  if (b && b.damageable && b.hp > 0) cands.push({ x: b.x, y: b.y, score: 6 });
+  cands.sort((a, c) => c.score - a.score);
+  const picks: { x: number; y: number }[] = [];
+  for (const c of cands) {
+    if (picks.length >= count) break;
+    if (picks.some((q) => (q.x - c.x) ** 2 + (q.y - c.y) ** 2 < GRENADE.radius ** 2)) continue;
+    picks.push(c);
+  }
+  for (let i = 0; picks.length > 0 && picks.length < count; i++) picks.push(picks[i]);
+  return picks;
+}
+
+/** FRAG OUT: every 4 s, throw the volley; grenades explode on landing for 40 dmg in 48 px. */
+function updateGrenades(w: World, dead: number[]): void {
+  if (w.stats.grenades > 0 && w.time >= w.nextVolleyAt && !w.won) {
+    const { count, mul } = overflow(w.stats.grenades, GRENADE.maxPerVolley, GRENADE.overflowBonus);
+    const targets = volleyTargets(w, count);
+    if (targets.length > 0) {
+      w.nextVolleyAt = w.time + GRENADE.everySec;
+      const p = w.player;
+      for (const t of targets)
+        w.grenades.push({ sx: p.x, sy: p.y, tx: t.x, ty: t.y, x: p.x, y: p.y, t: 0, damage: GRENADE.damage * mul * w.stats.damageMul });
+    }
+  }
+  for (let i = w.grenades.length - 1; i >= 0; i--) {
+    const g = w.grenades[i];
+    g.t += DT;
+    const k = Math.min(1, g.t / GRENADE.flightSec);
+    g.x = g.sx + (g.tx - g.sx) * k;
+    g.y = g.sy + (g.ty - g.sy) * k;
+    if (k < 1) continue;
+    const crit = w.stats.crit > 0 && w.rng() < w.stats.crit;
+    areaDamage(w, g.tx, g.ty, GRENADE.radius, g.damage * (crit ? PERK_RULES.critMultiplier : 1), dead);
+    addBlast(w, 'frag', g.tx, g.ty);
+    w.grenades[i] = w.grenades[w.grenades.length - 1];
+    w.grenades.pop();
   }
 }
 
@@ -588,6 +750,7 @@ export function step(w: World, input: Input): void {
   updateWarlord(w);
 
   fire(w);
+  updateDrones(w);
   if (p.hasTarget) p.facing = p.aim;
   else if (p.moving) p.facing = Math.atan2(input.my, input.mx);
 
@@ -603,6 +766,7 @@ export function step(w: World, input: Input): void {
     bl.rangeLeft -= bv * DT;
     let spent = bl.rangeLeft <= 0;
     let hitEnemy: Enemy | undefined;
+    let hitDmg = 0;
     if (!spent) {
       grid.query(bl.x, bl.y, GRID_CELL / 2, (i) => {
         if (spent || hitEnemy) return;
@@ -611,7 +775,8 @@ export function step(w: World, input: Input): void {
         const rr = e.def.radius + PLAYER.bulletRadius;
         if ((e.x - bl.x) ** 2 + (e.y - bl.y) ** 2 > rr * rr) return;
         const crit = w.stats.crit > 0 && w.rng() < w.stats.crit;
-        e.hp -= bl.damage * (crit ? PERK_RULES.critMultiplier : 1);
+        hitDmg = bl.damage * (crit ? PERK_RULES.critMultiplier : 1);
+        e.hp -= hitDmg;
         bl.hit.push(e.id);
         if (e.def.knockbackImmune) e.flash = DT;
         else {
@@ -627,15 +792,21 @@ export function step(w: World, input: Input): void {
       const rr = BOSS.radius + PLAYER.bulletRadius;
       if ((wb.x - bl.x) ** 2 + (wb.y - bl.y) ** 2 <= rr * rr) {
         const crit = w.stats.crit > 0 && w.rng() < w.stats.crit;
-        const dmg = Math.min(wb.hp, bl.damage * (crit ? PERK_RULES.critMultiplier : 1));
-        wb.hp -= dmg;
-        w.bossDamage += dmg;
-        if (wb.state !== 'stagger') wb.flash = DT;
+        const dmg = bl.damage * (crit ? PERK_RULES.critMultiplier : 1);
         bl.hit.push(-1);
         spent = true; // pierce and ricochet stop on the Warlord
-        if (wb.hp <= 0) winContract(w);
-        else checkPhase(wb, bossHost(w));
+        damageBoss(w, dmg);
+        if (bl.explodes && w.stats.explosive > 0 && w.rng() < w.stats.explosive) {
+          // The blast is centred on the hit, so the Warlord takes it too, plus any adds beside him.
+          areaDamage(w, bl.x, bl.y, EXPLOSIVE.radius, dmg * EXPLOSIVE.damageShare, dead);
+          addBlast(w, 'he', bl.x, bl.y);
+        }
       }
+    }
+    if (hitEnemy && bl.explodes && w.stats.explosive > 0 && w.rng() < w.stats.explosive) {
+      // HE ROUNDS: half the hit's damage to everything within 32 px, the target included (design.md 16.7).
+      areaDamage(w, hitEnemy.x, hitEnemy.y, EXPLOSIVE.radius, hitDmg * EXPLOSIVE.damageShare, dead);
+      addBlast(w, 'he', hitEnemy.x, hitEnemy.y);
     }
     if (hitEnemy) {
       if (bl.pierceLeft > 0) bl.pierceLeft--;
@@ -647,8 +818,10 @@ export function step(w: World, input: Input): void {
       w.bullets.pop();
     }
   }
+  updateGrenades(w, dead);
   dead.sort((a, b) => b - a);
   for (const i of dead) killEnemy(w, i);
+  if (w.blasts.length && w.time - w.blasts[0].at > BLAST_LIFE_SEC) w.blasts = w.blasts.filter((x) => w.time - x.at <= BLAST_LIFE_SEC);
 
   // Enemy bullets.
   for (let b = w.enemyBullets.length - 1; b >= 0; b--) {
