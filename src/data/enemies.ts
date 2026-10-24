@@ -61,7 +61,7 @@ export const GRUNT_WEAPONS = {
   weights: { shovel: 50, baton: 30, sledge: 20 } as Record<GruntWeapon, number>,
   walkFrameMs: 150, // two walk frames alternate
   // Swing on touch, animation only: the damage lands on the touch with no delay (Designer).
-  windupMs: 80,
+  windupMs: 60,
   strikeMs: 120,
 };
 
