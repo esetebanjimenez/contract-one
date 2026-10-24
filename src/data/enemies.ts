@@ -1,10 +1,10 @@
 export interface RangedDef {
-  intervalSec: number;
   damage: number;
   bulletSpeed: number;
   bulletRange: number;
   stopDistance: number; // stops advancing inside this distance
-  telegraphSec: number; // muzzle flash before each shot
+  aimSec: number; // stop with a muzzle glint before each shot (design.md 16.4)
+  moveSec: number; // minimum move time between stops at 0:00
 }
 
 export interface EnemyDef {
@@ -32,7 +32,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     contactDamage: 8,
     scrap: 3,
     radius: 9,
-    ranged: { intervalSec: 2, damage: 10, bulletSpeed: 95, bulletRange: 420, stopDistance: 140, telegraphSec: 0.3 },
+    ranged: { damage: 10, bulletSpeed: 95, bulletRange: 420, stopDistance: 140, aimSec: 0.6, moveSec: 2 },
   },
 };
 
@@ -40,8 +40,8 @@ export const ENEMIES: Record<string, EnemyDef> = {
 export const SCALING = {
   hpPerMinute: 0.14, // HP x (1 + 0.14 m), fixed at spawn
   contactPerMinute: 0.03, // contact damage x (1 + 0.03 m), at hit time
-  rifleIntervalPerMinute: 0.08, // fire interval 2.0 - 0.08 m
-  rifleIntervalMin: 1.2,
+  rifleMovePerMinute: 0.05, // move time between shots 2.0 - 0.05 m (design.md 16.4)
+  rifleMoveMin: 1.4,
 };
 
 /** Elite variant of any base type (design.md section 5). */

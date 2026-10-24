@@ -4,7 +4,7 @@ import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
 import { SPAWN } from '../src/data/spawns';
 import { PERKS } from '../src/data/perks';
-import { computeStats, drawOffer, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
+import { computeStats, drawOffer, softMove, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
 import { bossHp } from '../src/data/boss';
 import { checkPhase } from '../src/sim/boss';
@@ -14,7 +14,9 @@ import {
   inPressureWave,
   isRingWave,
   killEnemy,
-  rifleInterval,
+  clumpPickups,
+  fullyOnScreen,
+  rifleMoveSec,
   riflemenAlive,
   spawnRate,
   step,
@@ -29,12 +31,14 @@ describe('perk tiers', () => {
     expect(makeOffer('pierce', 'rare', s)).toEqual({ id: 'pierce', tier: 'common', value: 1 });
     expect(makeOffer('pierce', 'epic', s).value).toBe(2);
   });
-  it('clips the value to the max total', () => {
+  it('has no caps except crit, clipped at 100%', () => {
     const s = emptyStacks();
-    s.ricochet = 1;
-    s.dmg = 60;
-    expect(makeOffer('ricochet', 'mythic', s).value).toBe(1);
-    expect(makeOffer('dmg', 'epic', s).value).toBe(15);
+    s.ricochet = 50;
+    s.dmg = 600;
+    s.crit = 98;
+    expect(makeOffer('ricochet', 'mythic', s).value).toBe(3);
+    expect(makeOffer('dmg', 'epic', s).value).toBe(30);
+    expect(makeOffer('crit', 'common', s).value).toBe(2);
   });
   it('rolls tiers by level', () => {
     const rng = createRng(5);
@@ -56,19 +60,26 @@ describe('levels and perks', () => {
   it('follows 5 + 6 x (level - 1)', () => {
     expect([1, 2, 3, 4].map(scrapForLevel)).toEqual([5, 11, 17, 23]);
   });
-  it('offers 3 distinct perks and drops maxed ones', () => {
+  it('offers 4 distinct perks, with no caps except crit at 100%', () => {
     const s = emptyStacks();
     const rng = createRng(3);
     for (let i = 0; i < 50; i++) {
-      const o = drawOffer(s, 2, 1, 3, rng);
-      expect(new Set(o.map((x) => x.id)).size).toBe(3);
+      const o = drawOffer(s, 2, 1, 4, rng);
+      expect(new Set(o.map((x) => x.id)).size).toBe(4);
     }
-    for (const d of PERKS) if (d.id !== 'maxhp' && d.id !== 'move') s[d.id] = d.maxTotal;
-    expect(
-      drawOffer(s, 2, 1, 3, rng)
-        .map((x) => x.id)
-        .sort(),
-    ).toEqual(['maxhp', 'move']);
+    for (const d of PERKS) s[d.id] = 1000;
+    s.crit = 100;
+    for (let i = 0; i < 50; i++) {
+      const o = drawOffer(s, 2, 1, 4, rng);
+      expect(o).toHaveLength(4);
+      expect(o.some((x) => x.id === 'crit')).toBe(false);
+    }
+    expect(makeOffer('crit', 'mythic', { ...s, crit: 95 }).value).toBe(5);
+  });
+  it('counts move speed past +60% at half value', () => {
+    expect(softMove(40)).toBe(40);
+    expect(softMove(60)).toBe(60);
+    expect(softMove(100)).toBe(80);
   });
   it('guarantees a damage perk while the player has fewer than 2', () => {
     const rng = createRng(9);
@@ -115,7 +126,7 @@ describe('levels and perks', () => {
     w.pickups.push({ x: 0, y: 0, value: 5, age: 0, flying: true, cache: false, pop: 0 });
     step(w, { mx: 0, my: 0 });
     expect(w.phase).toBe('levelup');
-    expect(w.offer).toHaveLength(3);
+    expect(w.offer).toHaveLength(4);
     const { id, value } = w.offer[0];
     choosePerk(w, id);
     expect(w.phase).toBe('play');
@@ -138,10 +149,22 @@ describe('sim', () => {
     const w = createWorld(2);
     w.player.hp = w.stats.maxHp = 1e9;
     w.tick = -1e9; // keep the spawner quiet
-    w.enemies.push({ id: 1, def: ENEMIES.rifleman, x: 300, y: 0, hp: 1e9, maxHp: 1e9, fireTimer: 2, facing: 1, elite: false, flash: 0 });
-    for (let i = 0; i < Math.round(8 / DT); i++) step(w, { mx: 0, my: 0 });
+    w.enemies.push({
+      id: 1,
+      def: ENEMIES.rifleman,
+      x: 300,
+      y: 0,
+      hp: 1e9,
+      maxHp: 1e9,
+      fireTimer: 2,
+      facing: 1,
+      elite: false,
+      flash: 0,
+      aiming: false,
+    });
+    for (let i = 0; i < Math.round(12 / DT); i++) step(w, { mx: 0, my: 0 });
     expect(w.enemies[0].x).toBeGreaterThan(135);
-    expect(w.enemies[0].x).toBeLessThan(142);
+    expect(w.enemies[0].x).toBeLessThan(146);
     expect(w.player.hp).toBeLessThan(1e9);
   });
   it('never exceeds the enemy cap plus the pressure-wave overflow', () => {
@@ -164,11 +187,57 @@ describe('sim', () => {
       expect(w.phase).toBe('dead');
     }
   });
-  it('scales the Rifleman fire interval to 1.2 s at 10:00', () => {
-    expect(rifleInterval(0)).toBeCloseTo(2);
-    expect(rifleInterval(300)).toBeCloseTo(1.6);
-    expect(rifleInterval(600)).toBeCloseTo(1.2);
-    expect(rifleInterval(900)).toBeCloseTo(1.2);
+  it('scales the Rifleman move time between stops down to 1.4 s', () => {
+    expect(rifleMoveSec(0)).toBeCloseTo(2);
+    expect(rifleMoveSec(300)).toBeCloseTo(1.75);
+    expect(rifleMoveSec(720)).toBeCloseTo(1.4);
+    expect(rifleMoveSec(900)).toBeCloseTo(1.4);
+  });
+  it('Riflemen stop 0.6 s with a glint before firing, and never fire while off-screen', () => {
+    const w = createWorld(2);
+    w.player.hp = w.stats.maxHp = 1e9;
+    w.tick = -1e9;
+    w.enemies.push({
+      id: 1,
+      def: ENEMIES.rifleman,
+      x: 120,
+      y: 0,
+      hp: 1e9,
+      maxHp: 1e9,
+      fireTimer: 0,
+      facing: 1,
+      elite: false,
+      flash: 0,
+      aiming: false,
+    });
+    step(w, { mx: 0, my: 0 });
+    const e = w.enemies[0];
+    expect(e.aiming).toBe(true);
+    for (let i = 0; i < Math.round(0.5 / DT); i++) step(w, { mx: 0, my: 0 });
+    expect(e.aiming).toBe(true);
+    expect(w.enemyBullets).toHaveLength(0);
+    for (let i = 0; i < Math.round(0.2 / DT); i++) step(w, { mx: 0, my: 0 });
+    expect(w.enemyBullets).toHaveLength(1);
+    expect(e.aiming).toBe(false);
+    // Off-screen: never stops to aim.
+    const far = createWorld(2);
+    far.tick = -1e9;
+    far.enemies.push({
+      id: 1,
+      def: ENEMIES.rifleman,
+      x: 2000,
+      y: 0,
+      hp: 1e9,
+      maxHp: 1e9,
+      fireTimer: 0,
+      facing: 1,
+      elite: false,
+      flash: 0,
+      aiming: false,
+    });
+    expect(fullyOnScreen(far, far.enemies[0])).toBe(false);
+    step(far, { mx: 0, my: 0 });
+    expect(far.enemies[0].aiming).toBe(false);
   });
   it('keeps at most 30 Riflemen and replaces Grunts at the cap late in the run', () => {
     const w = createWorld(9);
@@ -283,20 +352,14 @@ describe('M3 contract', () => {
     expect(w.boss!.damageable).toBe(true);
     expect(w.boss!.y).toBeGreaterThanOrEqual(a.y0);
   });
-  it('offers FIELD RATIONS when every perk is maxed', () => {
-    const w = godMode(7);
-    for (const d of PERKS) w.stacks[d.id] = d.maxTotal;
-    w.player.hp = 10;
-    w.stats.maxHp = 100;
-    w.pendingLevels = 1;
-    w.scrap = 0;
-    step(w, { mx: 0, my: 0 });
-    expect(w.phase).toBe('levelup');
-    expect(w.offer).toEqual([{ id: 'rations', tier: 'common', value: 25 }]);
-    const lv = w.level;
-    choosePerk(w, 'rations');
-    expect(w.player.hp).toBe(35);
-    expect(w.level).toBe(lv + 1);
-    expect(w.phase).toBe('play');
+  it('clumps 8+ grounded pieces within 24 px into one at their centre', () => {
+    const w = createWorld(3);
+    w.pickups.length = 0;
+    for (let i = 0; i < 8; i++) w.pickups.push({ x: 100 + i * 2, y: 50, value: 1, age: 0, flying: false, cache: false, pop: 0 });
+    for (let i = 0; i < 7; i++) w.pickups.push({ x: 400 + i * 2, y: 50, value: 1, age: 0, flying: false, cache: false, pop: 0 });
+    clumpPickups(w);
+    expect(w.pickups).toHaveLength(8);
+    expect(w.pickups[0]).toMatchObject({ x: 107, y: 50, value: 8 });
+    expect(w.pickups[0].pop).toBeGreaterThan(0);
   });
 });

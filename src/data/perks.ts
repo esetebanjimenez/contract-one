@@ -12,7 +12,7 @@ export interface PerkDef {
   text: string;
   /** Value per tier in display units (% or whole numbers); null = no Rare version, rolls as Common. */
   values: Record<TierId, number | null>;
-  /** Cap on the total effect, display units. Excess is lost. */
+  /** Hard limit on the total effect, display units (design.md 16.1: only crit has one). Excess is lost. */
   maxTotal: number;
   /** Display units to sim units (0.01 for percentages). */
   scale: number;
@@ -20,6 +20,9 @@ export interface PerkDef {
   damageType: boolean; // counts toward the damage-perk offer rule
   category: PerkCategory;
 }
+
+/** design.md 16.1: move speed gains past +60% count at half value. */
+export const MOVE_SOFT = { kneePct: 60, pastKnee: 0.5 };
 
 const pct = (c: number, r: number, e: number, m: number) => ({ common: c, rare: r, epic: e, mythic: m });
 const whole = { common: 1, rare: null, epic: 2, mythic: 3 };
@@ -31,7 +34,7 @@ export const PERKS: PerkDef[] = [
     name: 'HOLLOW POINTS',
     text: '+{v}% damage',
     values: pct(15, 23, 30, 45),
-    maxTotal: 75,
+    maxTotal: Infinity,
     scale: 0.01,
     weight: 1,
     damageType: true,
@@ -42,7 +45,7 @@ export const PERKS: PerkDef[] = [
     name: 'TRIGGER JOB',
     text: '+{v}% fire rate',
     values: pct(12, 18, 24, 36),
-    maxTotal: 60,
+    maxTotal: Infinity,
     scale: 0.01,
     weight: 1,
     damageType: true,
@@ -53,7 +56,7 @@ export const PERKS: PerkDef[] = [
     name: 'AP ROUNDS',
     text: '+{v} pierce',
     values: whole,
-    maxTotal: 3,
+    maxTotal: Infinity,
     scale: 1,
     weight: 1,
     damageType: true,
@@ -64,7 +67,7 @@ export const PERKS: PerkDef[] = [
     name: 'EXTRA BARREL',
     text: '+{v} bullet{s}',
     values: whole,
-    maxTotal: 3,
+    maxTotal: Infinity,
     scale: 1,
     weight: 1,
     damageType: true,
@@ -75,7 +78,7 @@ export const PERKS: PerkDef[] = [
     name: 'LIGHT KIT',
     text: '+{v}% move speed',
     values: pct(8, 12, 16, 24),
-    maxTotal: 32,
+    maxTotal: Infinity,
     scale: 0.01,
     weight: 1,
     damageType: false,
@@ -86,7 +89,7 @@ export const PERKS: PerkDef[] = [
     name: 'PLATE CARRIER',
     text: '+{v} max HP, heal',
     values: pct(20, 30, 40, 60),
-    maxTotal: 100,
+    maxTotal: Infinity,
     scale: 1,
     weight: 1,
     damageType: false,
@@ -97,7 +100,7 @@ export const PERKS: PerkDef[] = [
     name: 'SCRAP MAGNET',
     text: '+{v}% magnet',
     values: pct(30, 45, 60, 90),
-    maxTotal: 90,
+    maxTotal: Infinity,
     scale: 0.01,
     weight: 1,
     damageType: false,
@@ -108,7 +111,7 @@ export const PERKS: PerkDef[] = [
     name: 'MARKSMAN',
     text: '+{v}% crit',
     values: pct(5, 8, 10, 15),
-    maxTotal: 25,
+    maxTotal: 100, // stops at 100%, then leaves the draw
     scale: 0.01,
     weight: 1,
     damageType: true,
@@ -119,7 +122,7 @@ export const PERKS: PerkDef[] = [
     name: 'HOT LOADS',
     text: '+{v}% speed/range',
     values: pct(15, 23, 30, 45),
-    maxTotal: 45,
+    maxTotal: Infinity,
     scale: 0.01,
     weight: 1,
     damageType: false,
@@ -130,7 +133,7 @@ export const PERKS: PerkDef[] = [
     name: 'MEDKIT',
     text: '+{v} HP per 2s',
     values: whole,
-    maxTotal: 3,
+    maxTotal: Infinity,
     scale: 1,
     weight: 1,
     damageType: false,
@@ -141,7 +144,7 @@ export const PERKS: PerkDef[] = [
     name: 'CERAMIC PLATES',
     text: '-{v} dmg per hit',
     values: whole,
-    maxTotal: 3,
+    maxTotal: Infinity,
     scale: 1,
     weight: 1,
     damageType: false,
@@ -152,7 +155,7 @@ export const PERKS: PerkDef[] = [
     name: 'RICOCHET',
     text: '+{v} bounce{s}',
     values: whole,
-    maxTotal: 2,
+    maxTotal: Infinity,
     scale: 1,
     weight: 1,
     damageType: true,
@@ -195,7 +198,3 @@ export function perkDef(id: PerkId): PerkDef {
 export function effectText(d: PerkDef, v: number): string {
   return d.text.replace('{v}', String(v)).replace('{s}', v === 1 ? '' : 's');
 }
-
-/** Fallback card when every perk is maxed (design.md 15.5): tier-less, grey frame. */
-export const RATIONS = { id: 'rations', name: 'FIELD RATIONS', text: 'Heal 25 HP', heal: 25, color: '#9AA0A6' } as const;
-export type OfferId = PerkId | typeof RATIONS.id;

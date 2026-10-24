@@ -1,3 +1,4 @@
+import { DT } from '../data/sim';
 import { Application, Assets, Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { BOSS } from '../data/boss';
 import { JOYSTICK } from '../data/controls';
@@ -273,15 +274,14 @@ export class Renderer {
         s.rotation = 0;
         s.scale.set(e.facing * sc, sc);
       }
-      if (r && e.fireTimer <= r.telegraphSec) {
-        // 0.3 s muzzle-flash telegraph before each Rifleman shot.
+      // Muzzle glint (design.md 16.4): a 3x3 #FF4A1C dot blinking every 0.15 s during the 0.6 s stop,
+      // then a 1-frame white flash on the shot.
+      const fired = r && e.firedAt !== undefined && w.time - e.firedAt < DT * 1.5;
+      if (r && ((e.aiming && Math.floor(e.fireTimer / 0.15) % 2 === 0) || fired)) {
+        const a = Math.atan2(p.y - e.y, p.x - e.x);
         this.fx
-          .circle(
-            Math.round(e.x + Math.cos(Math.atan2(p.y - e.y, p.x - e.x)) * 12),
-            Math.round(e.y + Math.sin(Math.atan2(p.y - e.y, p.x - e.x)) * 12),
-            3,
-          )
-          .fill({ color: 0xff6a2a, alpha: 0.9 });
+          .rect(Math.round(e.x + Math.cos(a) * 12) - 1, Math.round(e.y + Math.sin(a) * 12) - 1, 3, 3)
+          .fill({ color: fired ? 0xffffff : 0xff4a1c });
       }
     });
     this.enemies.hideFrom(w.enemies.length);

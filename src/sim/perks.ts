@@ -1,13 +1,13 @@
-import { PERK_RULES, PERKS, TIER_ODDS, TIERS, perkDef, type OfferId, type PerkId, type TierId } from '../data/perks';
+import { MOVE_SOFT, PERK_RULES, PERKS, TIER_ODDS, TIERS, perkDef, type PerkId, type TierId } from '../data/perks';
 import { PLAYER } from '../data/player';
 
 /** Total effect per perk in display units (e.g. dmg 45 = +45%). */
 export type PerkStacks = Record<PerkId, number>;
 
 export interface Offer {
-  id: OfferId;
+  id: PerkId;
   tier: TierId;
-  /** Value actually gained (clipped to the perk's max total). */
+  /** Value actually gained (clipped to the perk's hard limit, if any). */
   value: number;
 }
 
@@ -31,6 +31,11 @@ export interface PlayerStats {
   ricochet: number;
 }
 
+/** Effective move % after the soft limit (design.md 16.1). */
+export function softMove(pct: number): number {
+  return pct <= MOVE_SOFT.kneePct ? pct : MOVE_SOFT.kneePct + (pct - MOVE_SOFT.kneePct) * MOVE_SOFT.pastKnee;
+}
+
 export function computeStats(s: PerkStacks): PlayerStats {
   const p = (id: PerkId) => perkDef(id).scale * s[id];
   return {
@@ -38,7 +43,7 @@ export function computeStats(s: PerkStacks): PlayerStats {
     fireRate: PLAYER.fireRate * (1 + p('rof')),
     pierce: PLAYER.pierce + p('pierce'),
     projectiles: 1 + p('multishot'),
-    speed: PLAYER.speed * (1 + p('move')),
+    speed: PLAYER.speed * (1 + softMove(s.move) * perkDef('move').scale),
     maxHp: PLAYER.hp + p('maxhp'),
     magnet: PLAYER.magnet * (1 + p('magnet')),
     crit: p('crit'),

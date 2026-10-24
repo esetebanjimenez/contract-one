@@ -1,6 +1,6 @@
 /** design.md section 7. */
 export const LEVELS = {
-  perkChoices: 3,
+  perkChoices: 4, // 2x2 grid (design.md 16.2)
   pickupLifetimeSec: Infinity, // Scrap never despawns (Esteban, 2026-10-24)
 };
 

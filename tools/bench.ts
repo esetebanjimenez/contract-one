@@ -21,6 +21,7 @@ for (let i = 0; i < CAPS.enemies; i++) {
     facing: 1,
     elite: false,
     flash: 0,
+    aiming: false,
   });
 }
 const steps = 1200;

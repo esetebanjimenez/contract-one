@@ -2,7 +2,7 @@ import { BOSS } from '../data/boss';
 import { MAX_VIEW_HEIGHT, NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 import { LEVELS, scrapForLevel } from '../data/levels';
-import { PERK_RULES, RATIONS, perkDef, type OfferId } from '../data/perks';
+import { PERK_RULES, perkDef, type PerkId } from '../data/perks';
 import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { RUN } from '../data/run';
@@ -19,7 +19,9 @@ export interface Enemy {
   y: number;
   hp: number;
   maxHp: number;
-  fireTimer: number;
+  fireTimer: number; // seconds left of the current move or aim phase
+  aiming: boolean; // Riflemen: stopped with the muzzle glint, about to fire
+  firedAt?: number; // run time of the last shot (1-frame white muzzle flash)
   facing: 1 | -1;
   elite: boolean;
   flash: number; // seconds of white hit-flash left
@@ -111,6 +113,7 @@ export interface World {
   won: boolean; // the Warlord is dead; the UI plays the outro and shows results
   wonAt: number; // run time of the kill
   bossArrivedAt: number; // run time he became damageable (-1 before)
+  nextClumpAt: number; // run time of the next Scrap clumping pass
 }
 
 const HALF_W = NATIVE_WIDTH / 2;
@@ -154,6 +157,7 @@ export function createWorld(seed: number): World {
     won: false,
     wonAt: 0,
     bossArrivedAt: -1,
+    nextClumpAt: CLUMP.everySec,
   };
 }
 
@@ -214,8 +218,17 @@ function edgePoint(w: World, angle: number): { x: number; y: number } {
   return { x: w.player.x + dx * d, y: w.player.y + dy * d };
 }
 
-export function rifleInterval(t: number): number {
-  return Math.max(SCALING.rifleIntervalMin, 2 - SCALING.rifleIntervalPerMinute * (t / 60));
+/** Minimum move time between a Rifleman's stops (design.md 16.4). */
+export function rifleMoveSec(t: number): number {
+  return Math.max(SCALING.rifleMoveMin, 2 - SCALING.rifleMovePerMinute * (Math.max(0, t) / 60));
+}
+
+/** Whole body inside the current view (the locked arena view once it exists). */
+export function fullyOnScreen(w: World, e: Enemy): boolean {
+  const x0 = w.arena ? w.arena.camX : w.player.x - HALF_W;
+  const y0 = w.arena ? w.arena.camY : w.player.y - w.viewH / 2;
+  const r = e.def.radius;
+  return e.x - r >= x0 && e.x + r <= x0 + NATIVE_WIDTH && e.y - r >= y0 && e.y + r <= y0 + w.viewH;
 }
 
 export function contactDamage(e: Enemy, t: number): number {
@@ -277,7 +290,8 @@ function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef):
     y: p.y,
     hp: maxHp,
     maxHp,
-    fireTimer: rifleInterval(w.time),
+    fireTimer: rifleMoveSec(w.time),
+    aiming: false,
     facing: 1,
     elite,
     flash: 0,
@@ -398,6 +412,45 @@ function addScrap(w: World, v: number): void {
 }
 
 const MERGE_POP_SEC = 0.25;
+/** design.md 16.3: once a second, 8+ grounded pieces within 24 px merge into one at their centre. */
+const CLUMP = { everySec: 1, min: 8, radius: 24 };
+
+export function clumpPickups(w: World): void {
+  const ks = w.pickups;
+  const used = new Uint8Array(ks.length);
+  const r2 = CLUMP.radius * CLUMP.radius;
+  const group: number[] = [];
+  let removed = false;
+  for (let i = 0; i < ks.length; i++) {
+    if (used[i] || ks[i].flying) continue;
+    group.length = 0;
+    for (let j = i; j < ks.length; j++) {
+      if (used[j] || ks[j].flying) continue;
+      if ((ks[j].x - ks[i].x) ** 2 + (ks[j].y - ks[i].y) ** 2 <= r2) group.push(j);
+    }
+    if (group.length < CLUMP.min) continue;
+    let sx = 0;
+    let sy = 0;
+    let value = 0;
+    let cache = false;
+    for (const j of group) {
+      sx += ks[j].x;
+      sy += ks[j].y;
+      value += ks[j].value;
+      cache ||= ks[j].cache;
+      used[j] = 1;
+    }
+    const k = ks[i];
+    k.x = sx / group.length;
+    k.y = sy / group.length;
+    k.value = value;
+    k.cache = cache;
+    k.pop = MERGE_POP_SEC;
+    used[i] = 2; // keep
+    removed = true;
+  }
+  if (removed) w.pickups = ks.filter((_, i) => used[i] !== 1);
+}
 
 export function killEnemy(w: World, i: number): void {
   const e = w.enemies[i];
@@ -476,7 +529,7 @@ export function step(w: World, input: Input): void {
       continue;
     }
     const r = e.def.ranged;
-    if (!r || d > r.stopDistance) {
+    if (!r || (!e.aiming && d > r.stopDistance)) {
       const sp = e.def.speed * (e.elite ? ELITE.speed : 1);
       e.x += (dx / d) * sp * DT;
       e.y += (dy / d) * sp * DT;
@@ -498,13 +551,22 @@ export function step(w: World, input: Input): void {
     });
     if (e.flash > 0) e.flash -= DT;
     if (r) {
+      // Move for at least the move time, stop with a glint once fully on-screen, then fire (design.md 16.4).
       e.fireTimer -= DT;
-      if (e.fireTimer <= 0) {
-        e.fireTimer += rifleInterval(w.time);
+      if (!e.aiming) {
+        if (e.fireTimer <= 0 && fullyOnScreen(w, e)) {
+          e.aiming = true;
+          e.fireTimer = r.aimSec;
+        }
+      } else if (e.fireTimer <= 0) {
+        e.aiming = false;
+        e.fireTimer = rifleMoveSec(w.time);
         const shots = e.elite ? ELITE.rifleSpreadShots : 1;
         const base = Math.atan2(dy, dx);
         const spread = (ELITE.rifleSpreadDeg * Math.PI) / 180;
-        for (let k = 0; k < shots && d <= r.bulletRange && w.enemyBullets.length < CAPS.enemyBullets; k++) {
+        const n = fullyOnScreen(w, e) ? shots : 0;
+        if (n > 0) e.firedAt = w.time;
+        for (let k = 0; k < n && d <= r.bulletRange && w.enemyBullets.length < CAPS.enemyBullets; k++) {
           const a = base + (k - (shots - 1) / 2) * spread;
           w.enemyBullets.push({
             x: e.x,
@@ -608,6 +670,10 @@ export function step(w: World, input: Input): void {
   }
 
   // Pickups.
+  if (w.time >= w.nextClumpAt) {
+    w.nextClumpAt += CLUMP.everySec;
+    clumpPickups(w);
+  }
   for (let i = w.pickups.length - 1; i >= 0; i--) {
     const k = w.pickups[i];
     k.age += DT;
@@ -730,23 +796,12 @@ function clearField(w: World): void {
 
 function openLevelUp(w: World): void {
   w.offer = drawOffer(w.stacks, w.damagePicks, w.level, LEVELS.perkChoices, w.rng);
-  // Every perk maxed: the FIELD RATIONS card, so a level-up is never empty (design.md 15.5).
-  if (w.offer.length === 0) w.offer = [{ id: RATIONS.id, tier: 'common', value: RATIONS.heal }];
   w.phase = 'levelup';
 }
 
-export function choosePerk(w: World, id: OfferId): void {
+export function choosePerk(w: World, id: PerkId): void {
   const o = w.offer.find((x) => x.id === id);
   if (w.phase !== 'levelup' || !o) return;
-  if (o.id === RATIONS.id) {
-    w.player.hp = Math.min(w.stats.maxHp, w.player.hp + o.value);
-    w.level++;
-    w.pendingLevels--;
-    w.offer = [];
-    w.phase = 'play';
-    if (w.pendingLevels > 0) openLevelUp(w);
-    return;
-  }
   const prevMax = w.stats.maxHp;
   w.stacks[o.id] += o.value;
   if (perkDef(o.id).damageType) w.damagePicks++;

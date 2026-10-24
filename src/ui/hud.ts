@@ -1,6 +1,6 @@
 import { BOSS } from '../data/boss';
 import { scrapForLevel } from '../data/levels';
-import { RATIONS, TIERS, effectText, perkDef, type OfferId, type PerkId } from '../data/perks';
+import { TIERS, effectText, perkDef, type PerkId } from '../data/perks';
 import { RUN } from '../data/run';
 import { enragedFor } from '../sim/boss';
 import type { World } from '../sim/world';
@@ -20,7 +20,7 @@ export class Hud {
 
   constructor(
     root: HTMLElement,
-    private readonly onPick: (id: OfferId) => void,
+    private readonly onPick: (id: PerkId) => void,
     private readonly onRestart: () => void,
   ) {
     root.insertAdjacentHTML(
@@ -113,16 +113,6 @@ export class Hud {
         `<div class="cards">` +
         w.offer
           .map((o) => {
-            if (o.id === RATIONS.id) {
-              // Tier-less fallback in a grey frame (design.md 15.5).
-              return (
-                `<button class="card tier-none" data-id="${o.id}" style="--tc:${RATIONS.color}">` +
-                `<div class="tbar"></div>` +
-                `<div class="tile"></div>` + // icon waits on Esteban's okay
-                `<div class="pname">${RATIONS.name}</div><div class="rule"></div>` +
-                `<div class="eff">${RATIONS.text.toUpperCase()}</div></button>`
-              );
-            }
             const d = perkDef(o.id);
             const t = TIERS.find((x) => x.id === o.tier)!;
             // The icon is never shown without its name (design.md 15.2).
@@ -138,7 +128,7 @@ export class Hud {
         `</div>`;
       this.modal
         .querySelectorAll<HTMLButtonElement>('.card')
-        .forEach((b) => b.addEventListener('click', () => this.onPick(b.dataset.id as OfferId)));
+        .forEach((b) => b.addEventListener('click', () => this.onPick(b.dataset.id as PerkId)));
     } else {
       this.showResults(w);
     }
