@@ -97,9 +97,9 @@ Vertical slice subset: `dmg`, `rof`, `pierce`, `multishot`, `move`, `maxhp`.
 ## 9. Boss — The Warlord
 - **HP:** 2,000 × (1 + 0.1 × player level above 20). Size 64–96 px. A boss HP bar sits at the top of the screen.
 - **Arrival:** a 3 s warning banner, then the boss enters from the top edge.
-- **Phase 1 (100–66%):** Charge. A red telegraph line is shown for 0.8 s, then he dashes 300 px at 4× speed. 35 dmg on contact. He walks between charges.
-- **Phase 2 (66–33%):** adds a Bullet ring. 16 bullets go out radially every 2 s, with one rotating gap. Charges continue.
-- **Phase 3 (<33%):** adds Call reinforcements. 12 Grunts spawn in a ring every 8 s. Rings come every 1.5 s, and charge cooldown −30%.
+- **Phase 1 (100–66%):** Charge. A red telegraph line is shown for 0.8 s, then he dashes 300 px at 4× speed. 25 dmg on contact. He walks between charges.
+- **Phase 2 (66–33%):** adds a Bullet ring. 16 bullets go out radially every 3 s, with one rotating gap. Charges continue.
+- **Phase 3 (<33%):** adds Call reinforcements. 12 Grunts spawn in a ring every 8 s. Rings come every 2 s, and charge cooldown −30%.
 - His contact damage is 20, and he ignores the soft cap.
 - Kill: a slow-mo, then "CONTRACT COMPLETE".
 
@@ -230,9 +230,9 @@ Goal: a run has a real ending. You survive to 10:00, kill the Warlord, and get a
 | Body | about 80 px on a 96 px canvas, hitbox radius 30 |
 | Walk speed | 35 px/s toward the player |
 | Contact damage | 20 (not scaled by §12) |
-| Charge | every 5 s; 0.8 s telegraph line, then a 300 px dash at 140 px/s; 35 dmg (was 25) |
-| Phase 2 ring (below 66%) | 16 bullets every 2 s (was 3 s), one rotating gap of 2 bullets, 90 px/s, 10 dmg |
-| Phase 3 adds (below 33%) | 12 Grunts in a ring every 8 s; ring every 1.5 s (was 2 s); charge every 3.5 s |
+| Charge | every 5 s; 0.8 s telegraph line, then a 300 px dash at 140 px/s; 25 dmg (35 proposed in `bf9b206`, **on hold**) |
+| Phase 2 ring (below 66%) | 16 bullets every 3 s (2 s proposed, **on hold**), one rotating gap of 2 bullets, 90 px/s, 10 dmg |
+| Phase 3 adds (below 33%) | 12 Grunts in a ring every 8 s; ring every 2 s (1.5 s proposed, **on hold**); charge every 3.5 s |
 | Knockback | immune |
 | Phase change | 1 s stagger: he can't attack, flashes white, and every enemy bullet on screen is cleared |
 | Enrage | if still alive at 12:00 (2:00 into the fight): ring every 1.0 s, walk speed ×1.5. It must be lethal, not just a timer. Every run ends. |
@@ -254,7 +254,7 @@ At 0 HP: a 0.5 s freeze, the banner "KIA", then the results screen. If the boss 
 - Kite-smart kills the boss in **40–60%** of runs that reach 10:00.
 - Fight length for kite-smart: **60–120 s**.
 - The enrage fires in **under 10%** of fights.
-- Lever order if targets miss: boss HP base (2000), then the phase-2 ring interval, then charge damage. Sim at `7b0a900` showed kills of 82–100%, so all three levers are now used: HP 2000, rings at 2 s / 1.5 s, charge 35.
+- Lever order if targets miss: boss HP base (2000), then the phase-2 ring interval, then charge damage. Sim at `7b0a900` showed kills of 82–100%, The ring and charge buffs are on hold (Producer, 2026-10-24): Esteban found the fight hard in play, so we tune from his arena playtest rather than the bot kill rate.
 
 ### 14.8 Needs
 - **Art:** the boss sprite (top-down, 96 px canvas, walk and charge pose), a telegraph line in red-orange, and the banner and results-screen look.
@@ -267,8 +267,8 @@ At 10:00, when the boss warning starts:
 - **Boss:** walks in from the top edge as before. Once he's fully inside, the walls hold him too. A charge that hits a wall stops there. His bullets despawn at the walls.
 - **Spawns:** none during the fight, apart from the phase 3 adds, which walk in from just outside the arena edges, evenly spaced around it. Adds drop **no Scrap**.
 - **Scrap:** pieces already on the ground in the arena can still be picked up. Level-ups from them still happen, but the fight itself gives no levels.
-- **Edge read:** a 1px red-orange line on the arena edge, shown with the lock. Tell to the Artist.
-- Retune after it lands: the §14.7 targets still apply. Expect fewer kills, since there's no levelling during the fight.
+- **Edge read:** the Artist's 8px hazard-tape band (4px diagonal stripes in red-orange `#FF4A1C` and `#14110F`, with a 1px dark inner line), drawn in code. It grows in from the screen edges over 0.5 s at the lock.
+- Tune from Esteban's playtest of the arena first, then the bot sim.
 
 ### 14.10 Enrage tell
 At enrage, the Warlord's outline pulses red-orange `#FF4A1C` every 0.5 s, and "ENRAGED" shows in the HUD strip under the boss bar. No new art.
@@ -337,4 +337,4 @@ Tier odds by player level (Common / Rare / Epic / Mythic):
 ### 15.5 Perk pool exhausted
 - When every perk is at its max, the level-up shows one fallback card: **FIELD RATIONS**, "Heal 25 HP", tier-less in a grey frame. It always appears, so a level-up is never empty. The XP bar keeps showing.
 - If only some perks are maxed, maxed perks drop out of the draw and the card count falls to what's left (at least 1, using the fallback if needed).
-- Playtest flag: Esteban hit level 49 by 11:05 with every perk maxed, against ~23 for the bots at 10:00, so humans collect far more Scrap. Next lever: the Scrap-to-level curve (review after the arena lands).
+- Playtest flag: Esteban hit level 49 by 11:05 with every perk maxed, against ~23 for the bots at 10:00, so humans collect far more Scrap. Esteban found the fight hard, so we leave the level curve alone until the arena playtest.
