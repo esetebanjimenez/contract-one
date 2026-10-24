@@ -227,7 +227,7 @@ Goal: a run has a real ending. You survive to 10:00, kill the Warlord, and get a
 ### 14.3 Boss numbers (refines §9)
 | Value | Start |
 |---|---|
-| HP | 2000 × (1 + 0.1 × (level − 20)), clamped 2000–5000, using the player level at arrival |
+| HP | 2000 flat (level slope 0; was 0.1). Keep inside the 2000–5000 clamp. M3 sim `4131b07` showed 3:30 fights at ~3400 HP. |
 | Body | about 80 px on a 96 px canvas, hitbox radius 30 |
 | Walk speed | 35 px/s toward the player |
 | Contact damage | 20 (not scaled by §12) |
@@ -236,7 +236,7 @@ Goal: a run has a real ending. You survive to 10:00, kill the Warlord, and get a
 | Phase 3 adds (below 33%) | 12 Grunts in a ring every 8 s; ring every 2 s; charge every 3.5 s |
 | Knockback | immune |
 | Phase change | 1 s stagger: he can't attack, flashes white, and every enemy bullet on screen is cleared |
-| Enrage | if still alive at 13:00: ring every 1.5 s, walk speed ×1.5. Every run ends. |
+| Enrage | if still alive at 12:00 (2:00 into the fight): ring every 1.0 s, walk speed ×1.5. It must be lethal, not just a timer. Every run ends. |
 
 ### 14.4 Win
 On the kill: 1 s slow-mo at 0.3×, every other enemy dies with no Scrap, the banner "CONTRACT COMPLETE" shows, then 2 s later the results screen.
