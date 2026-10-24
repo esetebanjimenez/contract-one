@@ -1,0 +1,142 @@
+import { Application, Assets, Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
+import { JOYSTICK } from '../data/controls';
+import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
+import { MERC_ART, RIFLEMAN_ART } from '../data/player';
+import type { World } from '../sim/world';
+import type { Controls } from '../ui/input';
+
+const ART = [
+  'ground_sand_00',
+  'merc_t1_idle_00',
+  'grunt_t1_walk_00',
+  'rifleman_t1_idle_00',
+  'bullet_player_00',
+  'bullet_enemy_00',
+  'scrap_00',
+] as const;
+type ArtId = (typeof ART)[number];
+
+const ENEMY_ART: Record<string, ArtId> = { grunt: 'grunt_t1_walk_00', rifleman: 'rifleman_t1_idle_00' };
+
+/** Grows a list of sprites on demand and hides the unused tail each frame. */
+class Pool {
+  private items: Sprite[] = [];
+  constructor(private readonly layer: Container) {}
+  get(i: number, tex: Texture): Sprite {
+    let s = this.items[i];
+    if (!s) {
+      s = new Sprite(tex);
+      s.anchor.set(0.5);
+      this.layer.addChild(s);
+      this.items[i] = s;
+    }
+    if (s.texture !== tex) s.texture = tex;
+    s.visible = true;
+    return s;
+  }
+  hideFrom(n: number): void {
+    for (let i = n; i < this.items.length; i++) this.items[i].visible = false;
+  }
+}
+
+export class Renderer {
+  private tex = {} as Record<ArtId, Texture>;
+  private ground!: TilingSprite;
+  private world = new Container();
+  private pickups!: Pool;
+  private enemies!: Pool;
+  private enemyBullets!: Pool;
+  private bullets!: Pool;
+  private merc!: Sprite;
+  private facing = 0;
+  private fx = new Graphics();
+  private stick = new Graphics();
+
+  constructor(private readonly app: Application) {}
+
+  async load(): Promise<void> {
+    const base = import.meta.env.BASE_URL;
+    for (const id of ART) {
+      const t = await Assets.load<Texture>(`${base}art/${id}.png`);
+      t.source.scaleMode = 'nearest';
+      this.tex[id] = t;
+    }
+    this.ground = new TilingSprite({ texture: this.tex.ground_sand_00, width: NATIVE_WIDTH, height: NATIVE_HEIGHT });
+    const layers = [new Container(), new Container(), new Container(), new Container(), new Container()];
+    this.pickups = new Pool(layers[0]);
+    this.enemies = new Pool(layers[1]);
+    this.enemyBullets = new Pool(layers[3]);
+    this.bullets = new Pool(layers[4]);
+    this.merc = new Sprite(this.tex.merc_t1_idle_00);
+    this.merc.anchor.set(MERC_ART.bodyCenter.x / MERC_ART.size.w, MERC_ART.bodyCenter.y / MERC_ART.size.h);
+    layers[2].addChild(this.merc);
+    this.world.addChild(layers[0], layers[1], this.fx, layers[2], layers[3], layers[4]);
+    this.app.stage.addChild(this.ground, this.world, this.stick);
+  }
+
+  draw(w: World, controls: Controls, dtSec: number): void {
+    const p = w.player;
+    const camX = Math.round(p.x - NATIVE_WIDTH / 2);
+    const camY = Math.round(p.y - NATIVE_HEIGHT / 2);
+    this.world.position.set(-camX, -camY);
+    this.ground.tilePosition.set(-camX, -camY);
+
+    w.pickups.forEach((k, i) => {
+      const s = this.pickups.get(i, this.tex.scrap_00);
+      s.position.set(Math.round(k.x), Math.round(k.y));
+      s.alpha = k.age > 27 ? (Math.floor(k.age * 8) % 2 ? 0.3 : 1) : 1;
+    });
+    this.pickups.hideFrom(w.pickups.length);
+
+    this.fx.clear();
+    w.enemies.forEach((e, i) => {
+      const s = this.enemies.get(i, this.tex[ENEMY_ART[e.def.id]]);
+      s.position.set(Math.round(e.x), Math.round(e.y));
+      const r = e.def.ranged;
+      if (r) {
+        // Riflemen rotate as a whole sprite toward the player, like the merc.
+        s.anchor.set(RIFLEMAN_ART.bodyCenter.x / RIFLEMAN_ART.size.w, RIFLEMAN_ART.bodyCenter.y / RIFLEMAN_ART.size.h);
+        s.rotation = Math.atan2(p.y - e.y, p.x - e.x);
+        s.scale.x = 1;
+      } else {
+        s.rotation = 0;
+        s.scale.x = e.facing;
+      }
+      if (r && e.fireTimer <= r.telegraphSec) {
+        // 0.3 s muzzle-flash telegraph before each Rifleman shot.
+        this.fx
+          .circle(
+            Math.round(e.x + Math.cos(Math.atan2(p.y - e.y, p.x - e.x)) * 12),
+            Math.round(e.y + Math.sin(Math.atan2(p.y - e.y, p.x - e.x)) * 12),
+            3,
+          )
+          .fill({ color: 0xff6a2a, alpha: 0.9 });
+      }
+    });
+    this.enemies.hideFrom(w.enemies.length);
+
+    w.enemyBullets.forEach((b, i) => this.enemyBullets.get(i, this.tex.bullet_enemy_00).position.set(Math.round(b.x), Math.round(b.y)));
+    this.enemyBullets.hideFrom(w.enemyBullets.length);
+    w.bullets.forEach((b, i) => this.bullets.get(i, this.tex.bullet_player_00).position.set(Math.round(b.x), Math.round(b.y)));
+    this.bullets.hideFrom(w.bullets.length);
+
+    // Merc: whole sprite turns toward the aim target, or the move direction when nothing is targeted.
+    let diff = p.facing - this.facing;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    const maxTurn = MERC_ART.turnRadPerSec * dtSec;
+    this.facing += Math.abs(diff) <= maxTurn ? diff : Math.sign(diff) * maxTurn;
+    this.merc.position.set(Math.round(p.x), Math.round(p.y));
+    this.merc.rotation = this.facing;
+    const blink = p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0;
+    this.merc.alpha = blink ? 0.4 : 1;
+
+    this.stick.clear();
+    if (controls.active) {
+      this.stick
+        .circle(controls.originX, controls.originY, JOYSTICK.knobRadius)
+        .fill({ color: 0xffffff, alpha: 0.08 })
+        .stroke({ color: 0xe8e0c8, alpha: 0.35, width: 2 });
+      this.stick.circle(controls.knobX, controls.knobY, 16).fill({ color: 0xe8e0c8, alpha: 0.45 });
+    }
+  }
+}

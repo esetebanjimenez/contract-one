@@ -10,13 +10,16 @@
     "test": "vitest run",
     "lint": "eslint .",
     "format": "prettier --write src tools tests",
-    "format:check": "prettier --check src tools tests"
+    "format:check": "prettier --check src tools tests",
+    "sim": "tsx tools/sim.ts",
+    "bench": "tsx tools/bench.ts"
   },
   "dependencies": {
     "pixi.js": "^8.5.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^20.19.43",
     "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.1.8",
     "prettier": "^3.9.10",
