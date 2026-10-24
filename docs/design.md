@@ -66,7 +66,7 @@ HP scaling: see §12 (M2).
 - Soft caps: 250 enemies and 400 bullets (Programmer's numbers). Past the cap, spawns pause and the farthest enemies are recycled.
 
 ## 7. Scrap and levels
-- Kills drop Scrap pickups (pure cyan; no other cyan on screen). Pickups despawn after 60 s. Magnet 70 px; inside it, pickups fly to the player at 300 px/s.
+- Kills drop Scrap pickups (pure cyan; no other cyan on screen). Pickups despawn after 45 s (balance lever: 30 s starved kite-smart, 60 s overfed it). Magnet 70 px; inside it, pickups fly to the player at 300 px/s.
 - Scrap needed for the next level: `5 + 6 × (level − 1)`. That means 5, 11, 17 and so on, and a typical run reaches level ~25–30 by 10:00.
 - A level-up pauses the game and shows **3 perk cards**. Tapping one picks it. There is no reroll in v1.
 - Overflow Scrap carries into the next level.
