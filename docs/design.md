@@ -246,7 +246,7 @@ At 0 HP: a 0.5 s freeze, the banner "KIA", then the results screen. If the boss 
 ### 14.6 Results screen (win and lose)
 - Title: CONTRACT COMPLETE or CONTRACT FAILED.
 - Stats: time, level, kills, Scrap collected, and boss damage dealt.
-- The row of perks taken, as icons with stack counts.
+- The list of perks taken: each shows its icon, plain-language name and total value (never an icon alone).
 - One button, **New Contract**, in the bottom third (thumb reach). Input is locked for 0.8 s so a joystick release can't tap it by accident.
 - No meta-progression, no menus (§2).
 
@@ -285,7 +285,7 @@ Tier odds by player level (Common / Rare / Epic / Mythic):
 | 6–15 | 55 / 30 / 12 / 3 |
 | 16+ | 40 / 33 / 20 / 7 |
 
-- The card shows the tier name above the perk name and the scaled value ("Hollow Points — Epic — +30% damage").
+- The card shows the tier name, the plain-language perk name under the icon, and the scaled effect ("EPIC — DAMAGE — +30% damage"). Plain names (DAMAGE, FIRE RATE, PIERCE…) replace the flavour names in the UI. **An icon is never shown without its name**, anywhere.
 - Tier colour goes on the card frame and title bar (approved: Common `#9AA0A6`, Rare `#3D6BFF`, Epic `#A44DFF`, Mythic `#FFC233` with a slow twinkle). The attack, defence and utility category stays as the coloured border on the icon tile (approved by Esteban).
 - Later: `explosive`, `drone` and `grenade` can enter as Mythic-only perks.
 
