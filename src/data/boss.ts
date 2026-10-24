@@ -28,22 +28,26 @@ export interface DpsStats {
   drones?: number;
   grenades?: number;
   damageMul?: number; // HOLLOW POINTS factor for drones and grenades
+  fireRateMul?: number; // TRIGGER JOB factor, for drones (design.md 16.9)
+  cooldownMul?: number; // FAST HANDS factor on special-attack cooldowns
 }
 
 /**
- * Single-target sheet DPS (design.md 16.5, 16.7): gun DPS = damage x shots/s x (1 + 0.5 x extra bullets)
- * x (1 + HE share x HE chance), plus drone and grenade DPS in full, all times the crit factor.
- * Extra bullets count half since many miss one target. Pierce and ricochet don't count.
+ * Single-target sheet DPS (design.md 16.5, 16.7, 16.9): gun DPS = damage x shots/s x (1 + 0.5 x extra
+ * bullets) x (1 + HE share x HE chance). Drones are secondary shooters, so the same formula with
+ * drone damage and drone shots/s x the fire-rate factor. Grenades divide by the cooldown. All times the
+ * crit factor. Extra bullets count half since many miss one target. Pierce and ricochet don't count.
  */
 export function sheetDps(s: DpsStats, critMultiplier: number): number {
   const crit = 1 + Math.min(1, s.crit) * (critMultiplier - 1);
   const he = 1 + EXPLOSIVE.damageShare * Math.min(1, s.explosive ?? 0);
-  const gun = s.damage * s.fireRate * (1 + BOSS.hpExtraBulletWeight * (s.projectiles - 1)) * he;
+  const shot = (1 + BOSS.hpExtraBulletWeight * (s.projectiles - 1)) * he;
+  const gun = s.damage * s.fireRate * shot;
   const mul = s.damageMul ?? 1;
   const d = overflow(s.drones ?? 0, DRONE.maxBodies, DRONE.overflowBonus);
   const g = overflow(s.grenades ?? 0, GRENADE.maxPerVolley, GRENADE.overflowBonus);
-  const drones = d.count * DRONE.damage * DRONE.shotsPerSec * d.mul * mul;
-  const grenades = (g.count * GRENADE.damage * g.mul * mul) / GRENADE.everySec;
+  const drones = d.count * DRONE.damage * d.mul * mul * DRONE.shotsPerSec * (s.fireRateMul ?? 1) * shot;
+  const grenades = (g.count * GRENADE.damage * g.mul * mul) / (GRENADE.cooldownSec * (s.cooldownMul ?? 1));
   return (gun + drones + grenades) * crit;
 }
 

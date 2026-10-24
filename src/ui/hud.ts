@@ -165,7 +165,7 @@ export class Hud {
       .map((id) => {
         const d = perkDef(id);
         // Icon always next to its name (design.md 15.2).
-        return `<div class="perk"><img src="${ICON_BASE}perk_${id}_00.png" alt=""><span class="pn">${d.name}</span><span class="pv">${effectText(d, w.stacks[id])}</span></div>`;
+        return `<div class="perk"><img src="${ICON_BASE}perk_${id}_00.png" alt=""><span class="pn">${d.name}</span><span class="pv">${effectText(d, Math.round(w.stacks[id] * 10) / 10)}</span></div>`;
       })
       .join('');
     this.modal.innerHTML =

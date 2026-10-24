@@ -4,7 +4,7 @@ import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, GRUNT_WEAPONS, KNOCKBACK_PX, SCALI
 
 const GRUNT_SWING_SEC = (GRUNT_WEAPONS.windupMs + GRUNT_WEAPONS.strikeMs) / 1000;
 import { LEVELS, scrapForLevel } from '../data/levels';
-import { DRONE, EXPLOSIVE, GRENADE, PERK_RULES, overflow, perkDef, type PerkId } from '../data/perks';
+import { DRONE, EXPLOSIVE, GRENADE, PERK_RULES, addStack, overflow, perkDef, type PerkId } from '../data/perks';
 import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { RUN } from '../data/run';
@@ -53,7 +53,7 @@ export interface Bullet {
   pierceLeft: number;
   bounces: number;
   hit: number[]; // enemy ids already hit (for pierce)
-  explodes?: boolean; // the merc's gun bullets can roll HE ROUNDS; drone shots can't (design.md 16.7)
+  explodes?: boolean; // can roll HE ROUNDS: gun and drone bullets (design.md 16.9)
 }
 
 /** DRONE BUDDY body: orbits the merc, faces and shoots its own nearest target. */
@@ -392,18 +392,26 @@ function fire(w: World): void {
     return;
   }
   p.fireCd += 1 / w.stats.fireRate;
+  shoot(w, p.x, p.y, p.aim, w.stats.damage, w.stats.bulletRange, CAPS.playerBullets);
+}
+
+/**
+ * One trigger pull from any shooter (design.md 16.9): extra bullets in the gun's spread, each with the
+ * gun's speed, pierce, bounces and HE roll. Stops at `limit` bullets on screen.
+ */
+function shoot(w: World, x: number, y: number, aim: number, damage: number, range: number, limit: number): void {
   const n = w.stats.projectiles;
   const spread = (PLAYER.multishotSpreadDeg * Math.PI) / 180;
   for (let i = 0; i < n; i++) {
-    if (w.bullets.length >= CAPS.playerBullets) break;
-    const a = p.aim + (i - (n - 1) / 2) * spread;
+    if (w.bullets.length >= limit) break;
+    const a = aim + (i - (n - 1) / 2) * spread;
     w.bullets.push({
-      x: p.x,
-      y: p.y,
+      x,
+      y,
       vx: Math.cos(a) * w.stats.bulletSpeed,
       vy: Math.sin(a) * w.stats.bulletSpeed,
-      rangeLeft: w.stats.bulletRange,
-      damage: w.stats.damage,
+      rangeLeft: range,
+      damage,
       pierceLeft: w.stats.pierce,
       bounces: w.stats.ricochet,
       hit: [],
@@ -446,11 +454,15 @@ function areaDamage(w: World, x: number, y: number, r: number, dmg: number, dead
   if (b && b.damageable && b.hp > 0 && Math.hypot(b.x - x, b.y - y) <= r + BOSS.radius) damageBoss(w, dmg);
 }
 
-/** DRONE BUDDY: up to 8 evenly spaced bodies orbit the merc, each firing 5 dmg twice a second. */
+/**
+ * DRONE BUDDY: up to 8 evenly spaced bodies orbit the merc, each firing 5 dmg twice a second. As
+ * secondary shooters they take every gun stat (design.md 16.9). They keep one gun volley of room
+ * under the bullet limit, so they skip a shot before the gun does.
+ */
 function updateDrones(w: World): void {
   const { count, mul } = overflow(w.stats.drones, DRONE.maxBodies, DRONE.overflowBonus);
   while (w.drones.length < count)
-    w.drones.push({ x: w.player.x, y: w.player.y, aim: 0, cd: w.drones.length / (count * DRONE.shotsPerSec) });
+    w.drones.push({ x: w.player.x, y: w.player.y, aim: 0, cd: w.drones.length / (count * DRONE.shotsPerSec * w.stats.fireRateMul) });
   w.drones.length = count;
   const p = w.player;
   for (let i = 0; i < count; i++) {
@@ -465,20 +477,15 @@ function updateDrones(w: World): void {
       continue;
     }
     d.aim = Math.atan2(t.y - d.y, t.x - d.x);
-    if (d.cd > 0 || w.bullets.length >= CAPS.playerBullets) continue;
-    d.cd += 1 / DRONE.shotsPerSec;
-    w.bullets.push({
-      x: d.x,
-      y: d.y,
-      vx: Math.cos(d.aim) * w.stats.bulletSpeed,
-      vy: Math.sin(d.aim) * w.stats.bulletSpeed,
-      rangeLeft: DRONE.range + 40,
-      damage: DRONE.damage * mul * w.stats.damageMul,
-      pierceLeft: 0,
-      bounces: 0,
-      hit: [],
-      explodes: false,
-    });
+    if (d.cd > 0) continue;
+    const limit = CAPS.playerBullets - w.stats.projectiles;
+    if (w.bullets.length + w.stats.projectiles > limit) {
+      d.cd = 0;
+      continue;
+    }
+    d.cd += 1 / (DRONE.shotsPerSec * w.stats.fireRateMul);
+    const range = (DRONE.range + 40) * (w.stats.bulletRange / PLAYER.bulletRange);
+    shoot(w, d.x, d.y, d.aim, DRONE.damage * mul * w.stats.damageMul, range, limit);
   }
 }
 
@@ -509,13 +516,13 @@ export function volleyTargets(w: World, count: number): { x: number; y: number }
   return picks;
 }
 
-/** FRAG OUT: every 4 s, throw the volley; grenades explode on landing for 40 dmg in 48 px. */
+/** FRAG OUT: on its 4 s cooldown (cut by FAST HANDS), throw the volley; grenades explode on landing for 40 dmg in 48 px. */
 function updateGrenades(w: World, dead: number[]): void {
   if (w.stats.grenades > 0 && w.time >= w.nextVolleyAt && !w.won) {
     const { count, mul } = overflow(w.stats.grenades, GRENADE.maxPerVolley, GRENADE.overflowBonus);
     const targets = volleyTargets(w, count);
     if (targets.length > 0) {
-      w.nextVolleyAt = w.time + GRENADE.everySec;
+      w.nextVolleyAt = w.time + GRENADE.cooldownSec * w.stats.cooldownMul;
       const p = w.player;
       for (const t of targets)
         w.grenades.push({ sx: p.x, sy: p.y, tx: t.x, ty: t.y, x: p.x, y: p.y, t: 0, damage: GRENADE.damage * mul * w.stats.damageMul });
@@ -984,7 +991,7 @@ export function choosePerk(w: World, id: PerkId): void {
   const o = w.offer.find((x) => x.id === id);
   if (w.phase !== 'levelup' || !o) return;
   const prevMax = w.stats.maxHp;
-  w.stacks[o.id] += o.value;
+  w.stacks[o.id] = addStack(o.id, w.stacks[o.id], o.value);
   if (perkDef(o.id).damageType) w.damagePicks++;
   w.stats = computeStats(w.stacks);
   if (o.id === 'maxhp') w.player.hp = Math.min(w.stats.maxHp, w.player.hp + (w.stats.maxHp - prevMax));

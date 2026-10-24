@@ -3,7 +3,7 @@ import { ENEMIES } from '../src/data/enemies';
 import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
 import { SPAWN } from '../src/data/spawns';
-import { DRONE, GRENADE, PERKS } from '../src/data/perks';
+import { DRONE, GRENADE, PERKS, addStack } from '../src/data/perks';
 import { computeStats, drawOffer, softMove, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
 import { bossHp } from '../src/data/boss';
@@ -419,7 +419,7 @@ describe('16.7 attack perks', () => {
     place(w, 0, 100, 1e6);
     for (let i = 0; i < 60; i++) step(w, { mx: 0, my: 0 });
     expect(w.drones.length).toBe(8);
-    const shot = w.bullets.find((b) => !b.explodes);
+    const shot = w.bullets.find((b) => b.damage !== w.stats.damage);
     expect(shot?.damage).toBeCloseTo(DRONE.damage * 1.25, 5);
   });
   it('throws grenades at the densest cluster and blasts 40 dmg in 48 px', () => {
@@ -441,5 +441,67 @@ describe('16.7 attack perks', () => {
     expect(bossHp({ ...base, explosive: 1 }, 2)).toBe(40 * 200 * 1.5);
     expect(bossHp({ ...base, drones: 10, damageMul: 2 }, 2)).toBe(40 * (200 + 8 * 5 * 2 * 1.25 * 2));
     expect(bossHp({ ...base, grenades: 3 }, 2)).toBe(40 * (200 + (3 * 40) / 4));
+  });
+  it('counts drones like the gun and grenades by cooldown in boss HP (16.9)', () => {
+    const base = { damage: 20, fireRate: 10, projectiles: 3, crit: 0, explosive: 1 };
+    const shot = (1 + 0.5 * 2) * 1.5;
+    expect(bossHp({ ...base, drones: 2, fireRateMul: 1.5 }, 2)).toBeCloseTo(40 * (200 + 2 * 5 * 2 * 1.5) * shot, 6);
+    expect(bossHp({ ...base, projectiles: 1, explosive: 0, grenades: 2, cooldownMul: 0.5 }, 2)).toBe(40 * (200 + (2 * 40) / 2));
+  });
+  it('gives drones the gun stats: fire rate, extra bullets, pierce, bounces, HE, range (16.9)', () => {
+    const w = quiet();
+    Object.assign(w.stacks, { drone: 1, rof: 100, multishot: 2, pierce: 1, ricochet: 1, bspeed: 50 });
+    w.stats = computeStats(w.stacks);
+    w.player.fireCd = 1e9; // gun silent
+    place(w, 0, 100, 1e6);
+    const shots: number[] = [];
+    let b = w.bullets[0];
+    for (let i = 0; i < Math.round(2 / DT); i++) {
+      const before = w.bullets.length;
+      step(w, { mx: 0, my: 0 });
+      if (w.bullets.length > before) {
+        shots.push(w.bullets.length - before);
+        b = { ...w.bullets[w.bullets.length - 1] };
+      }
+    }
+    expect(shots.length).toBeGreaterThanOrEqual(7); // 2 x 2 per second, over 2 s
+    expect(shots.every((n) => n === 3)).toBe(true);
+    expect(b.pierceLeft).toBe(w.stats.pierce);
+    expect(b.bounces).toBe(1);
+    expect(b.explodes).toBe(true);
+  });
+  it('lets drones skip before the gun at the bullet limit', () => {
+    const w = quiet();
+    w.stacks.drone = 8;
+    w.stats = computeStats(w.stacks);
+    place(w, 0, 100, 1e6);
+    const fill = CAPS.playerBullets - w.stats.projectiles;
+    for (let i = 0; i < fill; i++)
+      w.bullets.push({ x: 0, y: -5000, vx: 0, vy: 0, rangeLeft: 1e9, damage: 0, pierceLeft: 0, bounces: 0, hit: [] });
+    w.drones.forEach((d) => (d.cd = 0));
+    w.player.fireCd = 0;
+    step(w, { mx: 0, my: 0 });
+    expect(w.bullets.length).toBe(CAPS.playerBullets); // the gun fired, no drone did
+  });
+  it('offers FAST HANDS only with a special attack, and its picks multiply (16.9)', () => {
+    const s = emptyStacks();
+    for (let i = 0; i < 200; i++) expect(drawOffer(s, 5, 20, 4, createRng(i)).some((o) => o.id === 'cooldown')).toBe(false);
+    s.grenade = 1;
+    expect(
+      Array.from({ length: 200 }, (_, i) => drawOffer(s, 5, 20, 4, createRng(i))).some((o) => o.some((x) => x.id === 'cooldown')),
+    ).toBe(true);
+    expect(addStack('cooldown', addStack('cooldown', 0, 20), 20)).toBeCloseTo(36, 9);
+    expect(addStack('dmg', 20, 20)).toBe(40);
+    s.cooldown = 36;
+    expect(computeStats(s).cooldownMul).toBeCloseTo(0.64, 9);
+  });
+  it('throws the next volley after the cut cooldown', () => {
+    const w = quiet();
+    w.stacks.grenade = 1;
+    w.stacks.cooldown = 50;
+    w.stats = computeStats(w.stacks);
+    place(w, 0, 60, 1e6);
+    step(w, { mx: 0, my: 0 });
+    expect(w.nextVolleyAt).toBeCloseTo(w.time + GRENADE.cooldownSec * 0.5, 6);
   });
 });

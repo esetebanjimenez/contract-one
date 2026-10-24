@@ -1,4 +1,4 @@
-import { MOVE_SOFT, PERK_RULES, PERKS, TIER_ODDS, TIERS, perkDef, type PerkId, type TierId } from '../data/perks';
+import { MOVE_SOFT, PERK_RULES, PERKS, SPECIAL_ATTACKS, TIER_ODDS, TIERS, perkDef, type PerkId, type TierId } from '../data/perks';
 import { PLAYER } from '../data/player';
 
 /** Total effect per perk in display units (e.g. dmg 45 = +45%). */
@@ -33,6 +33,8 @@ export interface PlayerStats {
   drones: number; // DRONE BUDDY total
   grenades: number; // FRAG OUT total per volley
   damageMul: number; // HOLLOW POINTS factor, also applied to drones and grenades
+  fireRateMul: number; // TRIGGER JOB factor, also applied to drones (design.md 16.9)
+  cooldownMul: number; // FAST HANDS factor on special-attack cooldowns
 }
 
 /** Effective move % after the soft limit (design.md 16.1). */
@@ -60,6 +62,8 @@ export function computeStats(s: PerkStacks): PlayerStats {
     drones: p('drone'),
     grenades: p('grenade'),
     damageMul: 1 + p('dmg'),
+    fireRateMul: 1 + p('rof'),
+    cooldownMul: 1 - p('cooldown'),
   };
 }
 
@@ -104,7 +108,8 @@ export function makeOffer(id: PerkId, rolled: TierId, stacks: PerkStacks): Offer
  * card is a damage perk.
  */
 export function drawOffer(stacks: PerkStacks, damagePicks: number, level: number, count: number, rng: () => number): Offer[] {
-  const pool = PERKS.filter((d) => stacks[d.id] < d.maxTotal);
+  const special = SPECIAL_ATTACKS.some((id) => stacks[id] > 0);
+  const pool = PERKS.filter((d) => stacks[d.id] < d.maxTotal && (d.id !== 'cooldown' || special));
   const ids: PerkId[] = [];
   if (damagePicks < PERK_RULES.minDamagePerks) {
     const dmgPool = pool.filter((d) => d.damageType);
