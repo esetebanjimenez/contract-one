@@ -1,6 +1,6 @@
 /** design.md section 6. */
 export const SPAWN = {
-  baseRate: 0.8, // enemies/s at 0:00
+  baseRate: 1.0, // enemies/s at 0:00
   doublingSec: 150, // rate(t) = baseRate x 2^(t / doublingSec)
   offscreenMin: 24, // px outside the visible area
   offscreenMax: 48,

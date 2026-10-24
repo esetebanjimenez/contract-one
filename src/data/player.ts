@@ -12,9 +12,9 @@ export const PLAYER = {
   bulletRadius: 3,
   pierce: 0,
   multishotSpreadDeg: 10,
-  magnet: 40, // px, pickups start flying to the player inside this radius
+  magnet: 70, // px, pickups start flying to the player inside this radius
   collectRadius: 10,
-  pickupFlySpeed: 260,
+  pickupFlySpeed: 300,
 };
 
 /** Whole-sprite rotation (design.md v0.2). The sprite faces right at 0 degrees. Pixels are on the art canvas. */

@@ -1,5 +1,6 @@
 import { Application, Assets, Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
 import { JOYSTICK } from '../data/controls';
+import { LEVELS } from '../data/levels';
 import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { MERC_ART, RIFLEMAN_ART } from '../data/player';
 import type { World } from '../sim/world';
@@ -84,7 +85,7 @@ export class Renderer {
     w.pickups.forEach((k, i) => {
       const s = this.pickups.get(i, this.tex.scrap_00);
       s.position.set(Math.round(k.x), Math.round(k.y));
-      s.alpha = k.age > 27 ? (Math.floor(k.age * 8) % 2 ? 0.3 : 1) : 1;
+      s.alpha = k.age > LEVELS.pickupLifetimeSec - 3 ? (Math.floor(k.age * 8) % 2 ? 0.3 : 1) : 1;
     });
     this.pickups.hideFrom(w.pickups.length);
 

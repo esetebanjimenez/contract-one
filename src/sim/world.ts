@@ -76,6 +76,8 @@ export interface World {
   pressureAngle: number;
   nextEnemyId: number;
   kills: number;
+  scrapDropped: number;
+  scrapCollected: number;
   peakEnemies: number;
   peakBullets: number;
   grid: SpatialGrid;
@@ -107,6 +109,8 @@ export function createWorld(seed: number): World {
     pressureAngle: 0,
     nextEnemyId: 1,
     kills: 0,
+    scrapDropped: 0,
+    scrapCollected: 0,
     peakEnemies: 0,
     peakBullets: 0,
     grid: new SpatialGrid(GRID_CELL),
@@ -237,6 +241,7 @@ function damagePlayer(w: World, dmg: number): void {
 }
 
 function addScrap(w: World, v: number): void {
+  w.scrapCollected += v;
   w.scrap += v;
   while (w.scrap >= scrapForLevel(w.level + w.pendingLevels)) {
     w.scrap -= scrapForLevel(w.level + w.pendingLevels);
@@ -247,6 +252,7 @@ function addScrap(w: World, v: number): void {
 function killEnemy(w: World, i: number): void {
   const e = w.enemies[i];
   w.kills++;
+  w.scrapDropped += e.def.scrap;
   if (w.pickups.length < CAPS.pickups) w.pickups.push({ x: e.x, y: e.y, value: e.def.scrap, age: 0, flying: false });
   else addScrap(w, e.def.scrap);
   w.enemies[i] = w.enemies[w.enemies.length - 1];

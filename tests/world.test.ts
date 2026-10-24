@@ -40,8 +40,8 @@ describe('levels and perks', () => {
 
 describe('sim', () => {
   it('spawn rate doubles every 150 s', () => {
-    expect(spawnRate(0)).toBeCloseTo(0.8);
-    expect(spawnRate(150)).toBeCloseTo(1.6);
+    expect(spawnRate(0)).toBeCloseTo(1.0);
+    expect(spawnRate(150)).toBeCloseTo(2.0);
   });
   it('is deterministic for a seed', () => {
     const a = runBot(42, 'kite', 120);

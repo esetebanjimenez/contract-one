@@ -54,6 +54,7 @@ export interface RunResult {
   reachedBoss: boolean;
   level: number;
   kills: number;
+  scrapPct: number;
   peakEnemies: number;
   peakBullets: number;
   perks: string;
@@ -79,6 +80,7 @@ export function runBot(seed: number, bot: Bot, maxSec = 600): RunResult {
     reachedBoss: w.phase !== 'dead',
     level: w.level,
     kills: w.kills,
+    scrapPct: (100 * w.scrapCollected) / Math.max(1, w.scrapDropped),
     peakEnemies: w.peakEnemies,
     peakBullets: w.peakBullets,
     perks: PERKS.map((d) => `${d.id}${w.stacks[d.id]}`).join(' '),
