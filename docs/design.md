@@ -379,3 +379,20 @@ Applies to the Rifleman and the Elite Rifleman. Replaces the fixed fire interval
 - Exception to the "never an icon without its name" rule: allowed here only, because the names are on the cards just above it and on the results screen.
 - If a card offers a perk the player already has, that perk's cell gets a 1 px outline in the card's tier colour.
 - Art: the Artist mocks it for Esteban's okay. The joystick is off during level-up, so the strip may sit in the bottom third.
+
+### 16.7 HE Rounds, Drone Buddy, Frag Out join the pool
+These replace the "Mythic-only" note in §15.2. They roll tiers like every other perk, with the same odds and no caps, because uncapped builds need them to come up regularly.
+
+| Id | Name | Effect line | Common | Rare | Epic | Mythic | Weight |
+|---|---|---|---|---|---|---|---|
+| `explosive` | HE ROUNDS | +{v}% explode | 10 | 15 | 20 | 30 | 1 |
+| `drone` | DRONE BUDDY | +{v} drones | 1 | – | 2 | 3 | 0.6 |
+| `grenade` | FRAG OUT | +{v} grenades | 1 | – | 2 | 3 | 0.6 |
+
+- **HE Rounds:** each hit has {total}% chance to explode, 32 px radius, 50% of the hit's damage. It stops at 100% and then leaves the draw, the same as crit.
+- **Drone Buddy:** each drone orbits at 28 px and fires at the nearest enemy, 5 damage twice a second. Drones are evenly spaced. Past 8 drones, each extra one adds +12.5% damage to all drones instead of a new body, for performance.
+- **Frag Out:** every 4 s, throws {total} grenades at the densest enemy clusters on screen. Each does 40 damage in 48 px. Past 8 grenades per volley, extra ones add +12.5% damage instead.
+- Drone and grenade damage scale with HOLLOW POINTS and crit, but not with fire rate.
+- Drone and grenade are whole-number perks, so a Rare roll becomes Common (§15.2).
+- **Boss HP (§16.5):** sheet DPS adds drone DPS and grenade DPS in full, and multiplies bullet DPS by (1 + 0.5 × HE chance).
+- Art (Artist, needs Esteban's okay): a small explosion, a drone sprite, a grenade, and a 48 px blast. Category tiles: HE and FRAG OUT are attack, DRONE BUDDY is utility.
