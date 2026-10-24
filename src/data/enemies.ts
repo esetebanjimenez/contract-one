@@ -38,7 +38,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
 
 /** design.md 12.1: scaling per minute elapsed (m). */
 export const SCALING = {
-  hpPerMinute: 0.12, // HP x (1 + 0.12 m), fixed at spawn
+  hpPerMinute: 0.14, // HP x (1 + 0.14 m), fixed at spawn
   contactPerMinute: 0.03, // contact damage x (1 + 0.03 m), at hit time
   rifleIntervalPerMinute: 0.08, // fire interval 2.0 - 0.08 m
   rifleIntervalMin: 1.2,
