@@ -1,12 +1,12 @@
 import { MAX_VIEW_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 import { LEVELS, scrapForLevel } from '../data/levels';
-import { PERK_RULES, type PerkId } from '../data/perks';
+import { PERK_RULES, perkDef, type PerkId } from '../data/perks';
 import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { SPAWN, SPAWN_BANDS } from '../data/spawns';
 import { SpatialGrid } from './grid';
-import { computeStats, drawOffer, emptyStacks, type PerkStacks, type PlayerStats } from './perks';
+import { computeStats, drawOffer, emptyStacks, type Offer, type PerkStacks, type PlayerStats } from './perks';
 import { createRng } from './rng';
 
 export interface Enemy {
@@ -67,11 +67,12 @@ export interface World {
     facing: number;
   };
   stacks: PerkStacks;
+  damagePicks: number;
   stats: PlayerStats;
   level: number;
   scrap: number; // scrap toward the next level
   pendingLevels: number;
-  offer: PerkId[];
+  offer: Offer[];
   enemies: Enemy[];
   bullets: Bullet[];
   enemyBullets: Bullet[];
@@ -102,6 +103,7 @@ export function createWorld(seed: number): World {
     phase: 'play',
     player: { x: 0, y: 0, hp: stats.maxHp, invuln: 0, fireCd: 0, aim: 0, moving: false, hasTarget: false, facing: 0 },
     stacks,
+    damagePicks: 0,
     stats,
     level: 1,
     scrap: 0,
@@ -537,7 +539,7 @@ export function step(w: World, input: Input): void {
 }
 
 function openLevelUp(w: World): void {
-  w.offer = drawOffer(w.stacks, LEVELS.perkChoices, w.rng);
+  w.offer = drawOffer(w.stacks, w.damagePicks, w.level, LEVELS.perkChoices, w.rng);
   if (w.offer.length === 0) {
     w.level += w.pendingLevels;
     w.pendingLevels = 0;
@@ -547,9 +549,11 @@ function openLevelUp(w: World): void {
 }
 
 export function choosePerk(w: World, id: PerkId): void {
-  if (w.phase !== 'levelup' || !w.offer.includes(id)) return;
+  const o = w.offer.find((x) => x.id === id);
+  if (w.phase !== 'levelup' || !o) return;
   const prevMax = w.stats.maxHp;
-  w.stacks[id]++;
+  w.stacks[id] += o.value;
+  if (perkDef(id).damageType) w.damagePicks++;
   w.stats = computeStats(w.stacks);
   if (id === 'maxhp') w.player.hp = Math.min(w.stats.maxHp, w.player.hp + (w.stats.maxHp - prevMax));
   w.level++;

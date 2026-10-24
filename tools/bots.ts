@@ -102,10 +102,10 @@ const PRIORITY: PerkId[] = ['dmg', 'rof', 'multishot', 'pierce', 'crit', 'ricoch
 
 function pick(w: World, bot: Bot): void {
   if (bot === 'kite-smart') {
-    const id = PRIORITY.find((p) => w.offer.includes(p))!;
+    const id = PRIORITY.find((p) => w.offer.some((o) => o.id === p))!;
     choosePerk(w, id);
   } else {
-    choosePerk(w, w.offer[Math.floor(w.rng() * w.offer.length)]);
+    choosePerk(w, w.offer[Math.floor(w.rng() * w.offer.length)].id);
   }
 }
 

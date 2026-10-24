@@ -1,8 +1,8 @@
 import { scrapForLevel } from '../data/levels';
-import { PERKS, type PerkId } from '../data/perks';
+import { TIERS, effectText, perkDef, type PerkId } from '../data/perks';
 import type { World } from '../sim/world';
 
-const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+const ICON_BASE = `${import.meta.env.BASE_URL}art/perks/`;
 
 /** DOM overlay: top bar, perk cards and the death screen. Sized in native px via the --s CSS scale. */
 export class Hud {
@@ -43,7 +43,7 @@ export class Hud {
     this.xp.style.width = `${(100 * w.scrap) / scrapForLevel(w.level)}%`;
     const t = Math.floor(w.time);
     this.label.textContent = `LV ${w.level}   ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}   KILLS ${w.kills}`;
-    const key = w.phase + w.offer.join();
+    const key = w.phase + w.offer.map((o) => o.id + o.tier).join();
     if (key === this.shownPhase) return;
     this.shownPhase = key;
     if (w.phase === 'play') {
@@ -54,12 +54,22 @@ export class Hud {
     if (w.phase === 'levelup') {
       this.modal.innerHTML =
         `<div class="title">LEVEL UP</div>` +
+        `<div class="cards">` +
         w.offer
-          .map((id) => {
-            const d = PERKS.find((p) => p.id === id)!;
-            return `<button class="card" data-id="${id}"><b>${d.name} ${ROMAN[w.stacks[id]]}</b><span>${d.text}</span><i>${w.stacks[id]}/${d.max}</i></button>`;
+          .map((o) => {
+            const d = perkDef(o.id);
+            const t = TIERS.find((x) => x.id === o.tier)!;
+            // The icon is never shown without its name (design.md 15.2).
+            return (
+              `<button class="card tier-${t.id}" data-id="${o.id}" style="--tc:${t.color}">` +
+              `<div class="tbar">${t.name}</div>` +
+              `<div class="tile"><img src="${ICON_BASE}perk_${o.id}_00.png" alt=""></div>` +
+              `<div class="pname">${d.name}</div><div class="rule"></div>` +
+              `<div class="eff">${effectText(d, o.value)}</div></button>`
+            );
           })
-          .join('');
+          .join('') +
+        `</div>`;
       this.modal
         .querySelectorAll<HTMLButtonElement>('.card')
         .forEach((b) => b.addEventListener('click', () => this.onPick(b.dataset.id as PerkId)));

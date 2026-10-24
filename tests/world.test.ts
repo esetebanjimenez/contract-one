@@ -4,10 +4,41 @@ import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
 import { SPAWN } from '../src/data/spawns';
 import { PERKS } from '../src/data/perks';
-import { computeStats, drawOffer, emptyStacks } from '../src/sim/perks';
+import { computeStats, drawOffer, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
 import { choosePerk, createWorld, isRingWave, rifleInterval, riflemenAlive, spawnRate, step } from '../src/sim/world';
 import { runBot } from '../tools/bots';
+
+describe('perk tiers', () => {
+  it('scales values by tier and turns Rare whole-number rolls into Common', () => {
+    const s = emptyStacks();
+    expect(makeOffer('dmg', 'rare', s)).toEqual({ id: 'dmg', tier: 'rare', value: 23 });
+    expect(makeOffer('dmg', 'mythic', s).value).toBe(45);
+    expect(makeOffer('pierce', 'rare', s)).toEqual({ id: 'pierce', tier: 'common', value: 1 });
+    expect(makeOffer('pierce', 'epic', s).value).toBe(2);
+  });
+  it('clips the value to the max total', () => {
+    const s = emptyStacks();
+    s.ricochet = 1;
+    s.dmg = 60;
+    expect(makeOffer('ricochet', 'mythic', s).value).toBe(1);
+    expect(makeOffer('dmg', 'epic', s).value).toBe(15);
+  });
+  it('rolls tiers by level', () => {
+    const rng = createRng(5);
+    const count = (lv: number) => {
+      const c = { common: 0, rare: 0, epic: 0, mythic: 0 };
+      for (let i = 0; i < 4000; i++) c[rollTier(lv, rng)]++;
+      return c;
+    };
+    const low = count(3);
+    expect(low.mythic).toBe(0);
+    expect(low.common / 4000).toBeCloseTo(0.7, 1);
+    const high = count(20);
+    expect(high.mythic / 4000).toBeCloseTo(0.07, 1);
+    expect(high.epic / 4000).toBeCloseTo(0.2, 1);
+  });
+});
 
 describe('levels and perks', () => {
   it('follows 5 + 6 x (level - 1)', () => {
@@ -17,23 +48,25 @@ describe('levels and perks', () => {
     const s = emptyStacks();
     const rng = createRng(3);
     for (let i = 0; i < 50; i++) {
-      const o = drawOffer(s, 3, rng);
-      expect(new Set(o).size).toBe(3);
+      const o = drawOffer(s, 2, 1, 3, rng);
+      expect(new Set(o.map((x) => x.id)).size).toBe(3);
     }
-    for (const d of PERKS) if (d.id !== 'maxhp' && d.id !== 'move') s[d.id] = d.max;
-    expect(drawOffer(s, 3, rng).sort()).toEqual(['maxhp', 'move']);
+    for (const d of PERKS) if (d.id !== 'maxhp' && d.id !== 'move') s[d.id] = d.maxTotal;
+    expect(
+      drawOffer(s, 2, 1, 3, rng)
+        .map((x) => x.id)
+        .sort(),
+    ).toEqual(['maxhp', 'move']);
   });
   it('guarantees a damage perk while the player has fewer than 2', () => {
     const rng = createRng(9);
     const s = emptyStacks();
     for (let i = 0; i < 200; i++) {
-      expect(drawOffer(s, 3, rng).some((id) => PERKS.find((d) => d.id === id)!.damageType)).toBe(true);
+      expect(drawOffer(s, 1, 1, 3, rng).some((o) => PERKS.find((d) => d.id === o.id)!.damageType)).toBe(true);
     }
-    s.move = 1;
-    s.dmg = 1;
-    expect(drawOffer(s, 3, rng).length).toBe(3);
+    expect(drawOffer(s, 2, 1, 3, rng).length).toBe(3);
   });
-  it('armor reduces hits to a minimum of 1 and regen heals every 5 s', () => {
+  it('armor reduces hits to a minimum of 1 and regen heals every 2 s', () => {
     const w = createWorld(1);
     w.stacks.armor = 3;
     w.stacks.regen = 1;
@@ -52,11 +85,11 @@ describe('levels and perks', () => {
     step(w, { mx: 0, my: 0 });
     expect(w.phase).toBe('levelup');
     expect(w.offer).toHaveLength(3);
-    const id = w.offer[0];
+    const { id, value } = w.offer[0];
     choosePerk(w, id);
     expect(w.phase).toBe('play');
     expect(w.level).toBe(2);
-    expect(w.stacks[id]).toBe(1);
+    expect(w.stacks[id]).toBe(value);
   });
 });
 

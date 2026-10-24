@@ -1,7 +1,15 @@
-import { PERK_RULES, PERKS, type PerkId } from '../data/perks';
+import { PERK_RULES, PERKS, TIER_ODDS, TIERS, perkDef, type PerkId, type TierId } from '../data/perks';
 import { PLAYER } from '../data/player';
 
+/** Total effect per perk in display units (e.g. dmg 45 = +45%). */
 export type PerkStacks = Record<PerkId, number>;
+
+export interface Offer {
+  id: PerkId;
+  tier: TierId;
+  /** Value actually gained (clipped to the perk's max total). */
+  value: number;
+}
 
 export function emptyStacks(): PerkStacks {
   return Object.fromEntries(PERKS.map((d) => [d.id, 0])) as PerkStacks;
@@ -24,7 +32,7 @@ export interface PlayerStats {
 }
 
 export function computeStats(s: PerkStacks): PlayerStats {
-  const p = (id: PerkId) => PERKS.find((d) => d.id === id)!.perStack * s[id];
+  const p = (id: PerkId) => perkDef(id).scale * s[id];
   return {
     damage: PLAYER.damage * (1 + p('dmg')),
     fireRate: PLAYER.fireRate * (1 + p('rof')),
@@ -53,34 +61,55 @@ function drawOne(pool: typeof PERKS, rng: () => number): number {
   return i;
 }
 
-export function damageStacks(s: PerkStacks): number {
-  return PERKS.filter((d) => d.damageType).reduce((a, d) => a + s[d.id], 0);
+export function tierOdds(level: number): [number, number, number, number] {
+  let odds = TIER_ODDS[0].odds;
+  for (const t of TIER_ODDS) if (level >= t.fromLevel) odds = t.odds;
+  return odds;
+}
+
+export function rollTier(level: number, rng: () => number): TierId {
+  const odds = tierOdds(level);
+  let r = rng() * odds.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < odds.length; i++) {
+    r -= odds[i];
+    if (r < 0) return TIERS[i].id;
+  }
+  return 'common';
+}
+
+/** Tier and value for one card; a Rare roll on a whole-number perk becomes Common. */
+export function makeOffer(id: PerkId, rolled: TierId, stacks: PerkStacks): Offer {
+  const d = perkDef(id);
+  const tier = d.values[rolled] === null ? 'common' : rolled;
+  const value = Math.min(d.values[tier]!, d.maxTotal - stacks[id]);
+  return { id, tier, value };
 }
 
 /**
- * Weighted draw without duplicates from perks that are not maxed. While the player has fewer than
- * PERK_RULES.minDamagePerks damage-type stacks, at least one card is a damage perk.
+ * Weighted draw without duplicates from perks below their max total, each card with its own tier
+ * roll. While the player has fewer than PERK_RULES.minDamagePerks damage-type picks, at least one
+ * card is a damage perk.
  */
-export function drawOffer(stacks: PerkStacks, count: number, rng: () => number): PerkId[] {
-  const pool = PERKS.filter((d) => stacks[d.id] < d.max);
-  const out: PerkId[] = [];
-  if (damageStacks(stacks) < PERK_RULES.minDamagePerks) {
+export function drawOffer(stacks: PerkStacks, damagePicks: number, level: number, count: number, rng: () => number): Offer[] {
+  const pool = PERKS.filter((d) => stacks[d.id] < d.maxTotal);
+  const ids: PerkId[] = [];
+  if (damagePicks < PERK_RULES.minDamagePerks) {
     const dmgPool = pool.filter((d) => d.damageType);
     if (dmgPool.length > 0) {
       const pick = dmgPool[drawOne(dmgPool, rng)];
-      out.push(pick.id);
+      ids.push(pick.id);
       pool.splice(pool.indexOf(pick), 1);
     }
   }
-  while (out.length < count && pool.length > 0) {
+  while (ids.length < count && pool.length > 0) {
     const i = drawOne(pool, rng);
-    out.push(pool[i].id);
+    ids.push(pool[i].id);
     pool.splice(i, 1);
   }
   // Shuffle so the guaranteed damage card is not always first.
-  for (let i = out.length - 1; i > 0; i--) {
+  for (let i = ids.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
+    [ids[i], ids[j]] = [ids[j], ids[i]];
   }
-  return out;
+  return ids.map((id) => makeOffer(id, rollTier(level, rng), stacks));
 }
