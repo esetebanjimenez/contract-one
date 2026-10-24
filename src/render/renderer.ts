@@ -14,6 +14,7 @@ const ART = [
   'merc_t1_walkB_00',
   'grunt_t1_walk_00',
   'runner_t1_walk_00',
+  'heavy_t1_walk_00',
   'runner_t1_walkA_00',
   'runner_t1_walkB_00',
   'rifleman_t1_idle_00',
@@ -26,7 +27,7 @@ type ArtId = (typeof ART)[number];
 const ENEMY_ART: Record<string, ArtId> = {
   grunt: 'grunt_t1_walk_00',
   runner: 'runner_t1_walk_00',
-  heavy: 'grunt_t1_walk_00',
+  heavy: 'heavy_t1_walk_00',
   rifleman: 'rifleman_t1_idle_00',
 };
 
@@ -34,7 +35,7 @@ const ENEMY_ART: Record<string, ArtId> = {
 const PLACEHOLDER: Record<string, { scale: number; tint: number }> = {
   grunt: { scale: 1, tint: 0xffffff },
   runner: { scale: 1, tint: 0xffffff },
-  heavy: { scale: 1.4, tint: 0x9a9a9a },
+  heavy: { scale: 1, tint: 0xffffff },
   rifleman: { scale: 1, tint: 0xffffff },
 };
 const ELITE_SCALE = 1.25;
@@ -141,8 +142,8 @@ export class Renderer {
       const look = PLACEHOLDER[e.def.id];
       const sc = look.scale * (e.elite ? ELITE_SCALE : 1);
       s.tint = e.flash > 0 ? 0xffffff : look.tint;
-      if (e.def.id === 'runner') {
-        // Top-down Runners face right in the art and rotate toward the player they charge.
+      if (e.def.id === 'runner' || e.def.id === 'heavy') {
+        // Top-down Runners and Heavies face right in the art and rotate toward the player, shield first.
         s.anchor.set(0.5);
         s.rotation = Math.atan2(p.y - e.y, p.x - e.x);
         s.scale.set(sc);
