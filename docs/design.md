@@ -66,7 +66,7 @@ HP scaling: see §12 (M2).
 - Soft caps: 250 enemies and 400 bullets (Programmer's numbers). Past the cap, spawns pause and the farthest enemies are recycled.
 
 ## 7. Scrap and levels
-- Kills drop Scrap pickups (pure cyan; no other cyan on screen). Pickups **never despawn** (Esteban, 2026-10-24). Above 300 pickups on the ground, a new pickup merges its value into the nearest existing one. Magnet 70 px; inside it, pickups fly to the player at 300 px/s.
+- Kills drop Scrap pickups (pure cyan; no other cyan on screen). Pickups **never despawn** (Esteban, 2026-10-24). At the 300-pickup cap, new drops fly straight to the player. Magnet 70 px; inside it, pickups fly to the player at 300 px/s.
 - Scrap needed for the next level: `5 + 6 × (level − 1)`. That means 5, 11, 17 and so on, and a typical run reaches level ~25–30 by 10:00.
 - A level-up pauses the game and shows **3 perk cards**. Tapping one picks it. There is no reroll in v1.
 - Overflow Scrap carries into the next level.
@@ -290,10 +290,10 @@ Tier odds by player level (Common / Rare / Epic / Mythic):
 - Later: `explosive`, `drone` and `grenade` can enter as Mythic-only perks.
 
 ### 15.3 Scrap persistence
-- Pickups never despawn. The merge rule above keeps at most 300 on the ground.
+- Pickups never despawn. At the 300 cap, new drops fly straight to the player.
 - Balance: with no despawn and with tiers, the player gets stronger. The rerun uses the enemy HP slope as the main lever, aiming at the §12.4 targets.
 
 ### 15.4 Regen
 - Reported as not working in the playtest; Programmer to check.
-- New value: +1 HP every 2 s per stack, with a brief tick on the HP bar when it heals.
+- New value: +1 HP every 2 s per stack, with a brief white tick on the HP bar when it heals (not green: reserved for the player).
 
