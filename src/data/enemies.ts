@@ -23,7 +23,7 @@ export interface EnemyDef {
 /** design.md sections 5 and 12. */
 export const ENEMIES: Record<string, EnemyDef> = {
   grunt: { id: 'grunt', hp: 10, speed: 45, contactDamage: 8, scrap: 1, radius: 8 },
-  runner: { id: 'runner', hp: 6, speed: 85, contactDamage: 6, scrap: 1, radius: 7, groupMin: 3, groupMax: 5 },
+  runner: { id: 'runner', hp: 6, speed: 95, contactDamage: 6, scrap: 1, radius: 7, groupMin: 3, groupMax: 5 },
   heavy: { id: 'heavy', hp: 60, speed: 30, contactDamage: 15, scrap: 5, radius: 12, knockbackImmune: true },
   rifleman: {
     id: 'rifleman',
@@ -38,8 +38,8 @@ export const ENEMIES: Record<string, EnemyDef> = {
 
 /** design.md 12.1: scaling per minute elapsed (m). */
 export const SCALING = {
-  hpPerMinute: 0.15, // HP x (1 + 0.15 m), fixed at spawn
-  contactPerMinute: 0.05, // contact damage x (1 + 0.05 m), at hit time
+  hpPerMinute: 0.12, // HP x (1 + 0.12 m), fixed at spawn
+  contactPerMinute: 0.03, // contact damage x (1 + 0.03 m), at hit time
   rifleIntervalPerMinute: 0.08, // fire interval 2.0 - 0.08 m
   rifleIntervalMin: 1.2,
 };
