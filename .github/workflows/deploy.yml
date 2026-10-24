@@ -9,7 +9,8 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages
+  # PR runs get their own group, so a PR never cancels a main deploy.
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'pages' }}
   cancel-in-progress: true
 jobs:
   build:
@@ -24,15 +25,19 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: npx tsc --noEmit -p .
       - run: pnpm lint
       - run: pnpm format:check
       - run: pnpm test
       - run: pnpm build
-      - uses: actions/upload-pages-artifact@v3
+      - run: pnpm smoke
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
   deploy:
-    if: github.event_name != 'pull_request'
+    # Deploys only from main, never from a PR or a branch.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:
