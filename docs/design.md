@@ -284,18 +284,18 @@ Whole-number perks are `pierce`, `multishot`, `ricochet`, `armor`, `regen`. They
 |---|---|---|---|---|---|---|---|
 | `dmg` | DAMAGE | +{v}% damage | 15 | 23 | 30 | 45 | +75% |
 | `rof` | FIRE RATE | +{v}% fire rate | 12 | 18 | 24 | 36 | +60% |
-| `pierce` | PIERCE | Bullets pass through +{v} enemy | 1 | – | 2 | 3 | 3 |
-| `multishot` | MULTISHOT | +{v} bullet per shot | 1 | – | 2 | 3 | 3 |
+| `pierce` | PIERCE | +{v} pierce | 1 | – | 2 | 3 | 3 |
+| `multishot` | MULTISHOT | +{v} bullets | 1 | – | 2 | 3 | 3 |
 | `move` | MOVE SPEED | +{v}% move speed | 8 | 12 | 16 | 24 | +32% |
-| `maxhp` | MAX HP | +{v} max HP and heal {v} | 20 | 30 | 40 | 60 | +100 |
-| `magnet` | MAGNET | +{v}% pickup range | 30 | 45 | 60 | 90 | +90% |
-| `crit` | CRIT | +{v}% chance of double damage | 5 | 8 | 10 | 15 | 25% |
-| `bspeed` | BULLET SPEED | +{v}% bullet speed and range | 15 | 23 | 30 | 45 | +45% |
-| `regen` | REGEN | Heal {v} HP every 2 s | 1 | – | 2 | 3 | 3 |
-| `armor` | ARMOR | Take {v} less damage per hit | 1 | – | 2 | 3 | 3 |
-| `ricochet` | RICOCHET | Bullets bounce to {v} more enemy | 1 | – | 2 | 3 | 2 |
+| `maxhp` | MAX HP | +{v} max HP, heal | 20 | 30 | 40 | 60 | +100 |
+| `magnet` | MAGNET | +{v}% magnet | 30 | 45 | 60 | 90 | +90% |
+| `crit` | CRIT | +{v}% crit | 5 | 8 | 10 | 15 | 25% |
+| `bspeed` | BULLET SPEED | +{v}% speed/range | 15 | 23 | 30 | 45 | +45% |
+| `regen` | REGEN | +{v} HP per 2s | 1 | – | 2 | 3 | 3 |
+| `armor` | ARMOR | -{v} dmg per hit | 1 | – | 2 | 3 | 3 |
+| `ricochet` | RICOCHET | +{v} bounces | 1 | – | 2 | 3 | 2 |
 
-Use "enemies" and "bullets" when `{v}` is above 1. A card for a perk that is one pick away from its max shows the value actually gained.
+Every name fits in 12 characters and every effect line in 16, so each stays on one line on the 104 px card (Silkscreen 8 px). "Max HP, heal" means the pick also heals by the same amount; "crit" is double damage. Use "bullet"/"bounce" when `{v}` is 1. A card for a perk that is one pick away from its max shows the value actually gained.
 
 Tier odds by player level (Common / Rare / Epic / Mythic):
 | Level | Odds |
