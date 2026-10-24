@@ -98,7 +98,7 @@ function collectorInput(w: World): Input {
   return m > 0 ? { mx: fx / m, my: fy / m } : { mx: 0, my: 0 };
 }
 
-const PRIORITY: PerkId[] = ['dmg', 'rof', 'pierce', 'multishot', 'maxhp', 'move'];
+const PRIORITY: PerkId[] = ['dmg', 'rof', 'multishot', 'pierce', 'crit', 'ricochet', 'maxhp', 'armor', 'regen', 'move', 'bspeed', 'magnet'];
 
 function pick(w: World, bot: Bot): void {
   if (bot === 'kite-smart') {

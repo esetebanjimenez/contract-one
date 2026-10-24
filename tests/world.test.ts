@@ -3,9 +3,10 @@ import { ENEMIES } from '../src/data/enemies';
 import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
 import { SPAWN } from '../src/data/spawns';
-import { drawOffer, emptyStacks } from '../src/sim/perks';
+import { PERKS } from '../src/data/perks';
+import { computeStats, drawOffer, emptyStacks } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
-import { choosePerk, createWorld, rifleInterval, riflemenAlive, spawnRate, step } from '../src/sim/world';
+import { choosePerk, createWorld, isRingWave, rifleInterval, riflemenAlive, spawnRate, step } from '../src/sim/world';
 import { runBot } from '../tools/bots';
 
 describe('levels and perks', () => {
@@ -19,15 +20,35 @@ describe('levels and perks', () => {
       const o = drawOffer(s, 3, rng);
       expect(new Set(o).size).toBe(3);
     }
-    s.pierce = 3;
-    s.multishot = 3;
-    s.dmg = 5;
-    s.rof = 5;
+    for (const d of PERKS) if (d.id !== 'maxhp' && d.id !== 'move') s[d.id] = d.max;
     expect(drawOffer(s, 3, rng).sort()).toEqual(['maxhp', 'move']);
+  });
+  it('guarantees a damage perk while the player has fewer than 2', () => {
+    const rng = createRng(9);
+    const s = emptyStacks();
+    for (let i = 0; i < 200; i++) {
+      expect(drawOffer(s, 3, rng).some((id) => PERKS.find((d) => d.id === id)!.damageType)).toBe(true);
+    }
+    s.move = 1;
+    s.dmg = 1;
+    expect(drawOffer(s, 3, rng).length).toBe(3);
+  });
+  it('armor reduces hits to a minimum of 1 and regen heals every 5 s', () => {
+    const w = createWorld(1);
+    w.stacks.armor = 3;
+    w.stacks.regen = 1;
+    w.stats = computeStats(w.stacks);
+    expect(w.stats.armor).toBe(3);
+    w.player.hp = 50;
+    for (let i = 0; i < 5 * 60 + 1; i++) {
+      w.enemies.length = 0;
+      step(w, { mx: 0, my: 0 });
+    }
+    expect(w.player.hp).toBe(51);
   });
   it('pauses for a level-up and applies the pick', () => {
     const w = createWorld(1);
-    w.pickups.push({ x: 0, y: 0, value: 5, age: 0, flying: true });
+    w.pickups.push({ x: 0, y: 0, value: 5, age: 0, flying: true, cache: false });
     step(w, { mx: 0, my: 0 });
     expect(w.phase).toBe('levelup');
     expect(w.offer).toHaveLength(3);
@@ -53,7 +74,7 @@ describe('sim', () => {
     const w = createWorld(2);
     w.player.hp = w.stats.maxHp = 1e9;
     w.tick = -1e9; // keep the spawner quiet
-    w.enemies.push({ id: 1, def: ENEMIES.rifleman, x: 300, y: 0, hp: 1e9, maxHp: 1e9, fireTimer: 2, facing: 1, elite: false });
+    w.enemies.push({ id: 1, def: ENEMIES.rifleman, x: 300, y: 0, hp: 1e9, maxHp: 1e9, fireTimer: 2, facing: 1, elite: false, flash: 0 });
     for (let i = 0; i < Math.round(8 / DT); i++) step(w, { mx: 0, my: 0 });
     expect(w.enemies[0].x).toBeGreaterThan(135);
     expect(w.enemies[0].x).toBeLessThan(142);
@@ -93,5 +114,8 @@ describe('sim', () => {
     expect(riflemenAlive(w)).toBeLessThanOrEqual(SPAWN.maxRiflemen);
     expect(w.enemies.some((e) => e.elite)).toBe(true);
     expect(w.enemies.some((e) => e.def.id === 'heavy')).toBe(true);
+  });
+  it('makes every second wave from 3:00 a full ring', () => {
+    expect([120, 180, 240, 300, 420, 540].map((t) => isRingWave(t + 1))).toEqual([false, true, false, true, true, true]);
   });
 });

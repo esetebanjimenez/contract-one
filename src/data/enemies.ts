@@ -14,14 +14,17 @@ export interface EnemyDef {
   contactDamage: number;
   scrap: number;
   radius: number; // collision radius in px
+  knockbackImmune?: boolean;
+  groupMin?: number; // arrives in groups from the same edge
+  groupMax?: number;
   ranged?: RangedDef;
 }
 
 /** design.md sections 5 and 12. */
 export const ENEMIES: Record<string, EnemyDef> = {
   grunt: { id: 'grunt', hp: 10, speed: 45, contactDamage: 8, scrap: 1, radius: 8 },
-  runner: { id: 'runner', hp: 6, speed: 85, contactDamage: 6, scrap: 1, radius: 7 },
-  heavy: { id: 'heavy', hp: 60, speed: 30, contactDamage: 15, scrap: 5, radius: 12 },
+  runner: { id: 'runner', hp: 6, speed: 85, contactDamage: 6, scrap: 1, radius: 7, groupMin: 3, groupMax: 5 },
+  heavy: { id: 'heavy', hp: 60, speed: 30, contactDamage: 15, scrap: 5, radius: 12, knockbackImmune: true },
   rifleman: {
     id: 'rifleman',
     hp: 25,
@@ -42,5 +45,8 @@ export const SCALING = {
 };
 
 /** Elite variant of any base type (design.md section 5). */
-export const ELITE = { hp: 3, speed: 1.1, contact: 1.5, scrap: 4 };
+export const ELITE = { hp: 3, speed: 1.1, contact: 1.5, scrap: 4, rifleSpreadShots: 3, rifleSpreadDeg: 12 };
+
+/** design.md 13.5: px pushed back per player bullet hit. */
+export const KNOCKBACK_PX = 4;
 export const ENEMY_BULLET_RADIUS = 3;

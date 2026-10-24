@@ -1,7 +1,7 @@
 import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
-import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, SCALING, type EnemyDef } from '../data/enemies';
+import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 import { LEVELS, scrapForLevel } from '../data/levels';
-import type { PerkId } from '../data/perks';
+import { PERK_RULES, type PerkId } from '../data/perks';
 import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { SPAWN, SPAWN_BANDS } from '../data/spawns';
@@ -19,6 +19,7 @@ export interface Enemy {
   fireTimer: number;
   facing: 1 | -1;
   elite: boolean;
+  flash: number; // seconds of white hit-flash left
 }
 
 export interface Bullet {
@@ -29,6 +30,7 @@ export interface Bullet {
   rangeLeft: number;
   damage: number;
   pierceLeft: number;
+  bounces: number;
   hit: number[]; // enemy ids already hit (for pierce)
 }
 
@@ -38,6 +40,7 @@ export interface Pickup {
   value: number;
   age: number;
   flying: boolean;
+  cache: boolean; // Elite Scrap cache
 }
 
 export type Phase = 'play' | 'levelup' | 'dead';
@@ -74,6 +77,7 @@ export interface World {
   enemyBullets: Bullet[];
   pickups: Pickup[];
   spawnAcc: number;
+  regenAcc: number;
   pressureAngle: number;
   nextEnemyId: number;
   kills: number;
@@ -107,6 +111,7 @@ export function createWorld(seed: number): World {
     enemyBullets: [],
     pickups: [],
     spawnAcc: 0,
+    regenAcc: 0,
     pressureAngle: 0,
     nextEnemyId: 1,
     kills: 0,
@@ -182,38 +187,81 @@ export function contactDamage(e: Enemy, t: number): number {
 }
 
 function spawnEnemy(w: World, angle: number, pressure: boolean): void {
+  const first = spawnOne(w, angle, pressure);
+  if (first && !first.elite && first.def.groupMin) {
+    // Runners arrive in groups from the same edge (design.md 13.2).
+    const extra = first.def.groupMin - 1 + Math.floor(w.rng() * (first.def.groupMax! - first.def.groupMin + 1));
+    for (let i = 0; i < extra; i++) spawnOne(w, angle + (w.rng() - 0.5) * 0.3, pressure, first.def);
+  }
+}
+
+function farthest(w: World, ok: (e: Enemy, offscreen: boolean) => boolean): number {
+  let slot = -1;
+  let fd = -1;
+  for (let i = 0; i < w.enemies.length; i++) {
+    const e = w.enemies[i];
+    if (e.elite) continue;
+    const dx = e.x - w.player.x;
+    const dy = e.y - w.player.y;
+    const off = Math.abs(dx) > NATIVE_WIDTH / 2 || Math.abs(dy) > NATIVE_HEIGHT / 2;
+    if (!ok(e, off)) continue;
+    const d = dx * dx + dy * dy;
+    if (d > fd) {
+      fd = d;
+      slot = i;
+    }
+  }
+  return slot;
+}
+
+/** From 3:00, every second pressure wave (3:00, 5:00, 7:00, 9:00) is a full ring (design.md 12.3). */
+export function isRingWave(t: number): boolean {
+  const n = Math.floor(t / SPAWN.pressureEverySec);
+  return t >= SPAWN.ringFromSec && n % SPAWN.ringEveryNthWave === 1;
+}
+
+function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef): Enemy | undefined {
   const cap = CAPS.enemies + (pressure ? SPAWN.pressureOverCap : 0);
   let slot = -1;
   if (w.enemies.length >= cap) {
-    // At the cap, the farthest Grunt is replaced so threat keeps climbing (design.md 12.2).
-    let fd = -1;
-    for (let i = 0; i < w.enemies.length; i++) {
-      const e = w.enemies[i];
-      if (e.def.id !== 'grunt' || e.elite) continue;
-      const d = (e.x - w.player.x) ** 2 + (e.y - w.player.y) ** 2;
-      if (d > fd) {
-        fd = d;
-        slot = i;
-      }
-    }
-    if (slot === -1) return;
+    // At the cap, replace the farthest off-screen non-Elite Grunt, else the farthest off-screen
+    // non-Elite of any type, else the farthest non-Elite, so spawning never stops (design.md 12.2).
+    slot = farthest(w, (e, off) => off && e.def.id === 'grunt');
+    if (slot === -1) slot = farthest(w, (_e, off) => off);
+    if (slot === -1) slot = farthest(w, () => true);
+    if (slot === -1) return undefined;
   }
-  const { def, elite } = pickType(w, pressure);
+  const { def, elite } = force ? { def: force, elite: false } : pickType(w, pressure);
   const p = edgePoint(w, angle);
   const maxHp = def.hp * (elite ? ELITE.hp : 1) * (1 + SCALING.hpPerMinute * (w.time / 60));
-  const e: Enemy = { id: w.nextEnemyId++, def, x: p.x, y: p.y, hp: maxHp, maxHp, fireTimer: rifleInterval(w.time), facing: 1, elite };
+  const e: Enemy = {
+    id: w.nextEnemyId++,
+    def,
+    x: p.x,
+    y: p.y,
+    hp: maxHp,
+    maxHp,
+    fireTimer: rifleInterval(w.time),
+    facing: 1,
+    elite,
+    flash: 0,
+  };
   if (slot >= 0) w.enemies[slot] = e;
   else w.enemies.push(e);
+  return e;
 }
 
-function updateSpawns(w: World): void {
+function updateSpawns(w: World, input: Input): void {
   const pressure = inPressureWave(w.time);
-  if (w.tick % Math.round(SPAWN.pressureEverySec / DT) === 0) w.pressureAngle = w.rng() * Math.PI * 2;
+  // Anti-flee: pressure arrives ahead of the player's movement, random when standing still.
+  if (Math.hypot(input.mx, input.my) > 0.01) w.pressureAngle = Math.atan2(input.my, input.mx);
+  else if (w.tick % Math.round(SPAWN.pressureEverySec / DT) === 0) w.pressureAngle = w.rng() * Math.PI * 2;
+  const ring = pressure && isRingWave(w.time);
   w.spawnAcc += spawnRate(w.time) * (pressure ? SPAWN.pressureMultiplier : 1) * DT;
   while (w.spawnAcc >= 1) {
     w.spawnAcc -= 1;
     const arc = (SPAWN.pressureArcDeg * Math.PI) / 180;
-    const angle = pressure ? w.pressureAngle + (w.rng() - 0.5) * arc : w.rng() * Math.PI * 2;
+    const angle = pressure && !ring ? w.pressureAngle + (w.rng() - 0.5) * arc : w.rng() * Math.PI * 2;
     spawnEnemy(w, angle, pressure);
   }
 }
@@ -250,20 +298,41 @@ function fire(w: World): void {
     w.bullets.push({
       x: p.x,
       y: p.y,
-      vx: Math.cos(a) * PLAYER.bulletSpeed,
-      vy: Math.sin(a) * PLAYER.bulletSpeed,
-      rangeLeft: PLAYER.bulletRange,
+      vx: Math.cos(a) * w.stats.bulletSpeed,
+      vy: Math.sin(a) * w.stats.bulletSpeed,
+      rangeLeft: w.stats.bulletRange,
       damage: w.stats.damage,
       pierceLeft: w.stats.pierce,
+      bounces: w.stats.ricochet,
       hit: [],
     });
   }
 }
 
+/** Ricochet: turn the bullet toward the nearest living enemy it has not hit within range. */
+function retarget(w: World, bl: Bullet, from: Enemy, speed: number): boolean {
+  let best: Enemy | undefined;
+  let bd = PERK_RULES.ricochetRange ** 2;
+  for (const e of w.enemies) {
+    if (e.hp <= 0 || bl.hit.includes(e.id)) continue;
+    const d = (e.x - from.x) ** 2 + (e.y - from.y) ** 2;
+    if (d < bd) {
+      bd = d;
+      best = e;
+    }
+  }
+  if (!best) return false;
+  const d = Math.sqrt(bd) || 1;
+  bl.vx = ((best.x - from.x) / d) * speed;
+  bl.vy = ((best.y - from.y) / d) * speed;
+  bl.rangeLeft = Math.max(bl.rangeLeft, PERK_RULES.ricochetRange + 10);
+  return true;
+}
+
 function damagePlayer(w: World, dmg: number): void {
   const p = w.player;
   if (p.invuln > 0) return;
-  p.hp -= dmg;
+  p.hp -= Math.max(1, dmg - w.stats.armor);
   p.invuln = PLAYER.invulnSec;
   if (p.hp <= 0) {
     p.hp = 0;
@@ -285,7 +354,7 @@ function killEnemy(w: World, i: number): void {
   w.kills++;
   const scrap = e.def.scrap * (e.elite ? ELITE.scrap : 1);
   w.scrapDropped += scrap;
-  if (w.pickups.length < CAPS.pickups) w.pickups.push({ x: e.x, y: e.y, value: scrap, age: 0, flying: false });
+  if (w.pickups.length < CAPS.pickups) w.pickups.push({ x: e.x, y: e.y, value: scrap, age: 0, flying: false, cache: e.elite });
   else addScrap(w, scrap);
   w.enemies[i] = w.enemies[w.enemies.length - 1];
   w.enemies.pop();
@@ -304,8 +373,15 @@ export function step(w: World, input: Input): void {
   p.y += input.my * s * w.stats.speed * DT;
   p.moving = mag > 0;
   if (p.invuln > 0) p.invuln -= DT;
+  if (w.stats.regenPerTick > 0) {
+    w.regenAcc += DT;
+    if (w.regenAcc >= PERK_RULES.regenIntervalSec) {
+      w.regenAcc -= PERK_RULES.regenIntervalSec;
+      p.hp = Math.min(w.stats.maxHp, p.hp + w.stats.regenPerTick);
+    }
+  }
 
-  updateSpawns(w);
+  updateSpawns(w, input);
 
   // Enemies: move, separate, shoot, contact.
   const grid = w.grid;
@@ -338,19 +414,25 @@ export function step(w: World, input: Input): void {
         o.y += oy * push;
       }
     });
+    if (e.flash > 0) e.flash -= DT;
     if (r) {
       e.fireTimer -= DT;
       if (e.fireTimer <= 0) {
         e.fireTimer += rifleInterval(w.time);
-        if (d <= r.bulletRange && w.enemyBullets.length < CAPS.enemyBullets) {
+        const shots = e.elite ? ELITE.rifleSpreadShots : 1;
+        const base = Math.atan2(dy, dx);
+        const spread = (ELITE.rifleSpreadDeg * Math.PI) / 180;
+        for (let k = 0; k < shots && d <= r.bulletRange && w.enemyBullets.length < CAPS.enemyBullets; k++) {
+          const a = base + (k - (shots - 1) / 2) * spread;
           w.enemyBullets.push({
             x: e.x,
             y: e.y,
-            vx: (dx / d) * r.bulletSpeed,
-            vy: (dy / d) * r.bulletSpeed,
+            vx: Math.cos(a) * r.bulletSpeed,
+            vy: Math.sin(a) * r.bulletSpeed,
             rangeLeft: r.bulletRange,
             damage: r.damage,
             pierceLeft: 0,
+            bounces: 0,
             hit: [],
           });
         }
@@ -371,20 +453,33 @@ export function step(w: World, input: Input): void {
     const bl = w.bullets[b];
     bl.x += bl.vx * DT;
     bl.y += bl.vy * DT;
-    bl.rangeLeft -= PLAYER.bulletSpeed * DT;
+    const bv = Math.hypot(bl.vx, bl.vy);
+    bl.rangeLeft -= bv * DT;
     let spent = bl.rangeLeft <= 0;
+    let hitEnemy: Enemy | undefined;
     if (!spent) {
       grid.query(bl.x, bl.y, GRID_CELL / 2, (i) => {
-        if (spent) return;
+        if (spent || hitEnemy) return;
         const e = w.enemies[i];
         if (e.hp <= 0 || bl.hit.includes(e.id)) return;
         const rr = e.def.radius + PLAYER.bulletRadius;
         if ((e.x - bl.x) ** 2 + (e.y - bl.y) ** 2 > rr * rr) return;
-        e.hp -= bl.damage;
+        const crit = w.stats.crit > 0 && w.rng() < w.stats.crit;
+        e.hp -= bl.damage * (crit ? PERK_RULES.critMultiplier : 1);
         bl.hit.push(e.id);
+        if (e.def.knockbackImmune) e.flash = DT;
+        else {
+          e.x += (bl.vx / bv) * KNOCKBACK_PX;
+          e.y += (bl.vy / bv) * KNOCKBACK_PX;
+        }
         if (e.hp <= 0) dead.push(i);
-        if (bl.pierceLeft-- <= 0) spent = true;
+        hitEnemy = e;
       });
+    }
+    if (hitEnemy) {
+      if (bl.pierceLeft > 0) bl.pierceLeft--;
+      else if (bl.bounces > 0 && retarget(w, bl, hitEnemy, bv)) bl.bounces--;
+      else spent = true;
     }
     if (spent) {
       w.bullets[b] = w.bullets[w.bullets.length - 1];
@@ -420,7 +515,7 @@ export function step(w: World, input: Input): void {
     const dx = p.x - k.x;
     const dy = p.y - k.y;
     const d = Math.hypot(dx, dy);
-    if (d < PLAYER.magnet) k.flying = true;
+    if (d < w.stats.magnet) k.flying = true;
     if (k.flying && d > 0) {
       const m = Math.min(d, PLAYER.pickupFlySpeed * DT);
       k.x += (dx / d) * m;

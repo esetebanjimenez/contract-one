@@ -7,7 +7,9 @@ export const SPAWN = {
   pressureEverySec: 60,
   pressureDurationSec: 5,
   pressureMultiplier: 3,
-  pressureArcDeg: 60, // pressure spawns come from one direction within this arc
+  pressureArcDeg: 90, // pressure spawns come from ahead of the player's movement within this arc
+  ringFromSec: 180, // from 3:00, every second wave (3:00, 5:00, 7:00, 9:00) is a full ring
+  ringEveryNthWave: 2,
   pressureOverCap: 40, // a pressure wave may exceed the enemy cap by this much
   pressureHeavyFromSec: 300,
   pressureHeavyShare: 0.25, // share of Heavies in a pressure ring from 5:00

@@ -5,6 +5,7 @@ import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { MERC_ART, RIFLEMAN_ART } from '../data/player';
 import type { World } from '../sim/world';
 import type { Controls } from '../ui/input';
+import { BONE_WHITE, outlined, silhouette } from './bake';
 
 const ART = [
   'ground_sand_00',
@@ -31,8 +32,8 @@ const PLACEHOLDER: Record<string, { scale: number; tint: number }> = {
   heavy: { scale: 1.4, tint: 0x9a9a9a },
   rifleman: { scale: 1, tint: 0xffffff },
 };
-const ELITE_TINT = 0xff9a7a;
 const ELITE_SCALE = 1.25;
+const CACHE_SCALE = 1.5; // 12 px Scrap cache from the 8 px Scrap sprite (design.md 13.4)
 
 /** Grows a list of sprites on demand and hides the unused tail each frame. */
 class Pool {
@@ -57,6 +58,8 @@ class Pool {
 
 export class Renderer {
   private tex = {} as Record<ArtId, Texture>;
+  private eliteTex = {} as Record<string, Texture>;
+  private flashTex = {} as Record<string, Texture>;
   private ground!: TilingSprite;
   private world = new Container();
   private pickups!: Pool;
@@ -77,6 +80,10 @@ export class Renderer {
       const t = await Assets.load<Texture>(`${base}art/${id}.png`);
       t.source.scaleMode = 'nearest';
       this.tex[id] = t;
+    }
+    for (const id of new Set(Object.values(ENEMY_ART))) {
+      this.eliteTex[id] = outlined(this.tex[id], BONE_WHITE);
+      this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
     }
     this.ground = new TilingSprite({ texture: this.tex.ground_sand_00, width: NATIVE_WIDTH, height: NATIVE_HEIGHT });
     const layers = [new Container(), new Container(), new Container(), new Container(), new Container()];
@@ -103,18 +110,22 @@ export class Renderer {
     w.pickups.forEach((k, i) => {
       const s = this.pickups.get(i, this.tex.scrap_00);
       s.position.set(Math.round(k.x), Math.round(k.y));
+      s.scale.set(k.cache ? CACHE_SCALE : 1);
       s.alpha = k.age > LEVELS.pickupLifetimeSec - 3 ? (Math.floor(k.age * 8) % 2 ? 0.3 : 1) : 1;
     });
     this.pickups.hideFrom(w.pickups.length);
 
     this.fx.clear();
     w.enemies.forEach((e, i) => {
-      const s = this.enemies.get(i, this.tex[ENEMY_ART[e.def.id]]);
+      const art = ENEMY_ART[e.def.id];
+      // Heavies flash white for one frame per hit; Elites carry a baked bone-white outline.
+      const tex = e.flash > 0 ? this.flashTex[art] : e.elite ? this.eliteTex[art] : this.tex[art];
+      const s = this.enemies.get(i, tex);
       s.position.set(Math.round(e.x), Math.round(e.y));
       const r = e.def.ranged;
       const look = PLACEHOLDER[e.def.id];
       const sc = look.scale * (e.elite ? ELITE_SCALE : 1);
-      s.tint = e.elite ? ELITE_TINT : look.tint;
+      s.tint = e.flash > 0 ? 0xffffff : look.tint;
       if (r) {
         // Riflemen rotate as a whole sprite toward the player, like the merc.
         s.anchor.set(RIFLEMAN_ART.bodyCenter.x / RIFLEMAN_ART.size.w, RIFLEMAN_ART.bodyCenter.y / RIFLEMAN_ART.size.h);
