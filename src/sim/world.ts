@@ -1,8 +1,8 @@
 import { BOSS } from '../data/boss';
-import { MAX_VIEW_HEIGHT, NATIVE_WIDTH } from '../data/display';
+import { MAX_VIEW_HEIGHT, NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 import { LEVELS, scrapForLevel } from '../data/levels';
-import { PERK_RULES, perkDef, type PerkId } from '../data/perks';
+import { PERK_RULES, RATIONS, perkDef, type OfferId } from '../data/perks';
 import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { RUN } from '../data/run';
@@ -23,6 +23,19 @@ export interface Enemy {
   facing: 1 | -1;
   elite: boolean;
   flash: number; // seconds of white hit-flash left
+  fleeing?: boolean; // boss clear-out: runs off, harmless, can't be hit
+  noScrap?: boolean; // phase 3 adds
+}
+
+/** The locked boss arena: camera position and the inner wall edges, in world px. */
+export interface Arena {
+  camX: number;
+  camY: number;
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  lockedAt: number;
 }
 
 export interface Bullet {
@@ -91,6 +104,8 @@ export interface World {
   peakBullets: number;
   grid: SpatialGrid;
   boss: Boss | null;
+  arena: Arena | null;
+  viewH: number; // visible world height, set by the client (bots use the 16:9 minimum)
   bossDamage: number; // damage dealt to the Warlord
   won: boolean; // the Warlord is dead; the UI plays the outro and shows results
   wonAt: number; // run time of the kill
@@ -132,6 +147,8 @@ export function createWorld(seed: number): World {
     peakBullets: 0,
     grid: new SpatialGrid(GRID_CELL),
     boss: null,
+    arena: null,
+    viewH: NATIVE_HEIGHT,
     bossDamage: 0,
     won: false,
     wonAt: 0,
@@ -270,15 +287,14 @@ function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef):
 }
 
 function updateSpawns(w: World, input: Input): void {
-  if (w.won) return;
+  // No normal spawns once the arena locks; only the phase 3 adds (design.md 14.9).
+  if (w.won || w.arena) return;
   const pressure = inPressureWave(w.time);
   // Anti-flee: pressure arrives ahead of the player's movement, random when standing still.
   if (Math.hypot(input.mx, input.my) > 0.01) w.pressureAngle = Math.atan2(input.my, input.mx);
   else if (w.tick % Math.round(SPAWN.pressureEverySec / DT) === 0) w.pressureAngle = w.rng() * Math.PI * 2;
   const ring = pressure && isRingWave(w.time);
-  // From 10:00 the rate holds at 30% of the 10:00 rate (design.md 14.2).
-  const rate = w.time >= RUN.contractSec ? spawnRate(RUN.contractSec) * RUN.bossSpawnRateMul : spawnRate(w.time);
-  w.spawnAcc += rate * (pressure ? SPAWN.pressureMultiplier : 1) * DT;
+  w.spawnAcc += spawnRate(w.time) * (pressure ? SPAWN.pressureMultiplier : 1) * DT;
   while (w.spawnAcc >= 1) {
     w.spawnAcc -= 1;
     const arc = (SPAWN.pressureArcDeg * Math.PI) / 180;
@@ -300,6 +316,7 @@ function nearestEnemy(w: World, range: number): { x: number; y: number } | undef
     }
   }
   for (const e of w.enemies) {
+    if (e.fleeing) continue;
     const d = (e.x - w.player.x) ** 2 + (e.y - w.player.y) ** 2;
     if (d < bd) {
       bd = d;
@@ -344,7 +361,7 @@ function retarget(w: World, bl: Bullet, from: Enemy, speed: number): boolean {
   let best: Enemy | undefined;
   let bd = PERK_RULES.ricochetRange ** 2;
   for (const e of w.enemies) {
-    if (e.hp <= 0 || bl.hit.includes(e.id)) continue;
+    if (e.hp <= 0 || e.fleeing || bl.hit.includes(e.id)) continue;
     const d = (e.x - from.x) ** 2 + (e.y - from.y) ** 2;
     if (d < bd) {
       bd = d;
@@ -382,9 +399,11 @@ function addScrap(w: World, v: number): void {
 export function killEnemy(w: World, i: number): void {
   const e = w.enemies[i];
   w.kills++;
-  const scrap = e.def.scrap * (e.elite ? ELITE.scrap : 1);
+  const scrap = e.noScrap ? 0 : e.def.scrap * (e.elite ? ELITE.scrap : 1);
   w.scrapDropped += scrap;
-  if (w.pickups.length < CAPS.pickups) w.pickups.push({ x: e.x, y: e.y, value: scrap, age: 0, flying: false, cache: e.elite });
+  if (scrap === 0) {
+    // Phase 3 adds drop nothing.
+  } else if (w.pickups.length < CAPS.pickups) w.pickups.push({ x: e.x, y: e.y, value: scrap, age: 0, flying: false, cache: e.elite });
   else {
     // Past the cap, the value goes onto the oldest piece still on the ground, so the player has to
     // go back for it (design.md 15.3). Pickups are kept in spawn order.
@@ -407,6 +426,12 @@ export function step(w: World, input: Input): void {
   p.x += input.mx * s * w.stats.speed * DT;
   p.y += input.my * s * w.stats.speed * DT;
   p.moving = mag > 0;
+  if (w.time >= RUN.contractSec && !w.arena) lockArena(w);
+  const ar = w.arena;
+  if (ar) {
+    p.x = Math.min(ar.x1 - PLAYER.hitRadius, Math.max(ar.x0 + PLAYER.hitRadius, p.x));
+    p.y = Math.min(ar.y1 - PLAYER.hitRadius, Math.max(ar.y0 + PLAYER.hitRadius, p.y));
+  }
   if (p.invuln > 0) p.invuln -= DT;
   if (w.stats.regenPerTick > 0) {
     w.regenAcc += DT;
@@ -428,6 +453,14 @@ export function step(w: World, input: Input): void {
     const dy = p.y - e.y;
     const d = Math.hypot(dx, dy) || 1;
     e.facing = dx >= 0 ? 1 : -1;
+    if (e.fleeing) {
+      // Clear-out: straight away from the player at 1.5x speed, no contact, no shots.
+      const sp = e.def.speed * (e.elite ? ELITE.speed : 1) * RUN.fleeSpeedMul;
+      e.x -= (dx / d) * sp * DT;
+      e.y -= (dy / d) * sp * DT;
+      e.facing = dx >= 0 ? -1 : 1;
+      continue;
+    }
     const r = e.def.ranged;
     if (!r || d > r.stopDistance) {
       const sp = e.def.speed * (e.elite ? ELITE.speed : 1);
@@ -498,7 +531,7 @@ export function step(w: World, input: Input): void {
       grid.query(bl.x, bl.y, GRID_CELL / 2, (i) => {
         if (spent || hitEnemy) return;
         const e = w.enemies[i];
-        if (e.hp <= 0 || bl.hit.includes(e.id)) return;
+        if (e.hp <= 0 || e.fleeing || bl.hit.includes(e.id)) return;
         const rr = e.def.radius + PLAYER.bulletRadius;
         if ((e.x - bl.x) ** 2 + (e.y - bl.y) ** 2 > rr * rr) return;
         const crit = w.stats.crit > 0 && w.rng() < w.stats.crit;
@@ -548,7 +581,7 @@ export function step(w: World, input: Input): void {
     bl.y += bl.vy * DT;
     bl.rangeLeft -= Math.hypot(bl.vx, bl.vy) * DT;
     const rr = PLAYER.hitRadius + ENEMY_BULLET_RADIUS;
-    let spent = bl.rangeLeft <= 0;
+    let spent = bl.rangeLeft <= 0 || (!!ar && (bl.x < ar.x0 || bl.x > ar.x1 || bl.y < ar.y0 || bl.y > ar.y1));
     if (!spent && (bl.x - p.x) ** 2 + (bl.y - p.y) ** 2 <= rr * rr) {
       const before = p.invuln;
       damagePlayer(w, bl.damage);
@@ -584,6 +617,7 @@ export function step(w: World, input: Input): void {
   w.peakEnemies = Math.max(w.peakEnemies, w.enemies.length);
   w.peakBullets = Math.max(w.peakBullets, w.bullets.length + w.enemyBullets.length);
 
+  if (ar) despawnFled(w, ar);
   if (w.won && (w.enemies.length || w.enemyBullets.length)) clearField(w);
   if (w.phase === 'play' && w.pendingLevels > 0 && !w.won) openLevelUp(w);
 }
@@ -594,11 +628,66 @@ function bossHost(w: World): BossHost {
     level: w.level,
     player: w.player,
     enemyBullets: w.enemyBullets,
+    arena: w.arena,
     hitPlayer: (dmg) => damagePlayer(w, dmg),
     spawnAddsRing: (count) => {
-      for (let i = 0; i < count; i++) spawnOne(w, (i / count) * Math.PI * 2, true, ENEMIES.grunt);
+      for (let i = 0; i < count; i++) {
+        const e = spawnOne(w, (i / count) * Math.PI * 2, true, ENEMIES.grunt);
+        if (!e) continue;
+        e.noScrap = true;
+        if (w.arena) {
+          // Evenly spaced just outside the arena edges, walking in.
+          const pt = arenaEdgePoint(w.arena, (i / count) * Math.PI * 2, ENEMIES.grunt.radius + RUN.arenaBandPx);
+          e.x = pt.x;
+          e.y = pt.y;
+        }
+      }
     },
   };
+}
+
+/** At 10:00: freeze the camera on the current view and turn every enemy into a harmless runner. */
+function lockArena(w: World): void {
+  const p = w.player;
+  const camX = Math.round(p.x - NATIVE_WIDTH / 2);
+  const camY = Math.round(p.y - w.viewH / 2);
+  const band = RUN.arenaBandPx;
+  w.arena = {
+    camX,
+    camY,
+    x0: camX + band,
+    y0: camY + RUN.arenaHudPx + band,
+    x1: camX + NATIVE_WIDTH - band,
+    y1: camY + w.viewH - band,
+    lockedAt: w.time,
+  };
+  for (const e of w.enemies) e.fleeing = true;
+  w.enemyBullets.length = 0;
+}
+
+/** Point on the arena rectangle in direction `angle` from its centre, pushed `out` px outside. */
+function arenaEdgePoint(a: Arena, angle: number, out: number): { x: number; y: number } {
+  const cx = (a.x0 + a.x1) / 2;
+  const cy = (a.y0 + a.y1) / 2;
+  const dx = Math.cos(angle);
+  const dy = Math.sin(angle);
+  const tx = Math.abs(dx) > 1e-6 ? ((a.x1 - a.x0) / 2 + out) / Math.abs(dx) : Infinity;
+  const ty = Math.abs(dy) > 1e-6 ? ((a.y1 - a.y0) / 2 + out) / Math.abs(dy) : Infinity;
+  const t = Math.min(tx, ty);
+  return { x: cx + dx * t, y: cy + dy * t };
+}
+
+/** Fleeing enemies vanish once fully off the locked screen. */
+function despawnFled(w: World, a: Arena): void {
+  const m = 24;
+  for (let i = w.enemies.length - 1; i >= 0; i--) {
+    const e = w.enemies[i];
+    if (!e.fleeing) continue;
+    if (e.x < a.camX - m || e.x > a.camX + NATIVE_WIDTH + m || e.y < a.camY - m || e.y > a.camY + w.viewH + m) {
+      w.enemies[i] = w.enemies[w.enemies.length - 1];
+      w.enemies.pop();
+    }
+  }
 }
 
 function updateWarlord(w: World): void {
@@ -626,22 +715,28 @@ function clearField(w: World): void {
 
 function openLevelUp(w: World): void {
   w.offer = drawOffer(w.stacks, w.damagePicks, w.level, LEVELS.perkChoices, w.rng);
-  if (w.offer.length === 0) {
-    w.level += w.pendingLevels;
-    w.pendingLevels = 0;
-    return;
-  }
+  // Every perk maxed: the FIELD RATIONS card, so a level-up is never empty (design.md 15.5).
+  if (w.offer.length === 0) w.offer = [{ id: RATIONS.id, tier: 'common', value: RATIONS.heal }];
   w.phase = 'levelup';
 }
 
-export function choosePerk(w: World, id: PerkId): void {
+export function choosePerk(w: World, id: OfferId): void {
   const o = w.offer.find((x) => x.id === id);
   if (w.phase !== 'levelup' || !o) return;
+  if (o.id === RATIONS.id) {
+    w.player.hp = Math.min(w.stats.maxHp, w.player.hp + o.value);
+    w.level++;
+    w.pendingLevels--;
+    w.offer = [];
+    w.phase = 'play';
+    if (w.pendingLevels > 0) openLevelUp(w);
+    return;
+  }
   const prevMax = w.stats.maxHp;
-  w.stacks[id] += o.value;
-  if (perkDef(id).damageType) w.damagePicks++;
+  w.stacks[o.id] += o.value;
+  if (perkDef(o.id).damageType) w.damagePicks++;
   w.stats = computeStats(w.stacks);
-  if (id === 'maxhp') w.player.hp = Math.min(w.stats.maxHp, w.player.hp + (w.stats.maxHp - prevMax));
+  if (o.id === 'maxhp') w.player.hp = Math.min(w.stats.maxHp, w.player.hp + (w.stats.maxHp - prevMax));
   w.level++;
   w.pendingLevels--;
   w.offer = [];

@@ -79,6 +79,7 @@ async function boot(): Promise<void> {
       step(world, controls.read());
     }
     if (world.phase !== 'play' || Hud.resultsDue(world, outro)) controls.reset();
+    world.viewH = viewH;
     renderer.draw(world, controls, dt * timeScale);
     hud.update(world, outro);
   });

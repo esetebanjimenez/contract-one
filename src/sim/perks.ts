@@ -1,11 +1,11 @@
-import { PERK_RULES, PERKS, TIER_ODDS, TIERS, perkDef, type PerkId, type TierId } from '../data/perks';
+import { PERK_RULES, PERKS, TIER_ODDS, TIERS, perkDef, type OfferId, type PerkId, type TierId } from '../data/perks';
 import { PLAYER } from '../data/player';
 
 /** Total effect per perk in display units (e.g. dmg 45 = +45%). */
 export type PerkStacks = Record<PerkId, number>;
 
 export interface Offer {
-  id: PerkId;
+  id: OfferId;
   tier: TierId;
   /** Value actually gained (clipped to the perk's max total). */
   value: number;

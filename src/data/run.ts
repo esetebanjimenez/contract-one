@@ -6,6 +6,10 @@ export const RUN = {
   inboundBannerSec: 2,
   warningSec: 3, // warning banner at 10:00, then he walks in
   bossSpawnRateMul: 0.3, // normal spawns at 30% of the 10:00 rate during the fight
+  arenaHudPx: 58, // HUD strip height; the arena is the visible world below it (design.md 14.9)
+  arenaBandPx: 8, // hazard-tape band; the walls are its inner edge
+  arenaGrowSec: 0.5,
+  fleeSpeedMul: 1.5,
   enrageSec: 720, // 12:00
   // Presentation (real seconds, UI only).
   winSlowMoSec: 1,

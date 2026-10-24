@@ -195,3 +195,7 @@ export function perkDef(id: PerkId): PerkDef {
 export function effectText(d: PerkDef, v: number): string {
   return d.text.replace('{v}', String(v)).replace('{s}', v === 1 ? '' : 's');
 }
+
+/** Fallback card when every perk is maxed (design.md 15.5): tier-less, grey frame. */
+export const RATIONS = { id: 'rations', name: 'FIELD RATIONS', text: 'Heal 25 HP', heal: 25, color: '#9AA0A6' } as const;
+export type OfferId = PerkId | typeof RATIONS.id;

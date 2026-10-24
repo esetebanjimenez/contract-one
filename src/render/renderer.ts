@@ -106,6 +106,9 @@ export class Renderer {
   private lastY = 0;
   private fx = new Graphics();
   private stick = new Graphics();
+  private band = new Container();
+  private bandTape: TilingSprite[] = [];
+  private bandLine = new Graphics();
   private viewH = NATIVE_HEIGHT;
 
   constructor(private readonly app: Application) {}
@@ -142,7 +145,43 @@ export class Renderer {
     layers[1].addChild(this.warlord);
     layers[2].addChild(this.shadow, this.merc);
     this.world.addChild(layers[0], layers[1], this.fx, layers[2], layers[3], layers[4]);
-    this.app.stage.addChild(this.ground, this.world, this.stick);
+    // Hazard-tape arena edge (Artist, design.md 14.9): 4 px diagonal stripes, red-orange and dark.
+    const tape = Texture.from(hazardTape());
+    tape.source.scaleMode = 'nearest';
+    for (let i = 0; i < 4; i++) {
+      const t = new TilingSprite({ texture: tape, width: 1, height: 1 });
+      this.bandTape.push(t);
+      this.band.addChild(t);
+    }
+    this.band.addChild(this.bandLine);
+    this.band.visible = false;
+    this.app.stage.addChild(this.ground, this.world, this.band, this.stick);
+  }
+
+  /** The band grows in from the screen edges over 0.5 s at the lock; the walls are its inner edge. */
+  private drawBand(w: World): void {
+    const a = w.arena;
+    this.band.visible = !!a && !w.won;
+    if (!a || w.won) return;
+    const k = Math.min(1, (w.time - a.lockedAt) / RUN.arenaGrowSec);
+    const t = Math.max(1, Math.round(RUN.arenaBandPx * k));
+    const top = RUN.arenaHudPx;
+    const W = NATIVE_WIDTH;
+    const H = this.viewH;
+    const rects = [
+      [0, top, W, t],
+      [0, H - t, W, t],
+      [0, top, t, H - top],
+      [W - t, top, t, H - top],
+    ];
+    rects.forEach(([x, y, rw, rh], i) => {
+      const s = this.bandTape[i];
+      s.position.set(x, y);
+      s.width = rw;
+      s.height = rh;
+    });
+    this.bandLine.clear();
+    if (k >= 1) this.bandLine.rect(t, top + t, W - 2 * t, H - top - 2 * t).stroke({ color: 0x14110f, width: 1, alignment: 1 });
   }
 
   private drawWarlord(w: World): void {
@@ -183,8 +222,10 @@ export class Renderer {
 
   draw(w: World, controls: Controls, dtSec: number): void {
     const p = w.player;
-    const camX = Math.round(p.x - NATIVE_WIDTH / 2);
-    const camY = Math.round(p.y - this.viewH / 2);
+    // The camera freezes when the boss arena locks.
+    const camX = w.arena ? w.arena.camX : Math.round(p.x - NATIVE_WIDTH / 2);
+    const camY = w.arena ? w.arena.camY : Math.round(p.y - this.viewH / 2);
+    this.drawBand(w);
     this.world.position.set(-camX, -camY);
     this.ground.tilePosition.set(-camX, -camY);
 
@@ -270,4 +311,19 @@ export class Renderer {
       this.stick.circle(controls.knobX, controls.knobY, 16).fill({ color: 0xe8e0c8, alpha: 0.45 });
     }
   }
+}
+
+/** 8x8 tile of 4 px diagonal stripes for the arena edge. */
+function hazardTape(): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = 8;
+  c.height = 8;
+  const g = c.getContext('2d')!;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      g.fillStyle = Math.floor((x + y) / 4) % 2 === 0 ? '#FF4A1C' : '#14110F';
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+  return c;
 }

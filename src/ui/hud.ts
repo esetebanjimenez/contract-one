@@ -1,6 +1,6 @@
 import { BOSS } from '../data/boss';
 import { scrapForLevel } from '../data/levels';
-import { TIERS, effectText, perkDef, type PerkId } from '../data/perks';
+import { RATIONS, TIERS, effectText, perkDef, type OfferId, type PerkId } from '../data/perks';
 import { RUN } from '../data/run';
 import type { World } from '../sim/world';
 
@@ -19,7 +19,7 @@ export class Hud {
 
   constructor(
     root: HTMLElement,
-    private readonly onPick: (id: PerkId) => void,
+    private readonly onPick: (id: OfferId) => void,
     private readonly onRestart: () => void,
   ) {
     root.insertAdjacentHTML(
@@ -112,6 +112,16 @@ export class Hud {
         `<div class="cards">` +
         w.offer
           .map((o) => {
+            if (o.id === RATIONS.id) {
+              // Tier-less fallback in a grey frame (design.md 15.5).
+              return (
+                `<button class="card tier-none" data-id="${o.id}" style="--tc:${RATIONS.color}">` +
+                `<div class="tbar"></div>` +
+                `<div class="tile"><img src="${ICON_BASE}perk_${o.id}_00.png" alt=""></div>` +
+                `<div class="pname">${RATIONS.name}</div><div class="rule"></div>` +
+                `<div class="eff">${RATIONS.text.toUpperCase()}</div></button>`
+              );
+            }
             const d = perkDef(o.id);
             const t = TIERS.find((x) => x.id === o.tier)!;
             // The icon is never shown without its name (design.md 15.2).
@@ -127,7 +137,7 @@ export class Hud {
         `</div>`;
       this.modal
         .querySelectorAll<HTMLButtonElement>('.card')
-        .forEach((b) => b.addEventListener('click', () => this.onPick(b.dataset.id as PerkId)));
+        .forEach((b) => b.addEventListener('click', () => this.onPick(b.dataset.id as OfferId)));
     } else {
       this.showResults(w);
     }
@@ -151,7 +161,7 @@ export class Hud {
       `<div class="title">${w.won ? 'CONTRACT COMPLETE' : 'CONTRACT FAILED'}</div>${hpLeft}` +
       `<div class="stats">${stat('TIME', mmss(w.won ? w.wonAt : w.time))}${stat('LEVEL', w.level)}${stat('KILLS', w.kills)}` +
       `${stat('SCRAP', w.scrapCollected)}${stat('BOSS DAMAGE', Math.round(w.bossDamage))}</div>` +
-      `<div class="perks">${perks || '<div class="none">NO PERKS</div>'}</div>` +
+      `<div class="plabel">PERKS</div><div class="perks">${perks || '<div class="none">NO PERKS</div>'}</div>` +
       `<button class="card restart newc" disabled>NEW CONTRACT</button></div>`;
     const btn = this.modal.querySelector<HTMLButtonElement>('.newc')!;
     // Locked briefly so a joystick release can't tap it by accident (design.md 14.6).

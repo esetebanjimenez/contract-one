@@ -112,7 +112,7 @@ describe('levels and perks', () => {
     choosePerk(w, id);
     expect(w.phase).toBe('play');
     expect(w.level).toBe(2);
-    expect(w.stacks[id]).toBe(value);
+    expect(w.stacks[id as keyof typeof w.stacks]).toBe(value);
   });
 });
 
@@ -226,6 +226,7 @@ describe('M3 contract', () => {
       level: w.level,
       player: w.player,
       enemyBullets: w.enemyBullets,
+      arena: null,
       hitPlayer: () => {},
       spawnAddsRing: () => {},
     });
@@ -252,5 +253,42 @@ describe('M3 contract', () => {
     run(w, 2);
     expect(w.enemies.length).toBe(0);
     expect(w.kills).toBe(kills);
+  });
+  it('locks the arena at 10:00: enemies flee and despawn, spawns stop, the player is walled in', () => {
+    const w = godMode(6);
+    w.tick = Math.round(599.9 / DT);
+    run(w, 0.05);
+    expect(w.arena).toBeNull();
+    run(w, 0.1);
+    const a = w.arena!;
+    expect(a).not.toBeNull();
+    expect(a.x1 - a.x0).toBe(360 - 16);
+    expect(w.enemies.every((e) => e.fleeing)).toBe(true);
+    expect(w.enemyBullets.length).toBe(0);
+    run(w, 3);
+    expect(w.enemies.filter((e) => !e.fleeing).length).toBe(0);
+    for (let i = 0; i < 300; i++) step(w, { mx: 1, my: 1 });
+    expect(w.player.x).toBeLessThanOrEqual(a.x1);
+    expect(w.player.y).toBeLessThanOrEqual(a.y1);
+    run(w, 6);
+    expect(w.enemies.some((e) => e.fleeing)).toBe(false);
+    expect(w.boss!.damageable).toBe(true);
+    expect(w.boss!.y).toBeGreaterThanOrEqual(a.y0);
+  });
+  it('offers FIELD RATIONS when every perk is maxed', () => {
+    const w = godMode(7);
+    for (const d of PERKS) w.stacks[d.id] = d.maxTotal;
+    w.player.hp = 10;
+    w.stats.maxHp = 100;
+    w.pendingLevels = 1;
+    w.scrap = 0;
+    step(w, { mx: 0, my: 0 });
+    expect(w.phase).toBe('levelup');
+    expect(w.offer).toEqual([{ id: 'rations', tier: 'common', value: 25 }]);
+    const lv = w.level;
+    choosePerk(w, 'rations');
+    expect(w.player.hp).toBe(35);
+    expect(w.level).toBe(lv + 1);
+    expect(w.phase).toBe('play');
   });
 });

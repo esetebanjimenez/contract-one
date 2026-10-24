@@ -43,6 +43,8 @@ export interface BossHost {
     bounces: number;
     hit: number[];
   }[];
+  /** Locked boss arena (inner wall edges), or null before the lock. */
+  arena: { x0: number; y0: number; x1: number; y1: number } | null;
   hitPlayer(dmg: number): void;
   spawnAddsRing(count: number): void;
 }
@@ -53,8 +55,9 @@ const HALF_H = MAX_VIEW_HEIGHT / 2;
 export function createBoss(h: BossHost): Boss {
   const hp = bossHp(h.level);
   return {
-    x: h.player.x,
-    y: h.player.y - HALF_H - BOSS.entryOffscreenPx,
+    // Walks in from the top edge, 120 px off-screen (design.md 14.2).
+    x: h.arena ? (h.arena.x0 + h.arena.x1) / 2 : h.player.x,
+    y: h.arena ? h.arena.y0 - BOSS.entryOffscreenPx : h.player.y - HALF_H - BOSS.entryOffscreenPx,
     hp,
     maxHp: hp,
     phase: 1,
@@ -137,7 +140,11 @@ export function updateBoss(b: Boss, h: BossHost): void {
       b.facing = Math.atan2(dy, dx);
       b.moving = true;
       // Damageable (and attacking) once fully inside the tallest view.
-      if (Math.abs(b.x - p.x) <= HALF_W - BOSS.radius && Math.abs(b.y - p.y) <= HALF_H - BOSS.radius) {
+      const a = h.arena;
+      const inside = a
+        ? b.x >= a.x0 + BOSS.radius && b.x <= a.x1 - BOSS.radius && b.y >= a.y0 + BOSS.radius && b.y <= a.y1 - BOSS.radius
+        : Math.abs(b.x - p.x) <= HALF_W - BOSS.radius && Math.abs(b.y - p.y) <= HALF_H - BOSS.radius;
+      if (inside) {
         b.damageable = true;
         b.state = 'walk';
       }
@@ -182,6 +189,20 @@ export function updateBoss(b: Boss, h: BossHost): void {
       }
       break;
     }
+  }
+
+  // Once inside, the arena walls hold him; a charge that hits a wall stops there (design.md 14.9).
+  const ar = h.arena;
+  if (ar && b.damageable) {
+    const cx = Math.min(ar.x1 - BOSS.radius, Math.max(ar.x0 + BOSS.radius, b.x));
+    const cy = Math.min(ar.y1 - BOSS.radius, Math.max(ar.y0 + BOSS.radius, b.y));
+    if ((cx !== b.x || cy !== b.y) && b.state === 'charge') {
+      b.state = 'walk';
+      b.chargeLeft = 0;
+      b.chargeCd = b.phase === 3 ? BOSS.phase3.chargeEverySec : BOSS.charge.everySec;
+    }
+    b.x = cx;
+    b.y = cy;
   }
 
   if (b.state !== 'enter' && b.state !== 'stagger') {
