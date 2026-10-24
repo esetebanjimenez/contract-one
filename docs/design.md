@@ -420,7 +420,7 @@ Esteban's run 3 (win at 11:13, level 53, 96,962 boss damage) showed the build ou
 - **Sim table on the `feat/` PR:** reach rate, level and boss HP at spawn, kill rate and median fight per bot.
 - **Levers if it's off:** boss HP multiplier (40) first, then Scrap per level, then the enemy bands.
 
-**Step 2 (parked until we add bosses):** three bosses per contract at 4:00, 8:00 and 12:00. The first two are lieutenants: arena fight, then the run carries on (camera unlocks, spawns resume). The Warlord is last and ends the contract.
+**Step 2:** ~~parked~~ **superseded by §16.11** (three fights at 5:00, 9:00 and 13:00). Original note: three bosses per contract at 4:00, 8:00 and 12:00. The first two are lieutenants: arena fight, then the run carries on (camera unlocks, spawns resume). The Warlord is last and ends the contract.
 
 ### 16.9 Secondary shooters and special attacks (Esteban, 2026-10-24)
 A standing rule for every weapon we add from here on. Each extra weapon is one of two kinds.
@@ -462,4 +462,70 @@ Looks only. Damage, crit rolls and the sim are unchanged.
 4. **Area hits:** an HE or grenade blast shows a number only on the enemy it hit hardest, so one blast doesn't spray numbers across a crowd.
 
 **Done when:** a busy late-run fight with HE and drones stays readable in the CI screenshot, and normal and crit hits are easy to tell apart at a glance.
+
+### 16.11 Three targets per contract (Esteban, 2026-10-24)
+Esteban's win at 5:52 (level 22, 23,594 boss damage, about a 52 s fight) showed today's 5:00 fight is right as an opener. It becomes **Lieutenant 1 with no changes**, and two more fights follow. Supersedes §16.8 step 2.
+
+**Contract clock.** The `TARGET IN` timer counts contract time, which **pauses during every boss fight** (from the warning banner to the kill). Boss times below are contract time, so there are always exactly 4:00 of waves between fights. The results screen still shows real run time (a full contract is roughly 16–18 min with fights). The spawn rate, the enemy bands and per-minute scaling (§12.1) all run on contract time.
+
+| Contract time | Event |
+|---|---|
+| 5:00 | **Lieutenant 1**: today's fight (§14.3, §14.9), unchanged |
+| 9:00 | **Lieutenant 2**: new fight (below) |
+| 13:00 | **The Warlord**: final fight. Killing him ends the contract (§14.4) |
+
+**Targets at a glance**
+| | Lieutenant 1 | Lieutenant 2 | The Warlord |
+|---|---|---|---|
+| Working name (Esteban names them) | LT. HAMMER | LT. VIPER | THE WARLORD |
+| Role | charger, closes distance | gunner, keeps distance | both, plus everything |
+| HP (× sheet DPS at spawn, min 2000) | 40× | 50× | 60× |
+| Attack damage (contact, charge, bullets) | ×1.0 (§14.3) | ×1.25 | ×1.5 |
+| Enrage | own 2:00 fight clock | own 2:00 fight clock | own 2:00 fight clock |
+| Art | today's Warlord sprite | new (Artist) | new, larger (Artist) |
+
+**Lieutenant 2 (LT. VIPER), the gunner.** He holds about 160 px from the player instead of walking in (walk speed 45 px/s, backing off if the player closes in). Contact damage 25.
+- **Phase 1 (100–66%), aimed burst:** a thin red-orange aim line tracks the player for 0.6 s, locks for 0.2 s, then 3 bullets fire down it (160 px/s, 12 dmg each). Every 2.5 s.
+- **Phase 2 (66–33%), adds a fan:** 7 bullets in a 60° fan toward the player every 4 s (100 px/s, 12 dmg), alternating with the burst.
+- **Phase 3 (<33%), adds mines and Runners:** every 6 s he drops 3 mines behind him as he backs off. A mine blinks red-orange, arms after 1 s and explodes when the player is within 30 px (25 dmg, 30 px radius) or after 10 s. 8 Runners walk in from the arena edges every 8 s, with no Scrap.
+- Phase change, stagger, arena, walls and Scrap rules are the same as §14.3 and §14.9.
+
+**The Warlord (final), both styles.** Same body rules as §14.3, but bigger (Artist's call on the canvas). Contact damage 30.
+- **Phase 1:** charge (§14.3) plus the aimed burst, alternating every 3 s.
+- **Phase 2:** adds the 16-bullet ring every 3 s and the fan.
+- **Phase 3:** adds reinforcements every 8 s (8 Grunts and 4 Runners) and mines on each charge's start point.
+- All attacks are reused from Lieutenant 1 and 2, so the final fight needs no new attack code, only a new attack schedule.
+
+**Between fights**
+- **On a lieutenant kill:** 0.5 s slow-mo, a "LIEUTENANT DOWN" banner for 2 s, then the hazard tape fades out over 0.5 s, the camera unlocks and waves resume. There are no spawns within 200 px of the player for the first 3 s.
+- **Reward:** the lieutenant drops a Scrap pile worth exactly one level (the next level's cost), in cyan pieces that clump as in §16.3.
+- The `TARGET IN` timer reappears, counting to the next fight. Each boss bar shows that boss's name.
+- **Lose:** results show "TARGETS 1/3" (or 0/3, 2/3) under the title, plus "TARGET HP LEFT" for the one alive.
+- **Win:** only on the Warlord kill. Results show "TARGETS 3/3".
+
+**Waves after 5:00**
+- **Spawn rate:** doubles every 2:30 until 5:00 (4/s, unchanged), then **every 5:00 after that, with a ceiling of 10/s.** That's about 7/s at 9:00, with the ceiling reached at about 11:40. Late pressure comes from the enemy mix and per-minute HP, not from enemy count. The enemy cap stays 250.
+- **Enemy bands:**
+
+| Band (contract time) | Grunt | Runner | Heavy | Rifleman | Elite |
+|---|---|---|---|---|---|
+| 5:00–9:00 | 25 | 20 | 20 | 20 | 15 |
+| 9:00–13:00 | 20 | 20 | 20 | 20 | 20 |
+
+- **Per-minute scaling (§12.1):** unchanged on contract time. About ×2.3 enemy HP at 9:00 and ×2.8 at 13:00. This is the second lever if waves get too easy late.
+- **Pressure waves** every 60 s and **full rings** at 7:00, 8:00, 11:00 and 12:00, both stopping 30 s before each fight (8:30 and 12:30), with the "TARGET INBOUND" banner then.
+
+**Sim targets (kite-smart; Esteban's runs come first)**
+- Reaches Lieutenant 1 in 80–95% of runs, kills him in 70–85% of fights (Esteban's run says he's the opener, not a wall).
+- Kills Lieutenant 2 in 55–75% of fights reached, and the Warlord in 40–60% of fights reached.
+- Fight length: Lieutenant 1 **40–90 s** (the opener; Esteban's kill took about 52 s), Lieutenant 2 and the Warlord 60–120 s. Enrage in under 10% of each fight.
+- Report the level and boss HP at each spawn, plus contract completion rate; no target yet.
+- `tools/sim-report.ts` gets these targets in the same PR.
+
+**Levers if it's off:** each boss's HP multiplier first (40, 50, 60), then the attack damage scale, then the spawn ceiling (10/s).
+
+**Needs**
+- **Art:** LT. VIPER sprite (walk, aim and fire poses), the Warlord's new larger sprite, a mine sprite (red-orange blink), the aim line in red-orange. Today's Warlord sprite becomes LT. HAMMER. Esteban okays the looks.
+- **Data:** a `BOSSES` list in `src/data/boss.ts` (time, HP multiplier, damage scale, attack schedule per phase, name) and the post-5:00 rate and bands in `src/data/spawns.ts`.
+- **Build order (can ship in parts):** (1) the contract clock, the bosses list and a two-lieutenant loop that reuses LT. HAMMER as a stand-in; (2) LT. VIPER's attacks; (3) the Warlord schedule and new art.
 
