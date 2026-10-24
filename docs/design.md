@@ -39,7 +39,7 @@ There is no meta-progression in v1. Death shows run stats and a Restart button.
 | Bullet speed | 360 px/s, range 260 px |
 | Pierce | 0 |
 | Crit | 0% (x2 damage) |
-| Pickup magnet | 40 px |
+| Pickup magnet | 70 px (pickups fly in at 300 px/s) |
 | Hitbox | 7 px radius circle at the body centre (not the sprite centre) |
 
 Facing: the whole sprite rotates (0° = facing right). It faces the auto-aim target when one is in range, otherwise the move direction, and turns within ~0.1 s.
@@ -57,16 +57,16 @@ All enemies spawn 24–48 px outside the visible area, from a random edge direct
 
 Enemy bullets must be dodgeable on a phone: they fire slowly, and every shot is telegraphed by a 0.3 s muzzle flash.
 
-HP scaling: all enemy HP x(1 + 0.08 × minutes elapsed).
+HP scaling: see §12 (M2).
 
 ## 6. Spawn ramp
-- Spawn rate: `rate(t) = 0.8 × 2^(t / 150)` enemies/s, where t is in seconds. That roughly doubles every 2.5 min, giving ~0.8/s at 0:00 and ~13/s at 10:00.
+- Spawn rate: `rate(t) = 1.0 × 2^(t / 150)` enemies/s, where t is in seconds. That roughly doubles every 2.5 min, giving ~0.8/s at 0:00 and ~13/s at 10:00.
 - Mix weights per time band are kept in `src/data/spawns.ts`. A newly unlocked type starts at 20% weight and grows.
 - **Pressure waves:** every 60 s, a 5 s burst at x3 rate arrives from one direction (a ring of Grunts).
 - Soft caps: 250 enemies and 400 bullets (Programmer's numbers). Past the cap, spawns pause and the farthest enemies are recycled.
 
 ## 7. Scrap and levels
-- Kills drop Scrap pickups (pure cyan; no other cyan on screen). Pickups despawn after 30 s.
+- Kills drop Scrap pickups (pure cyan; no other cyan on screen). Pickups despawn after 60 s. Magnet 70 px; inside it, pickups fly to the player at 300 px/s.
 - Scrap needed for the next level: `5 + 6 × (level − 1)`. That means 5, 11, 17 and so on, and a typical run reaches level ~25–30 by 10:00.
 - A level-up pauses the game and shows **3 perk cards**. Tapping one picks it. There is no reroll in v1.
 - Overflow Scrap carries into the next level.
@@ -112,3 +112,38 @@ Vertical slice subset: `dmg`, `rof`, `pierce`, `multishot`, `move`, `maxhp`.
 
 ## 11. Later (not in v1)
 Character select with 2–3 mercs, each with its own starting weapon and passive. Weapon swaps, perk reroll and banish, meta-progression, and more contracts and bosses.
+
+## 12. M2 difficulty: threat per enemy, not more enemies
+M1 sim finding: the 250-enemy cap is reached mid-run, so the spawn rate stops adding pressure, and kite bots reach 10:00 every time. From M2 on, late-run pressure comes from **what** spawns, not how many.
+
+### 12.1 Scaling per minute elapsed (m)
+| Stat | Formula | At 5:00 | At 10:00 |
+|---|---|---|---|
+| Enemy HP | × (1 + 0.15·m) | ×1.75 | ×2.5 |
+| Contact damage | × (1 + 0.05·m) | ×1.25 | ×1.5 |
+| Rifleman fire interval | 2.0 s − 0.08·m (min 1.2 s) | 1.6 s | 1.2 s |
+| Enemy move speed | unchanged | | |
+
+### 12.2 Mix replaces count once the cap is hit
+When enemies are at the cap, each new spawn replaces the **farthest Grunt** with a pick from the current mix, so the screen's threat keeps climbing.
+
+| Band | Grunt | Runner | Heavy | Rifleman | Elite |
+|---|---|---|---|---|---|
+| 0:00–1:30 | 100 | – | – | – | – |
+| 1:30–3:00 | 75 | 25 | – | – | – |
+| 3:00–4:30 | 55 | 25 | 20 | – | – |
+| 4:30–7:00 | 40 | 20 | 20 | 20 | – |
+| 7:00–10:00 | 25 | 20 | 20 | 20 | 15 |
+
+Ranged cap: at most 30 Riflemen alive, so bullets stay readable.
+
+### 12.3 Pressure waves (from §6) become the spike
+Every 60 s: a 5 s burst from one direction, which may exceed the cap by up to 40 for its duration. From 5:00, the ring includes Heavies.
+
+### 12.4 M2 tuning targets
+- Kite bot (random perks) reaches 10:00 in **60–80%** of runs; kite-smart in **80–95%**.
+- Median level at 10:00 for kite-smart: 22–30.
+- Idle still dies before 2:00.
+- Scrap collected ≥70% for a **collector** bot (kites in small loops, sweeps back through drops). Judge this value only with that bot; a wide-circling bot is not the reference.
+
+Levers in order if targets miss: HP slope (0.15) first, then the Elite share, then the Rifleman fire interval.
