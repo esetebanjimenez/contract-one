@@ -272,11 +272,30 @@ Each offered card rolls a tier independently.
 | Tier | Colour (card border) | Effect multiplier | Whole-number perks |
 |---|---|---|---|
 | Common | grey | ×1 | +1 |
-| Rare | blue | ×1.5 | +1 |
+| Rare | blue | ×1.5 | none (rolls as Common) |
 | Epic | purple | ×2 | +2 |
 | Mythic | gold (deep gold, not the pale yellow of player bullets) | ×3 | +3 |
 
-Whole-number perks are `pierce`, `multishot`, `ricochet`, `armor`, `regen`. Each perk's max applies to the **total effect**, not the number of picks, and the excess is lost.
+Whole-number perks are `pierce`, `multishot`, `ricochet`, `armor`, `regen`. They have no Rare version: a Rare roll on one of them becomes Common. Each perk's max applies to the **total effect**, not the number of picks, and the excess is lost.
+
+**Card labels and values** (name in the title bar, effect line under the icon; `{v}` is the tier value):
+
+| Id | Name | Effect line | Common | Rare | Epic | Mythic | Max total |
+|---|---|---|---|---|---|---|---|
+| `dmg` | DAMAGE | +{v}% damage | 15 | 23 | 30 | 45 | +75% |
+| `rof` | FIRE RATE | +{v}% fire rate | 12 | 18 | 24 | 36 | +60% |
+| `pierce` | PIERCE | Bullets pass through +{v} enemy | 1 | – | 2 | 3 | 3 |
+| `multishot` | MULTISHOT | +{v} bullet per shot | 1 | – | 2 | 3 | 3 |
+| `move` | MOVE SPEED | +{v}% move speed | 8 | 12 | 16 | 24 | +32% |
+| `maxhp` | MAX HP | +{v} max HP and heal {v} | 20 | 30 | 40 | 60 | +100 |
+| `magnet` | MAGNET | +{v}% pickup range | 30 | 45 | 60 | 90 | +90% |
+| `crit` | CRIT | +{v}% chance of double damage | 5 | 8 | 10 | 15 | 25% |
+| `bspeed` | BULLET SPEED | +{v}% bullet speed and range | 15 | 23 | 30 | 45 | +45% |
+| `regen` | REGEN | Heal {v} HP every 2 s | 1 | – | 2 | 3 | 3 |
+| `armor` | ARMOR | Take {v} less damage per hit | 1 | – | 2 | 3 | 3 |
+| `ricochet` | RICOCHET | Bullets bounce to {v} more enemy | 1 | – | 2 | 3 | 2 |
+
+Use "enemies" and "bullets" when `{v}` is above 1. A card for a perk that is one pick away from its max shows the value actually gained.
 
 Tier odds by player level (Common / Rare / Epic / Mythic):
 | Level | Odds |
