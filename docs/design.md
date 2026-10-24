@@ -221,8 +221,7 @@ Goal: a run has a real ending. You survive to 10:00, kill the Warlord, and get a
 
 ### 14.2 Boss arrival
 - A 3 s warning (§9), then he walks in from the top edge, 120 px off-screen. He can't be damaged until fully on-screen.
-- Normal spawns drop to 30% of the rate at 10:00, the band mix stays at 7:00–10:00, and there are no waves or rings.
-- Scrap and level-ups continue during the fight.
+- ~~Normal spawns drop to 30%~~. Replaced by the boss arena in §14.9.
 
 ### 14.3 Boss numbers (refines §9)
 | Value | Start |
@@ -260,6 +259,24 @@ At 0 HP: a 0.5 s freeze, the banner "KIA", then the results screen. If the boss 
 ### 14.8 Needs
 - **Art:** the boss sprite (top-down, 96 px canvas, walk and charge pose), a telegraph line in red-orange, and the banner and results-screen look.
 - **Data:** every value above goes in `src/data/boss.ts`, with the timer and banner times in `src/data/run.ts`.
+
+### 14.9 Boss arena (M3.1, Esteban playtest 2026-10-24)
+At 10:00, when the boss warning starts:
+- **Clear-out:** every non-boss enemy turns and flees directly away from the player at 1.5× its speed. Fleeing enemies do no contact damage, can't be hit, drop no Scrap, and despawn once off-screen. Enemy bullets already in flight are cleared.
+- **Lock:** the camera freezes where it is. The visible world below the HUD strip is the arena, and its edges are solid walls for the player. The bottom-third joystick zone is still part of the arena.
+- **Boss:** walks in from the top edge as before. Once he's fully inside, the walls hold him too. A charge that hits a wall stops there. His bullets despawn at the walls.
+- **Spawns:** none during the fight, apart from the phase 3 adds, which walk in from just outside the arena edges, evenly spaced around it. Adds drop **no Scrap**.
+- **Scrap:** pieces already on the ground in the arena can still be picked up. Level-ups from them still happen, but the fight itself gives no levels.
+- **Edge read:** a 1px red-orange line on the arena edge, shown with the lock. Tell to the Artist.
+- Retune after it lands: the §14.7 targets still apply. Expect fewer kills, since there's no levelling during the fight.
+
+### 14.10 Enrage tell
+At enrage, the Warlord's outline pulses red-orange `#FF4A1C` every 0.5 s, and "ENRAGED" shows in the HUD strip under the boss bar. No new art.
+
+### 14.11 Later: character identities (parked, not in M3)
+- Base merc (current): **fires while moving**. That's his identity.
+- Future characters swap this rule and make up for it with other strengths. For example, a Marksman who only fires while standing still, with high damage and +2 pierce built in, or a Gunner who deploys a turret after standing still for 1 s.
+- Character choice would be one screen before New Contract. Each character keeps the shared perk pool and adds 1–2 signature perks.
 
 ## 15. Playtest changes (Esteban, 2026-10-24)
 
@@ -317,3 +334,7 @@ Tier odds by player level (Common / Rare / Epic / Mythic):
 - Reported as not working in the playtest; Programmer to check.
 - New value: +1 HP every 2 s per stack, with a brief white tick on the HP bar when it heals (not green: reserved for the player).
 
+### 15.5 Perk pool exhausted
+- When every perk is at its max, the level-up shows one fallback card: **FIELD RATIONS**, "Heal 25 HP", tier-less in a grey frame. It always appears, so a level-up is never empty. The XP bar keeps showing.
+- If only some perks are maxed, maxed perks drop out of the draw and the card count falls to what's left (at least 1, using the fallback if needed).
+- Playtest flag: Esteban hit level 49 by 11:05 with every perk maxed, against ~23 for the bots at 10:00, so humans collect far more Scrap. Next lever: the Scrap-to-level curve (review after the arena lands).
