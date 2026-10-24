@@ -19,6 +19,7 @@ for (let i = 0; i < CAPS.enemies; i++) {
     maxHp: 1e9,
     fireTimer: (i % 20) / 10,
     facing: 1,
+    elite: false,
   });
 }
 const steps = 1200;

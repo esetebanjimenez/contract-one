@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { ENEMIES } from '../src/data/enemies';
 import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
+import { SPAWN } from '../src/data/spawns';
 import { drawOffer, emptyStacks } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
-import { choosePerk, createWorld, spawnRate, step } from '../src/sim/world';
+import { choosePerk, createWorld, rifleInterval, riflemenAlive, spawnRate, step } from '../src/sim/world';
 import { runBot } from '../tools/bots';
 
 describe('levels and perks', () => {
@@ -52,18 +53,18 @@ describe('sim', () => {
     const w = createWorld(2);
     w.player.hp = w.stats.maxHp = 1e9;
     w.tick = -1e9; // keep the spawner quiet
-    w.enemies.push({ id: 1, def: ENEMIES.rifleman, x: 300, y: 0, hp: 1e9, maxHp: 1e9, fireTimer: 2, facing: 1 });
+    w.enemies.push({ id: 1, def: ENEMIES.rifleman, x: 300, y: 0, hp: 1e9, maxHp: 1e9, fireTimer: 2, facing: 1, elite: false });
     for (let i = 0; i < Math.round(8 / DT); i++) step(w, { mx: 0, my: 0 });
     expect(w.enemies[0].x).toBeGreaterThan(135);
     expect(w.enemies[0].x).toBeLessThan(142);
     expect(w.player.hp).toBeLessThan(1e9);
   });
-  it('never exceeds the enemy cap', () => {
+  it('never exceeds the enemy cap plus the pressure-wave overflow', () => {
     const w = createWorld(5);
     w.player.hp = w.stats.maxHp = 1e9;
     w.tick = 900 * 60;
     for (let i = 0; i < 600; i++) step(w, { mx: 0, my: 0 });
-    expect(w.peakEnemies).toBeLessThanOrEqual(CAPS.enemies);
+    expect(w.peakEnemies).toBeLessThanOrEqual(CAPS.enemies + SPAWN.pressureOverCap);
   });
   it('an idle bot with no perks dies before 2:00', () => {
     for (const seed of [1, 2, 3]) {
@@ -77,5 +78,20 @@ describe('sim', () => {
       }
       expect(w.phase).toBe('dead');
     }
+  });
+  it('scales the Rifleman fire interval to 1.2 s at 10:00', () => {
+    expect(rifleInterval(0)).toBeCloseTo(2);
+    expect(rifleInterval(300)).toBeCloseTo(1.6);
+    expect(rifleInterval(600)).toBeCloseTo(1.2);
+    expect(rifleInterval(900)).toBeCloseTo(1.2);
+  });
+  it('keeps at most 30 Riflemen and replaces Grunts at the cap late in the run', () => {
+    const w = createWorld(9);
+    w.player.hp = w.stats.maxHp = 1e9;
+    w.tick = 540 * 60;
+    for (let i = 0; i < 1800; i++) step(w, { mx: 0, my: 0 });
+    expect(riflemenAlive(w)).toBeLessThanOrEqual(SPAWN.maxRiflemen);
+    expect(w.enemies.some((e) => e.elite)).toBe(true);
+    expect(w.enemies.some((e) => e.def.id === 'heavy')).toBe(true);
   });
 });

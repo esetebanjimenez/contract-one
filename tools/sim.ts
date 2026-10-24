@@ -1,7 +1,7 @@
 import { runBot, type Bot } from './bots';
 
 const runs = Number(process.env.RUNS ?? 20);
-const bots: Bot[] = (process.env.BOTS?.split(',') as Bot[]) ?? ['idle', 'kite', 'kite-smart'];
+const bots: Bot[] = (process.env.BOTS?.split(',') as Bot[]) ?? ['idle', 'kite', 'kite-smart', 'collector'];
 const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 console.log(

@@ -1,10 +1,10 @@
 import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
-import { ENEMIES, ENEMY_BULLET_RADIUS, ENEMY_HP_PER_MINUTE, type EnemyDef } from '../data/enemies';
+import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, SCALING, type EnemyDef } from '../data/enemies';
 import { LEVELS, scrapForLevel } from '../data/levels';
 import type { PerkId } from '../data/perks';
 import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
-import { SPAWN, SPAWN_TABLE } from '../data/spawns';
+import { SPAWN, SPAWN_BANDS } from '../data/spawns';
 import { SpatialGrid } from './grid';
 import { computeStats, drawOffer, emptyStacks, type PerkStacks, type PlayerStats } from './perks';
 import { createRng } from './rng';
@@ -18,6 +18,7 @@ export interface Enemy {
   maxHp: number;
   fireTimer: number;
   facing: 1 | -1;
+  elite: boolean;
 }
 
 export interface Bullet {
@@ -125,21 +126,41 @@ export function inPressureWave(t: number): boolean {
   return t >= SPAWN.pressureEverySec && t % SPAWN.pressureEverySec < SPAWN.pressureDurationSec;
 }
 
-function pickType(w: World): EnemyDef {
-  const mins = w.time / 60;
-  let total = 0;
-  const weights: number[] = [];
-  for (const e of SPAWN_TABLE) {
-    const wt = w.time < e.unlockSec ? 0 : Math.min(e.maxWeight, e.startWeight + e.weightPerMinute * (mins - e.unlockSec / 60));
-    weights.push(wt);
-    total += wt;
-  }
+export function bandAt(t: number) {
+  let b = SPAWN_BANDS[0];
+  for (const x of SPAWN_BANDS) if (t >= x.fromSec) b = x;
+  return b;
+}
+
+function weighted<K extends string>(w: World, weights: Record<K, number>, exclude: K[] = []): K {
+  const keys = (Object.keys(weights) as K[]).filter((k) => !exclude.includes(k) && weights[k] > 0);
+  const total = keys.reduce((a, k) => a + weights[k], 0);
   let r = w.rng() * total;
-  for (let i = 0; i < SPAWN_TABLE.length; i++) {
-    r -= weights[i];
-    if (r < 0) return ENEMIES[SPAWN_TABLE[i].type];
+  for (const k of keys) {
+    r -= weights[k];
+    if (r < 0) return k;
   }
-  return ENEMIES[SPAWN_TABLE[0].type];
+  return keys[keys.length - 1];
+}
+
+export function riflemenAlive(w: World): number {
+  let n = 0;
+  for (const e of w.enemies) if (e.def.ranged) n++;
+  return n;
+}
+
+function pickType(w: World, pressure: boolean): { def: EnemyDef; elite: boolean } {
+  if (pressure) {
+    const heavy = w.time >= SPAWN.pressureHeavyFromSec && w.rng() < SPAWN.pressureHeavyShare;
+    return { def: heavy ? ENEMIES.heavy : ENEMIES.grunt, elite: false };
+  }
+  const weights = bandAt(w.time).weights;
+  type Kind = keyof typeof weights;
+  const noRifle = riflemenAlive(w) >= SPAWN.maxRiflemen;
+  const kind = weighted<Kind>(w, weights, noRifle ? ['rifleman'] : []);
+  if (kind !== 'elite') return { def: ENEMIES[kind], elite: false };
+  const base = weighted<Kind>(w, weights, noRifle ? ['elite', 'rifleman'] : ['elite']);
+  return { def: ENEMIES[base as Exclude<Kind, 'elite'>], elite: true };
 }
 
 /** A point just outside the visible rectangle in direction `angle` from the player. */
@@ -152,27 +173,37 @@ function edgePoint(w: World, angle: number): { x: number; y: number } {
   return { x: w.player.x + dx * d, y: w.player.y + dy * d };
 }
 
-function spawnEnemy(w: World, angle: number): void {
-  const def = pickType(w);
-  const p = edgePoint(w, angle);
-  const maxHp = def.hp * (1 + ENEMY_HP_PER_MINUTE * (w.time / 60));
-  if (w.enemies.length >= CAPS.enemies) {
-    // Recycle the farthest enemy instead of growing past the cap.
-    let far = 0;
+export function rifleInterval(t: number): number {
+  return Math.max(SCALING.rifleIntervalMin, 2 - SCALING.rifleIntervalPerMinute * (t / 60));
+}
+
+export function contactDamage(e: Enemy, t: number): number {
+  return e.def.contactDamage * (e.elite ? ELITE.contact : 1) * (1 + SCALING.contactPerMinute * (t / 60));
+}
+
+function spawnEnemy(w: World, angle: number, pressure: boolean): void {
+  const cap = CAPS.enemies + (pressure ? SPAWN.pressureOverCap : 0);
+  let slot = -1;
+  if (w.enemies.length >= cap) {
+    // At the cap, the farthest Grunt is replaced so threat keeps climbing (design.md 12.2).
     let fd = -1;
     for (let i = 0; i < w.enemies.length; i++) {
       const e = w.enemies[i];
+      if (e.def.id !== 'grunt' || e.elite) continue;
       const d = (e.x - w.player.x) ** 2 + (e.y - w.player.y) ** 2;
       if (d > fd) {
         fd = d;
-        far = i;
+        slot = i;
       }
     }
-    const e = w.enemies[far];
-    Object.assign(e, { id: w.nextEnemyId++, def, x: p.x, y: p.y, hp: maxHp, maxHp, fireTimer: def.ranged?.intervalSec ?? 0 });
-    return;
+    if (slot === -1) return;
   }
-  w.enemies.push({ id: w.nextEnemyId++, def, x: p.x, y: p.y, hp: maxHp, maxHp, fireTimer: def.ranged?.intervalSec ?? 0, facing: 1 });
+  const { def, elite } = pickType(w, pressure);
+  const p = edgePoint(w, angle);
+  const maxHp = def.hp * (elite ? ELITE.hp : 1) * (1 + SCALING.hpPerMinute * (w.time / 60));
+  const e: Enemy = { id: w.nextEnemyId++, def, x: p.x, y: p.y, hp: maxHp, maxHp, fireTimer: rifleInterval(w.time), facing: 1, elite };
+  if (slot >= 0) w.enemies[slot] = e;
+  else w.enemies.push(e);
 }
 
 function updateSpawns(w: World): void {
@@ -183,7 +214,7 @@ function updateSpawns(w: World): void {
     w.spawnAcc -= 1;
     const arc = (SPAWN.pressureArcDeg * Math.PI) / 180;
     const angle = pressure ? w.pressureAngle + (w.rng() - 0.5) * arc : w.rng() * Math.PI * 2;
-    spawnEnemy(w, angle);
+    spawnEnemy(w, angle, pressure);
   }
 }
 
@@ -252,9 +283,10 @@ function addScrap(w: World, v: number): void {
 function killEnemy(w: World, i: number): void {
   const e = w.enemies[i];
   w.kills++;
-  w.scrapDropped += e.def.scrap;
-  if (w.pickups.length < CAPS.pickups) w.pickups.push({ x: e.x, y: e.y, value: e.def.scrap, age: 0, flying: false });
-  else addScrap(w, e.def.scrap);
+  const scrap = e.def.scrap * (e.elite ? ELITE.scrap : 1);
+  w.scrapDropped += scrap;
+  if (w.pickups.length < CAPS.pickups) w.pickups.push({ x: e.x, y: e.y, value: scrap, age: 0, flying: false });
+  else addScrap(w, scrap);
   w.enemies[i] = w.enemies[w.enemies.length - 1];
   w.enemies.pop();
 }
@@ -287,8 +319,9 @@ export function step(w: World, input: Input): void {
     e.facing = dx >= 0 ? 1 : -1;
     const r = e.def.ranged;
     if (!r || d > r.stopDistance) {
-      e.x += (dx / d) * e.def.speed * DT;
-      e.y += (dy / d) * e.def.speed * DT;
+      const sp = e.def.speed * (e.elite ? ELITE.speed : 1);
+      e.x += (dx / d) * sp * DT;
+      e.y += (dy / d) * sp * DT;
     }
     grid.query(e.x, e.y, e.def.radius * 2, (j) => {
       if (j <= i) return;
@@ -308,7 +341,7 @@ export function step(w: World, input: Input): void {
     if (r) {
       e.fireTimer -= DT;
       if (e.fireTimer <= 0) {
-        e.fireTimer += r.intervalSec;
+        e.fireTimer += rifleInterval(w.time);
         if (d <= r.bulletRange && w.enemyBullets.length < CAPS.enemyBullets) {
           w.enemyBullets.push({
             x: e.x,
@@ -323,7 +356,7 @@ export function step(w: World, input: Input): void {
         }
       }
     }
-    if (d < e.def.radius + PLAYER.hitRadius) damagePlayer(w, e.def.contactDamage);
+    if (d < e.def.radius + PLAYER.hitRadius) damagePlayer(w, contactDamage(e, w.time));
   }
 
   fire(w);

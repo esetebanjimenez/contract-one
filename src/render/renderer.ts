@@ -17,7 +17,22 @@ const ART = [
 ] as const;
 type ArtId = (typeof ART)[number];
 
-const ENEMY_ART: Record<string, ArtId> = { grunt: 'grunt_t1_walk_00', rifleman: 'rifleman_t1_idle_00' };
+const ENEMY_ART: Record<string, ArtId> = {
+  grunt: 'grunt_t1_walk_00',
+  runner: 'grunt_t1_walk_00',
+  heavy: 'grunt_t1_walk_00',
+  rifleman: 'rifleman_t1_idle_00',
+};
+
+/** Placeholder looks until the Artist's Runner, Heavy and Elite sprites land: scale and tint of existing art. */
+const PLACEHOLDER: Record<string, { scale: number; tint: number }> = {
+  grunt: { scale: 1, tint: 0xffffff },
+  runner: { scale: 0.8, tint: 0xc8d0ff },
+  heavy: { scale: 1.4, tint: 0x9a9a9a },
+  rifleman: { scale: 1, tint: 0xffffff },
+};
+const ELITE_TINT = 0xff9a7a;
+const ELITE_SCALE = 1.25;
 
 /** Grows a list of sprites on demand and hides the unused tail each frame. */
 class Pool {
@@ -49,6 +64,7 @@ export class Renderer {
   private enemyBullets!: Pool;
   private bullets!: Pool;
   private merc!: Sprite;
+  private shadow = new Graphics();
   private facing = 0;
   private fx = new Graphics();
   private stick = new Graphics();
@@ -70,7 +86,9 @@ export class Renderer {
     this.bullets = new Pool(layers[4]);
     this.merc = new Sprite(this.tex.merc_t1_idle_00);
     this.merc.anchor.set(MERC_ART.bodyCenter.x / MERC_ART.size.w, MERC_ART.bodyCenter.y / MERC_ART.size.h);
-    layers[2].addChild(this.merc);
+    // Soft shadow under the merc so the coyote helmet separates from the sand (Artist, M2).
+    this.shadow.ellipse(0, 0, MERC_ART.shadow.rx, MERC_ART.shadow.ry).fill({ color: 0x000000, alpha: MERC_ART.shadow.alpha });
+    layers[2].addChild(this.shadow, this.merc);
     this.world.addChild(layers[0], layers[1], this.fx, layers[2], layers[3], layers[4]);
     this.app.stage.addChild(this.ground, this.world, this.stick);
   }
@@ -94,14 +112,18 @@ export class Renderer {
       const s = this.enemies.get(i, this.tex[ENEMY_ART[e.def.id]]);
       s.position.set(Math.round(e.x), Math.round(e.y));
       const r = e.def.ranged;
+      const look = PLACEHOLDER[e.def.id];
+      const sc = look.scale * (e.elite ? ELITE_SCALE : 1);
+      s.tint = e.elite ? ELITE_TINT : look.tint;
       if (r) {
         // Riflemen rotate as a whole sprite toward the player, like the merc.
         s.anchor.set(RIFLEMAN_ART.bodyCenter.x / RIFLEMAN_ART.size.w, RIFLEMAN_ART.bodyCenter.y / RIFLEMAN_ART.size.h);
         s.rotation = Math.atan2(p.y - e.y, p.x - e.x);
-        s.scale.x = 1;
+        s.scale.set(sc);
       } else {
+        s.anchor.set(0.5);
         s.rotation = 0;
-        s.scale.x = e.facing;
+        s.scale.set(e.facing * sc, sc);
       }
       if (r && e.fireTimer <= r.telegraphSec) {
         // 0.3 s muzzle-flash telegraph before each Rifleman shot.
@@ -127,6 +149,7 @@ export class Renderer {
     const maxTurn = MERC_ART.turnRadPerSec * dtSec;
     this.facing += Math.abs(diff) <= maxTurn ? diff : Math.sign(diff) * maxTurn;
     this.merc.position.set(Math.round(p.x), Math.round(p.y));
+    this.shadow.position.set(Math.round(p.x), Math.round(p.y) + MERC_ART.shadow.offsetY);
     this.merc.rotation = this.facing;
     const blink = p.invuln > 0 && Math.floor(p.invuln * 20) % 2 === 0;
     this.merc.alpha = blink ? 0.4 : 1;

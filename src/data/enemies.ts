@@ -17,9 +17,11 @@ export interface EnemyDef {
   ranged?: RangedDef;
 }
 
-/** design.md section 5. M1 slice: Grunt and Rifleman only. */
+/** design.md sections 5 and 12. */
 export const ENEMIES: Record<string, EnemyDef> = {
   grunt: { id: 'grunt', hp: 10, speed: 45, contactDamage: 8, scrap: 1, radius: 8 },
+  runner: { id: 'runner', hp: 6, speed: 85, contactDamage: 6, scrap: 1, radius: 7 },
+  heavy: { id: 'heavy', hp: 60, speed: 30, contactDamage: 15, scrap: 5, radius: 12 },
   rifleman: {
     id: 'rifleman',
     hp: 25,
@@ -31,6 +33,14 @@ export const ENEMIES: Record<string, EnemyDef> = {
   },
 };
 
-/** All enemy HP is multiplied by 1 + hpPerMinute x minutes elapsed. */
-export const ENEMY_HP_PER_MINUTE = 0.08;
+/** design.md 12.1: scaling per minute elapsed (m). */
+export const SCALING = {
+  hpPerMinute: 0.15, // HP x (1 + 0.15 m), fixed at spawn
+  contactPerMinute: 0.05, // contact damage x (1 + 0.05 m), at hit time
+  rifleIntervalPerMinute: 0.08, // fire interval 2.0 - 0.08 m
+  rifleIntervalMin: 1.2,
+};
+
+/** Elite variant of any base type (design.md section 5). */
+export const ELITE = { hp: 3, speed: 1.1, contact: 1.5, scrap: 4 };
 export const ENEMY_BULLET_RADIUS = 3;
