@@ -5,6 +5,7 @@ import { JOYSTICK } from '../data/controls';
 import { LEVELS } from '../data/levels';
 import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { RUN } from '../data/run';
+import { GRUNT_WEAPONS, gruntWeapon, type GruntWeapon } from '../data/enemies';
 import { MERC_ART, RIFLEMAN_ART } from '../data/player';
 import { enragedFor } from '../sim/boss';
 import type { World } from '../sim/world';
@@ -72,6 +73,27 @@ const ENEMY_WALK: Record<string, { frames: ArtId[]; frameMs: number }> = {
   runner: { frames: ['runner_t1_walkA_00', 'runner_t1_walk_00', 'runner_t1_walkB_00', 'runner_t1_walk_00'], frameMs: 90 },
   heavy: { frames: ['heavy_t1_walkA_00', 'heavy_t1_walk_00', 'heavy_t1_walkB_00', 'heavy_t1_walk_00'], frameMs: 160 },
 };
+/**
+ * Grunt weapon frames (§13.1 grunt, Esteban 2026-10-24): two walk frames, a wind-up and a strike per weapon,
+ * 40x40 with the body centred. Stand-ins: today's grunt frame until the Artist's frames are merged.
+ */
+const GRUNT_FRAMES: Record<GruntWeapon, { walk: [ArtId, ArtId]; windup: ArtId; strike: ArtId }> = {
+  shovel: { walk: ['grunt_t1_walk_00', 'grunt_t1_walk_00'], windup: 'grunt_t1_walk_00', strike: 'grunt_t1_walk_00' },
+  baton: { walk: ['grunt_t1_walk_00', 'grunt_t1_walk_00'], windup: 'grunt_t1_walk_00', strike: 'grunt_t1_walk_00' },
+  sledge: { walk: ['grunt_t1_walk_00', 'grunt_t1_walk_00'], windup: 'grunt_t1_walk_00', strike: 'grunt_t1_walk_00' },
+};
+
+/** Which grunt frame shows now: the touch swing (wind-up, then strike) if one is playing, else the walk. */
+export function gruntFrame(weapon: GruntWeapon, id: number, time: number, swingAt?: number): ArtId {
+  const f = GRUNT_FRAMES[weapon];
+  if (swingAt !== undefined) {
+    const ms = (time - swingAt) * 1000;
+    if (ms >= 0 && ms < GRUNT_WEAPONS.windupMs) return f.windup;
+    if (ms >= 0 && ms < GRUNT_WEAPONS.windupMs + GRUNT_WEAPONS.strikeMs) return f.strike;
+  }
+  return f.walk[Math.floor((time * 1000 + id * 37) / GRUNT_WEAPONS.walkFrameMs) % 2];
+}
+
 /** Warlord: 96x96 facing right, body centre at (27,44); A-idle-B-idle walk at 180 ms (Artist, M3). */
 const WARLORD_PIVOT = { x: 27 / 96, y: 44 / 96 };
 const WARLORD_WALK: ArtId[] = ['warlord_t1_walkA_00', 'warlord_t1_idle_00', 'warlord_t1_walkB_00', 'warlord_t1_idle_00'];
@@ -150,7 +172,11 @@ export class Renderer {
       t.source.scaleMode = 'nearest';
       this.tex[id] = t;
     }
-    const enemyArt = new Set<ArtId>([...Object.values(ENEMY_ART), ...Object.values(ENEMY_WALK).flatMap((a) => a.frames)]);
+    const enemyArt = new Set<ArtId>([
+      ...Object.values(ENEMY_ART),
+      ...Object.values(ENEMY_WALK).flatMap((a) => a.frames),
+      ...Object.values(GRUNT_FRAMES).flatMap((g) => [...g.walk, g.windup, g.strike]),
+    ]);
     for (const id of [...WARLORD_WALK, 'warlord_t1_windup_00', 'warlord_t1_phase2_00', 'warlord_t1_phase3_00'] as ArtId[]) {
       this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
       this.enrageTex[id] = outlined(this.tex[id], ENRAGE_OUTLINE);
@@ -284,7 +310,12 @@ export class Renderer {
     }
     w.enemies.forEach((e, i) => {
       const anim = ENEMY_WALK[e.def.id];
-      const art = anim ? anim.frames[Math.floor((w.time * 1000 + e.id * 37) / anim.frameMs) % anim.frames.length] : ENEMY_ART[e.def.id];
+      const art =
+        e.def.id === 'grunt'
+          ? gruntFrame(gruntWeapon(e.id), e.id, w.time, e.swingAt)
+          : anim
+            ? anim.frames[Math.floor((w.time * 1000 + e.id * 37) / anim.frameMs) % anim.frames.length]
+            : ENEMY_ART[e.def.id];
       // Heavies flash white for one frame per hit; Elites carry a baked bone-white outline.
       const tex = e.flash > 0 ? this.flashTex[art] : e.elite ? this.eliteTex[art] : this.tex[art];
       const s = this.enemies.get(i, tex);
