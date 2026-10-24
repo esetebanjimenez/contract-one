@@ -161,7 +161,7 @@ Each enemy type is told apart by **size and shape first**, colour second. Sizes 
 
 | Enemy | Size | Shape read |
 |---|---|---|
-| Runner | 16 px | small, lean, leaning forward |
+| Runner | 20 px | same size as the Grunt; told apart by shape: crouched, knife forward, scarf streaking behind (approved by Esteban) |
 | Grunt | 20 px | baseline |
 | Rifleman | 24 px | rifle pointing at the player |
 | Heavy | 28 px | wide and square, shield in front |
