@@ -1,8 +1,7 @@
 import { PERKS, type PerkId } from '../src/data/perks';
 import { DT } from '../src/data/sim';
-import { BOSS } from '../src/data/boss';
+import { BOSS, BOSSES } from '../src/data/boss';
 import { RUN } from '../src/data/run';
-import { enragedFor } from '../src/sim/boss';
 import { choosePerk, createWorld, step, type Input, type World } from '../src/sim/world';
 
 /**
@@ -169,17 +168,25 @@ function pick(w: World, bot: Bot): void {
   }
 }
 
+export interface FightResult {
+  target: number; // index into BOSSES
+  level: number; // player level at his spawn
+  hp: number; // his HP at spawn
+  damage: number; // damage dealt to him
+  sec: number; // arrival to kill, or to death/timeout (0 if he never became damageable)
+  killed: boolean;
+  enraged: boolean;
+}
+
 export interface RunResult {
   seed: number;
   bot: Bot;
   survivedSec: number;
-  reachedBoss: boolean;
-  levelAtBoss: number; // level when the contract timer hit 0 (5:00) (or at death before it)
-  bossKilled: boolean;
-  fightSec: number; // arrival to kill, or to death/timeout
-  bossHp: number; // Warlord HP at spawn (0 if he never came)
-  bossDamage: number; // damage dealt to him
-  enraged: boolean;
+  reachedBoss: boolean; // reached the first fight
+  levelAtBoss: number; // level when the contract clock hit the first fight (or at death before it)
+  bossKilled: boolean; // contract complete (the Warlord is dead)
+  targetsDown: number;
+  fights: FightResult[]; // one per target reached, in order (design.md 16.11)
   level: number;
   kills: number;
   scrapPct: number;
@@ -201,13 +208,16 @@ export function playUntil(w: World, bot: Bot, done: (w: World) => boolean, maxSe
   }
 }
 
-export function runBot(seed: number, bot: Bot, maxSec = RUN.contractSec + 60 + RUN.enrageFightSec + 120): RunResult {
+/** Long enough for all three fights to reach enrage plus a minute each, and two more minutes. */
+const MAX_RUN_SEC = BOSSES[BOSSES.length - 1].atSec + BOSSES.length * (RUN.warningSec + 60 + RUN.enrageFightSec) + 120;
+
+export function runBot(seed: number, bot: Bot, maxSec = MAX_RUN_SEC): RunResult {
   const w = createWorld(seed);
   const maxTicks = Math.round(maxSec / DT);
   const t0 = performance.now();
   let levelAtBoss = 0;
   while (w.tick < maxTicks && w.phase !== 'dead' && !w.won) {
-    if (w.time < RUN.contractSec) levelAtBoss = w.level;
+    if (w.contractTime < BOSSES[0].atSec) levelAtBoss = w.level;
     if (w.phase === 'levelup') {
       pick(w, bot);
       continue;
@@ -219,13 +229,22 @@ export function runBot(seed: number, bot: Bot, maxSec = RUN.contractSec + 60 + R
     seed,
     bot,
     survivedSec: w.time,
-    reachedBoss: w.time >= RUN.contractSec,
+    reachedBoss: w.fights.length > 0,
     levelAtBoss,
     bossKilled: w.won,
-    bossHp: w.boss ? w.boss.maxHp : 0,
-    bossDamage: w.bossDamage,
-    fightSec: w.bossArrivedAt < 0 ? 0 : (w.won ? w.wonAt : w.time) - w.bossArrivedAt,
-    enraged: !!w.boss && enragedFor(w.boss, w.time) >= 0,
+    targetsDown: w.targetsDown,
+    fights: w.fights.map((f) => {
+      const end = f.killedAt >= 0 ? f.killedAt : w.time;
+      return {
+        target: f.target,
+        level: f.level,
+        hp: f.hp,
+        damage: f.damage,
+        sec: f.arrivedAt < 0 ? 0 : end - f.arrivedAt,
+        killed: f.killedAt >= 0,
+        enraged: f.arrivedAt >= 0 && end - f.arrivedAt >= RUN.enrageFightSec,
+      };
+    }),
     level: w.level,
     kills: w.kills,
     scrapPct: (100 * w.scrapCollected) / Math.max(1, w.scrapDropped),

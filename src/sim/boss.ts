@@ -1,4 +1,4 @@
-import { BOSS, bossHp, type DpsStats } from '../data/boss';
+import { BOSS, BOSSES, bossHp, type DpsStats } from '../data/boss';
 import { PERK_RULES } from '../data/perks';
 import { MAX_VIEW_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { PLAYER } from '../data/player';
@@ -8,6 +8,7 @@ import { RUN } from '../data/run';
 export type BossState = 'enter' | 'walk' | 'telegraph' | 'charge' | 'stagger';
 
 export interface Boss {
+  target: number; // index into BOSSES
   x: number;
   y: number;
   hp: number;
@@ -55,9 +56,10 @@ export interface BossHost {
 const HALF_W = NATIVE_WIDTH / 2;
 const HALF_H = MAX_VIEW_HEIGHT / 2;
 
-export function createBoss(h: BossHost): Boss {
-  const hp = bossHp(h.stats, PERK_RULES.critMultiplier);
+export function createBoss(h: BossHost, target = 0): Boss {
+  const hp = bossHp(h.stats, PERK_RULES.critMultiplier, BOSSES[target].hpDpsSec);
   return {
+    target,
     // Walks in from the top edge, 120 px off-screen (design.md 14.2).
     x: h.arena ? (h.arena.x0 + h.arena.x1) / 2 : h.player.x,
     y: h.arena ? h.arena.y0 - BOSS.entryOffscreenPx : h.player.y - HALF_H - BOSS.entryOffscreenPx,
@@ -107,7 +109,7 @@ function fireRing(b: Boss, h: BossHost): void {
       vx: Math.cos(a) * BOSS.ring.speed,
       vy: Math.sin(a) * BOSS.ring.speed,
       rangeLeft: BOSS.ring.range,
-      damage: BOSS.ring.damage,
+      damage: BOSS.ring.damage * BOSSES[b.target].damageScale,
       pierceLeft: 0,
       bounces: 0,
       hit: [],
@@ -234,6 +236,6 @@ export function updateBoss(b: Boss, h: BossHost): void {
 
   const cd = Math.hypot(p.x - b.x, p.y - b.y);
   if (b.state !== 'enter' && cd < BOSS.radius + PLAYER.hitRadius) {
-    h.hitPlayer(b.state === 'charge' ? BOSS.charge.damage : BOSS.contactDamage);
+    h.hitPlayer((b.state === 'charge' ? BOSS.charge.damage : BOSS.contactDamage) * BOSSES[b.target].damageScale);
   }
 }

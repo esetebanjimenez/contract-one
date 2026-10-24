@@ -1,16 +1,17 @@
 /** design.md sections 6 and 12. */
 export const SPAWN = {
   baseRate: 1.0, // enemies/s at 0:00
-  doublingSec: 150, // rate(t) = baseRate x 2^(t / doublingSec)
+  doublingSec: 150, // rate(t) = baseRate x 2^(t / doublingSec) until lateFromSec (contract time)
+  lateFromSec: 300, // after 5:00 the rate doubles every lateDoublingSec instead, up to maxRate (design.md 16.11)
+  lateDoublingSec: 300,
+  maxRate: 10,
   offscreenMin: 24, // px outside the visible area
   offscreenMax: 48,
   pressureEverySec: 60,
   pressureDurationSec: 5,
   pressureMultiplier: 3,
   pressureArcDeg: 90, // pressure spawns come from ahead of the player's movement within this arc
-  ringFromSec: 120, // from 2:00, every second wave (2:00, 4:00) is a full ring (design.md 16.8)
-  ringEveryNthWave: 2,
-  ringWavePhase: 0, // wave n (= floor(t / 60)) is a ring when n % ringEveryNthWave === ringWavePhase
+  ringWavesSec: [120, 240, 420, 480, 660, 720], // pressure waves that are full rings (design.md 16.8, 16.11)
   pressureOverCap: 40, // a pressure wave may exceed the enemy cap by this much
   pressureHeavyFromSec: 240,
   pressureHeavyShare: 0.25, // share of Heavies in a pressure ring from 4:00
@@ -29,4 +30,6 @@ export const SPAWN_BANDS: SpawnBand[] = [
   { fromSec: 90, weights: { grunt: 55, runner: 25, heavy: 20, rifleman: 0, elite: 0 } },
   { fromSec: 135, weights: { grunt: 40, runner: 20, heavy: 20, rifleman: 20, elite: 0 } },
   { fromSec: 210, weights: { grunt: 30, runner: 20, heavy: 20, rifleman: 20, elite: 10 } },
+  { fromSec: 300, weights: { grunt: 25, runner: 20, heavy: 20, rifleman: 20, elite: 15 } }, // design.md 16.11
+  { fromSec: 540, weights: { grunt: 20, runner: 20, heavy: 20, rifleman: 20, elite: 20 } },
 ];

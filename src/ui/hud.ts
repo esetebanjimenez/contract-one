@@ -1,4 +1,4 @@
-import { BOSS } from '../data/boss';
+import { BOSSES, LIEUTENANT_DOWN } from '../data/boss';
 import { scrapForLevel } from '../data/levels';
 import { PERKS, TIERS, effectText, perkDef, type PerkId } from '../data/perks';
 import { RUN } from '../data/run';
@@ -26,7 +26,7 @@ export class Hud {
     root.insertAdjacentHTML(
       'beforeend',
       `<div class="hud"><div class="bars"><div class="hpbar"><div class="fill hp"></div></div><div class="xpbar"><div class="fill xp"></div></div></div><div class="label"></div>` +
-        `<div class="timer"></div><div class="bossbar" hidden><div class="fill boss"></div><div class="bname">${BOSS.name}</div></div><div class="enraged" hidden>ENRAGED</div></div>` +
+        `<div class="timer"></div><div class="bossbar" hidden><div class="fill boss"></div><div class="bname"></div></div><div class="enraged" hidden>ENRAGED</div></div>` +
         `<div class="banner" hidden></div><div class="modal" hidden></div>`,
     );
     this.bar = root.querySelector('.hud')!;
@@ -37,6 +37,7 @@ export class Hud {
     this.timer = this.bar.querySelector('.timer')!;
     this.bossBar = this.bar.querySelector('.bossbar')!;
     this.bossFill = this.bar.querySelector('.fill.boss')!;
+    this.bossName = this.bar.querySelector('.bname')!;
     this.banner = root.querySelector('.banner')!;
     this.enraged = this.bar.querySelector('.enraged')!;
   }
@@ -46,6 +47,7 @@ export class Hud {
   private timer: HTMLDivElement;
   private bossBar: HTMLDivElement;
   private bossFill: HTMLDivElement;
+  private bossName: HTMLDivElement;
   private banner: HTMLDivElement;
 
   private setBanner(text: string, cls = ''): void {
@@ -56,23 +58,32 @@ export class Hud {
     this.banner.className = `banner ${cls}`;
   }
 
-  /** Contract timer before 5:00, then the Warlord's HP bar; banners for inbound, warning, win and KIA. */
+  /**
+   * Between fights the TARGET IN timer counts contract time to the next target; in a fight his named HP
+   * bar shows instead. Banners: inbound, warning, LIEUTENANT DOWN, win and KIA (design.md 16.11).
+   */
   private updateContract(w: World, outroSec: number): void {
-    const left = RUN.contractSec - w.time;
+    const next = BOSSES[w.target];
+    const fight = !!w.arena || w.won;
+    const left = next ? next.atSec - w.contractTime : 0;
     const boss = w.boss;
-    this.timer.hidden = left <= 0;
-    if (left > 0) {
+    this.timer.hidden = fight || !next;
+    if (!this.timer.hidden) {
       this.timer.textContent = `TARGET IN ${mmss(Math.ceil(left))}`;
       this.timer.classList.toggle('red', left <= RUN.timerRedLastSec);
     }
-    this.bossBar.hidden = left > 0 || w.won;
+    this.bossBar.hidden = !fight || w.won;
+    if (next && this.bossName.textContent !== next.name) this.bossName.textContent = next.name;
     this.enraged.hidden = !(boss && boss.hp > 0 && !w.won && w.phase !== 'dead' && enragedFor(boss, w.time) >= 0);
-    if (left <= 0) this.bossFill.style.width = boss ? `${(100 * Math.max(0, boss.hp)) / boss.maxHp}%` : '100%';
+    if (fight) this.bossFill.style.width = boss ? `${(100 * Math.max(0, boss.hp)) / boss.maxHp}%` : '100%';
+    const lockedFor = w.arena ? w.time - w.arena.lockedAt : -1;
     if (w.won) this.setBanner(outroSec < RUN.winResultsDelaySec ? 'CONTRACT COMPLETE' : '', 'win');
     else if (w.phase === 'dead')
       this.setBanner(outroSec >= RUN.loseFreezeSec && outroSec < RUN.loseFreezeSec + RUN.loseBannerSec ? 'KIA' : '', 'kia');
-    else if (w.time >= RUN.inboundAtSec && w.time < RUN.inboundAtSec + RUN.inboundBannerSec) this.setBanner('TARGET INBOUND');
-    else if (w.time >= RUN.contractSec && w.time < RUN.contractSec + RUN.warningSec) this.setBanner('WARNING', 'warn');
+    else if (w.downAt >= 0 && w.time - w.downAt < LIEUTENANT_DOWN.bannerSec) this.setBanner('LIEUTENANT DOWN', 'win');
+    else if (next && !fight && left <= RUN.inboundLeadSec && left > RUN.inboundLeadSec - RUN.inboundBannerSec)
+      this.setBanner('TARGET INBOUND');
+    else if (lockedFor >= 0 && lockedFor < RUN.warningSec) this.setBanner('WARNING', 'warn');
     else this.setBanner('');
   }
 
@@ -157,6 +168,7 @@ export class Hud {
 
   private showResults(w: World): void {
     const boss = w.boss;
+    const targets = `<div class="targets">TARGETS ${w.targetsDown}/${BOSSES.length}</div>`;
     const hpLeft =
       !w.won && boss && boss.hp > 0 ? `<div class="hpleft">TARGET HP LEFT: ${Math.ceil((100 * boss.hp) / boss.maxHp)}%</div>` : '';
     const stat = (k: string, v: string | number): string => `<div class="row"><span>${k}</span><span>${v}</span></div>`;
@@ -170,7 +182,7 @@ export class Hud {
       .join('');
     this.modal.innerHTML =
       `<div class="results ${w.won ? 'won' : 'failed'}">` +
-      `<div class="title">${w.won ? 'CONTRACT COMPLETE' : 'CONTRACT FAILED'}</div>${hpLeft}` +
+      `<div class="title">${w.won ? 'CONTRACT COMPLETE' : 'CONTRACT FAILED'}</div>${targets}${hpLeft}` +
       `<div class="stats">${stat('TIME', mmss(w.won ? w.wonAt : w.time))}${stat('LEVEL', w.level)}${stat('KILLS', w.kills)}` +
       `${stat('SCRAP', w.scrapCollected)}${stat('BOSS DAMAGE', Math.round(w.bossDamage))}</div>` +
       `<div class="plabel">PERKS</div><div class="perks">${perks || '<div class="none">NO PERKS</div>'}</div>` +

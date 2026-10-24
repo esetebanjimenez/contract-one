@@ -1,4 +1,4 @@
-import { BOSS } from '../data/boss';
+import { BOSS, BOSSES, LIEUTENANT_DOWN } from '../data/boss';
 import { MAX_VIEW_HEIGHT, NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, GRUNT_WEAPONS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 
@@ -103,10 +103,22 @@ export interface Input {
   my: number;
 }
 
+/** One target fight, for the results screen and the sim (design.md 16.11). */
+export interface Fight {
+  target: number; // index into BOSSES
+  level: number; // player level when he spawned
+  hp: number; // his HP at spawn
+  arrivedAt: number; // run time he became damageable (-1 before)
+  killedAt: number; // run time of the kill (-1 if alive)
+  damage: number; // damage dealt to him
+}
+
 export interface World {
   rng: () => number;
   tick: number;
-  time: number;
+  time: number; // run time
+  contractTicks: number; // ticks of contract time, which pauses during every fight (design.md 16.11)
+  contractTime: number; // drives the TARGET IN timer, spawn rate, bands and per-minute scaling
   phase: Phase;
   player: {
     x: number;
@@ -143,10 +155,14 @@ export interface World {
   boss: Boss | null;
   arena: Arena | null;
   viewH: number; // visible world height, set by the client (bots use the 16:9 minimum)
-  bossDamage: number; // damage dealt to the Warlord
+  bossDamage: number; // damage dealt to all targets
+  target: number; // index into BOSSES of the current or next fight
+  targetsDown: number;
+  fights: Fight[];
+  downAt: number; // run time of the last lieutenant kill (-1 before); the arena releases tapeFadeSec later
   won: boolean; // the Warlord is dead; the UI plays the outro and shows results
   wonAt: number; // run time of the kill
-  bossArrivedAt: number; // run time he became damageable (-1 before)
+  bossArrivedAt: number; // run time the current target became damageable (-1 before)
   nextClumpAt: number; // run time of the next Scrap clumping pass
   drones: Drone[];
   grenades: Grenade[];
@@ -166,6 +182,8 @@ export function createWorld(seed: number): World {
     rng: createRng(seed),
     tick: 0,
     time: 0,
+    contractTicks: 0,
+    contractTime: 0,
     phase: 'play',
     player: { x: 0, y: 0, hp: stats.maxHp, invuln: 0, fireCd: 0, aim: 0, moving: false, hasTarget: false, facing: 0 },
     stacks,
@@ -193,6 +211,10 @@ export function createWorld(seed: number): World {
     arena: null,
     viewH: NATIVE_HEIGHT,
     bossDamage: 0,
+    target: 0,
+    targetsDown: 0,
+    fights: [],
+    downAt: -1,
     won: false,
     wonAt: 0,
     bossArrivedAt: -1,
@@ -205,13 +227,22 @@ export function createWorld(seed: number): World {
   };
 }
 
+/** Enemies/s at contract time t: doubling every 2:30 to 5:00, then every 5:00 up to 10/s (design.md 16.11). */
 export function spawnRate(t: number): number {
-  return SPAWN.baseRate * Math.pow(2, t / SPAWN.doublingSec);
+  const early = SPAWN.baseRate * Math.pow(2, Math.min(t, SPAWN.lateFromSec) / SPAWN.doublingSec);
+  if (t <= SPAWN.lateFromSec) return early;
+  return Math.min(SPAWN.maxRate, early * Math.pow(2, (t - SPAWN.lateFromSec) / SPAWN.lateDoublingSec));
+}
+
+/** True in the 0:30 before a fight (contract time): the TARGET INBOUND stretch. */
+export function inbound(t: number): boolean {
+  return BOSSES.some((b) => t >= b.atSec - RUN.inboundLeadSec && t < b.atSec);
 }
 
 export function inPressureWave(t: number): boolean {
-  // No waves or rings from 4:30, so the Warlord's arrival isn't buried (design.md 14.1).
-  if (t >= RUN.inboundAtSec) return false;
+  // No waves or rings in the 0:30 before each fight, so the arrival isn't buried (design.md 14.1, 16.11),
+  // and none on the fight's own minute, so the waves come back gently after a lieutenant kill.
+  if (inbound(t) || BOSSES.some((b) => t >= b.atSec && t < b.atSec + SPAWN.pressureDurationSec)) return false;
   return t >= SPAWN.pressureEverySec && t % SPAWN.pressureEverySec < SPAWN.pressureDurationSec;
 }
 
@@ -240,10 +271,10 @@ export function riflemenAlive(w: World): number {
 
 function pickType(w: World, pressure: boolean): { def: EnemyDef; elite: boolean } {
   if (pressure) {
-    const heavy = w.time >= SPAWN.pressureHeavyFromSec && w.rng() < SPAWN.pressureHeavyShare;
+    const heavy = w.contractTime >= SPAWN.pressureHeavyFromSec && w.rng() < SPAWN.pressureHeavyShare;
     return { def: heavy ? ENEMIES.heavy : ENEMIES.grunt, elite: false };
   }
-  const weights = bandAt(w.time).weights;
+  const weights = bandAt(w.contractTime).weights;
   type Kind = keyof typeof weights;
   const noRifle = riflemenAlive(w) >= SPAWN.maxRiflemen;
   const kind = weighted<Kind>(w, weights, noRifle ? ['rifleman'] : []);
@@ -307,10 +338,10 @@ function farthest(w: World, ok: (e: Enemy, offscreen: boolean) => boolean): numb
   return slot;
 }
 
-/** From 2:00, every second pressure wave (2:00, 4:00) is a full ring (design.md 12.3, 16.8). */
+/** The pressure waves at 2:00, 4:00, 7:00, 8:00, 11:00 and 12:00 are full rings (design.md 12.3, 16.8, 16.11). */
 export function isRingWave(t: number): boolean {
-  const n = Math.floor(t / SPAWN.pressureEverySec);
-  return t >= SPAWN.ringFromSec && n % SPAWN.ringEveryNthWave === SPAWN.ringWavePhase;
+  const start = Math.floor(t / SPAWN.pressureEverySec) * SPAWN.pressureEverySec;
+  return SPAWN.ringWavesSec.includes(start);
 }
 
 function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef): Enemy | undefined {
@@ -326,7 +357,7 @@ function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef):
   }
   const { def, elite } = force ? { def: force, elite: false } : pickType(w, pressure);
   const p = edgePoint(w, angle);
-  const maxHp = def.hp * (elite ? ELITE.hp : 1) * (1 + SCALING.hpPerMinute * (w.time / 60));
+  const maxHp = def.hp * (elite ? ELITE.hp : 1) * (1 + SCALING.hpPerMinute * (w.contractTime / 60));
   const e: Enemy = {
     id: w.nextEnemyId++,
     def,
@@ -334,7 +365,7 @@ function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef):
     y: p.y,
     hp: maxHp,
     maxHp,
-    fireTimer: rifleMoveSec(w.time),
+    fireTimer: rifleMoveSec(w.contractTime),
     aiming: false,
     facing: 1,
     elite,
@@ -348,12 +379,13 @@ function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef):
 function updateSpawns(w: World, input: Input): void {
   // No normal spawns once the arena locks; only the phase 3 adds (design.md 14.9).
   if (w.won || w.arena) return;
-  const pressure = inPressureWave(w.time);
+  const t = w.contractTime;
+  const pressure = inPressureWave(t);
   // Anti-flee: pressure arrives ahead of the player's movement, random when standing still.
   if (Math.hypot(input.mx, input.my) > 0.01) w.pressureAngle = Math.atan2(input.my, input.mx);
-  else if (w.tick % Math.round(SPAWN.pressureEverySec / DT) === 0) w.pressureAngle = w.rng() * Math.PI * 2;
-  const ring = pressure && isRingWave(w.time);
-  w.spawnAcc += spawnRate(w.time) * (pressure ? SPAWN.pressureMultiplier : 1) * DT;
+  else if (w.contractTicks % Math.round(SPAWN.pressureEverySec / DT) === 0) w.pressureAngle = w.rng() * Math.PI * 2;
+  const ring = pressure && isRingWave(t);
+  w.spawnAcc += spawnRate(t) * (pressure ? SPAWN.pressureMultiplier : 1) * DT;
   while (w.spawnAcc >= 1) {
     w.spawnAcc -= 1;
     const arc = (SPAWN.pressureArcDeg * Math.PI) / 180;
@@ -439,9 +471,16 @@ function damageBoss(w: World, dmg: number, crit: boolean): void {
   addDamageNumber(w, BOSS_KEY, wb.x, wb.y - BOSS.radius - DAMAGE_NUMBERS.abovePx, d, crit);
   wb.hp -= d;
   w.bossDamage += d;
+  const fl = w.fights[w.fights.length - 1];
+  if (fl) fl.damage += d;
   if (wb.state !== 'stagger') wb.flash = DT;
-  if (wb.hp <= 0) winContract(w);
-  else checkPhase(wb, bossHost(w));
+  if (wb.hp > 0) checkPhase(wb, bossHost(w));
+  else {
+    if (fl) fl.killedAt = w.time;
+    w.targetsDown++;
+    if (BOSSES[wb.target].final) winContract(w);
+    else lieutenantDown(w, wb);
+  }
 }
 
 /**
@@ -677,6 +716,9 @@ export function step(w: World, input: Input): void {
   if (w.phase !== 'play') return;
   w.tick++;
   w.time = w.tick * DT;
+  // The contract clock runs only between fights (design.md 16.11).
+  if (!w.arena) w.contractTicks++;
+  w.contractTime = w.contractTicks * DT;
   const p = w.player;
 
   // Player movement.
@@ -685,7 +727,9 @@ export function step(w: World, input: Input): void {
   p.x += input.mx * s * w.stats.speed * DT;
   p.y += input.my * s * w.stats.speed * DT;
   p.moving = mag > 0;
-  if (w.time >= RUN.contractSec && !w.arena) lockArena(w);
+  const next = BOSSES[w.target];
+  if (!w.arena && !w.won && next && w.contractTime >= next.atSec) lockArena(w);
+  else if (w.arena && w.downAt >= w.arena.lockedAt && w.time >= w.downAt + LIEUTENANT_DOWN.tapeFadeSec) releaseArena(w);
   const ar = w.arena;
   if (ar) {
     p.x = Math.min(ar.x1 - PLAYER.hitRadius, Math.max(ar.x0 + PLAYER.hitRadius, p.x));
@@ -752,7 +796,7 @@ export function step(w: World, input: Input): void {
         }
       } else if (e.fireTimer <= 0) {
         e.aiming = false;
-        e.fireTimer = rifleMoveSec(w.time);
+        e.fireTimer = rifleMoveSec(w.contractTime);
         const shots = e.elite ? ELITE.rifleSpreadShots : 1;
         const base = Math.atan2(dy, dx);
         const spread = (ELITE.rifleSpreadDeg * Math.PI) / 180;
@@ -775,7 +819,7 @@ export function step(w: World, input: Input): void {
       }
     }
     if (d < e.def.radius + PLAYER.hitRadius) {
-      damagePlayer(w, contactDamage(e, w.time));
+      damagePlayer(w, contactDamage(e, w.contractTime));
       // Grunt swing (looks only): restart it once the last one has played while he keeps touching.
       if (e.def.id === 'grunt' && (e.swingAt === undefined || w.time - e.swingAt >= GRUNT_SWING_SEC)) e.swingAt = w.time;
     }
@@ -937,7 +981,7 @@ function bossHost(w: World): BossHost {
   };
 }
 
-/** At 5:00: freeze the camera on the current view and turn every enemy into a harmless runner. */
+/** At each fight: freeze the camera on the current view and turn every enemy into a harmless runner. */
 function lockArena(w: World): void {
   const p = w.player;
   const camX = Math.round(p.x - NATIVE_WIDTH / 2);
@@ -983,11 +1027,49 @@ function despawnFled(w: World, a: Arena): void {
 
 function updateWarlord(w: World): void {
   if (w.won) return;
-  if (!w.boss && w.time >= RUN.contractSec + RUN.warningSec) w.boss = createBoss(bossHost(w));
+  const a = w.arena;
+  if (!w.boss && a && w.time >= a.lockedAt + RUN.warningSec) {
+    w.boss = createBoss(bossHost(w), w.target);
+    w.fights.push({ target: w.target, level: w.level, hp: w.boss.maxHp, arrivedAt: -1, killedAt: -1, damage: 0 });
+  }
   const b = w.boss;
   if (!b || b.hp <= 0) return;
   updateBoss(b, bossHost(w));
-  if (b.damageable && w.bossArrivedAt < 0) w.bossArrivedAt = w.time;
+  if (b.damageable && w.bossArrivedAt < 0) {
+    w.bossArrivedAt = w.time;
+    w.fights[w.fights.length - 1].arrivedAt = w.time;
+  }
+}
+
+/**
+ * A lieutenant kill (design.md 16.11): enemy bullets clear and he drops a Scrap pile worth exactly the
+ * next level. The walls hold while the tape fades, then the arena releases and the waves resume.
+ */
+function lieutenantDown(w: World, b: Boss): void {
+  w.downAt = w.time;
+  w.kills += 1;
+  w.enemyBullets.length = 0;
+  const value = scrapForLevel(w.level + w.pendingLevels);
+  const n = LIEUTENANT_DOWN.scrapPieces;
+  w.scrapDropped += value;
+  for (let i = 0; i < n; i++) {
+    // Even split (the remainder on the first piece), on a small ring so the next clumping pass merges them.
+    const v = Math.floor(value / n) + (i === 0 ? value % n : 0);
+    const ang = (i / n) * Math.PI * 2;
+    const r = LIEUTENANT_DOWN.scrapSpreadPx;
+    w.pickups.push({ x: b.x + Math.cos(ang) * r, y: b.y + Math.sin(ang) * r, value: v, age: 0, flying: false, cache: false, pop: 0 });
+  }
+}
+
+/**
+ * The camera unlocks and the waves resume on the contract clock. New spawns already come from at least
+ * 204 px out (the edge of the tallest view plus 24 px), so none land within 200 px in the first 3 s.
+ */
+function releaseArena(w: World): void {
+  w.arena = null;
+  w.boss = null;
+  w.bossArrivedAt = -1;
+  w.target++;
 }
 
 /** Kill: every other enemy dies with no Scrap and enemy bullets clear (design.md 14.4). */

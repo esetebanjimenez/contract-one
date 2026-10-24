@@ -1,5 +1,6 @@
 import { Application } from 'pixi.js';
 import { MAX_VIEW_HEIGHT, NATIVE_HEIGHT, NATIVE_WIDTH } from './data/display';
+import { LIEUTENANT_DOWN } from './data/boss';
 import { RUN } from './data/run';
 import { DT } from './data/sim';
 import { Renderer } from './render/renderer';
@@ -63,12 +64,23 @@ export async function boot(first?: () => World): Promise<void> {
 
   let acc = 0;
   let outro = 0; // real seconds since the win or the death
+  let seenDownAt = -1;
+  let downSlow = 0; // real seconds of lieutenant-kill slow-mo left
   app.ticker.add((t) => {
     const dt = t.deltaMS / 1000;
     const ended = world.won || world.phase === 'dead';
     if (ended) outro += dt;
-    // On the kill: 1 s of slow-mo at 0.3x, then normal speed while the banner shows (design.md 14.4).
-    const timeScale = world.won && outro < RUN.winSlowMoSec ? RUN.winSlowMoScale : 1;
+    if (world.downAt !== seenDownAt) {
+      seenDownAt = world.downAt;
+      downSlow = world.downAt >= 0 ? LIEUTENANT_DOWN.slowMoSec : 0;
+    }
+    // On the kill: 1 s of slow-mo at 0.3x, then normal speed while the banner shows (design.md 14.4);
+    // 0.5 s on a lieutenant kill (16.11).
+    let timeScale = world.won && outro < RUN.winSlowMoSec ? RUN.winSlowMoScale : 1;
+    if (downSlow > 0 && !world.won) {
+      downSlow -= dt;
+      timeScale = LIEUTENANT_DOWN.slowMoScale;
+    }
     acc = Math.min(acc + dt * timeScale, 0.25);
     if (world.won && Hud.resultsDue(world, outro)) acc = 0;
     while (acc >= DT) {

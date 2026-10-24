@@ -1,6 +1,6 @@
 import { DT } from '../data/sim';
 import { Application, Assets, Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
-import { BOSS } from '../data/boss';
+import { BOSS, LIEUTENANT_DOWN } from '../data/boss';
 import { JOYSTICK } from '../data/controls';
 import { LEVELS } from '../data/levels';
 import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
@@ -239,11 +239,16 @@ export class Renderer {
     this.app.stage.addChild(this.ground, this.world, this.band, this.stick);
   }
 
-  /** The band grows in from the screen edges over 0.5 s at the lock; the walls are its inner edge. */
+  /**
+   * The band grows in from the screen edges over 0.5 s at the lock; the walls are its inner edge. After a
+   * lieutenant kill it fades out over 0.5 s, then the arena releases (design.md 16.11).
+   */
   private drawBand(w: World): void {
     const a = w.arena;
     this.band.visible = !!a && !w.won;
     if (!a || w.won) return;
+    const down = w.downAt >= a.lockedAt;
+    this.band.alpha = down ? Math.max(0, 1 - (w.time - w.downAt) / LIEUTENANT_DOWN.tapeFadeSec) : 1;
     const k = Math.min(1, (w.time - a.lockedAt) / RUN.arenaGrowSec);
     const t = Math.max(1, Math.round(RUN.arenaBandPx * k));
     const top = RUN.arenaHudPx;

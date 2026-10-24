@@ -1,9 +1,33 @@
 import { DRONE, EXPLOSIVE, GRENADE, overflow } from './perks';
 
-/** The Warlord (design.md 14.3). */
+/** The three targets of a contract (design.md 16.11), in order, on the contract clock. */
+export interface Target {
+  name: string; // working name, shown on the boss bar
+  atSec: number; // contract time of the fight (the clock pauses during it)
+  hpDpsSec: number; // HP = this x the player's single-target sheet DPS at spawn (design.md 16.5)
+  damageScale: number; // contact, charge and bullet damage
+  final: boolean; // killing him ends the contract
+}
+
+export const BOSSES: Target[] = [
+  { name: 'LT. HAMMER', atSec: 300, hpDpsSec: 40, damageScale: 1, final: false },
+  // Part 1 of 16.11: LT. VIPER and the Warlord fight like LT. HAMMER, with their own HP and damage, until their attacks land.
+  { name: 'LT. VIPER', atSec: 540, hpDpsSec: 50, damageScale: 1.25, final: false },
+  { name: 'THE WARLORD', atSec: 780, hpDpsSec: 60, damageScale: 1.5, final: true },
+];
+
+/** On a lieutenant kill (design.md 16.11). The slow-mo is real seconds (UI); the rest is run time. */
+export const LIEUTENANT_DOWN = {
+  slowMoSec: 0.5,
+  slowMoScale: 0.3,
+  bannerSec: 2,
+  tapeFadeSec: 0.5, // then the camera unlocks and waves resume
+  scrapPieces: 8, // the one-level Scrap pile, split so it lands as a clump (16.3)
+  scrapSpreadPx: 10,
+};
+
+/** Body and attacks (design.md 14.3), shared by every target for now. */
 export const BOSS = {
-  name: 'THE WARLORD',
-  hpDpsSec: 40, // HP = 40 x the player's single-target sheet DPS at spawn (design.md 16.5)
   hpExtraBulletWeight: 0.5,
   hpMin: 2000, // no upper clamp
   radius: 30,
@@ -51,6 +75,6 @@ export function sheetDps(s: DpsStats, critMultiplier: number): number {
   return (gun + drones + grenades) * crit;
 }
 
-export function bossHp(s: DpsStats, critMultiplier: number): number {
-  return Math.max(BOSS.hpMin, Math.round(BOSS.hpDpsSec * sheetDps(s, critMultiplier)));
+export function bossHp(s: DpsStats, critMultiplier: number, hpDpsSec = BOSSES[0].hpDpsSec): number {
+  return Math.max(BOSS.hpMin, Math.round(hpDpsSec * sheetDps(s, critMultiplier)));
 }
