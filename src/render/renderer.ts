@@ -15,6 +15,8 @@ const ART = [
   'grunt_t1_walk_00',
   'runner_t1_walk_00',
   'heavy_t1_walk_00',
+  'heavy_t1_walkA_00',
+  'heavy_t1_walkB_00',
   'runner_t1_walkA_00',
   'runner_t1_walkB_00',
   'rifleman_t1_idle_00',
@@ -43,6 +45,7 @@ const ELITE_SCALE = 1.25;
 /** Enemy walk cycles: frames played in order while alive (Artist, M2). */
 const ENEMY_WALK: Record<string, { frames: ArtId[]; frameMs: number }> = {
   runner: { frames: ['runner_t1_walkA_00', 'runner_t1_walk_00', 'runner_t1_walkB_00', 'runner_t1_walk_00'], frameMs: 90 },
+  heavy: { frames: ['heavy_t1_walkA_00', 'heavy_t1_walk_00', 'heavy_t1_walkB_00', 'heavy_t1_walk_00'], frameMs: 160 },
 };
 const CACHE_SCALE = 1.5; // 12 px Scrap cache from the 8 px Scrap sprite (design.md 13.4)
 
