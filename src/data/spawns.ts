@@ -27,5 +27,5 @@ export const SPAWN_BANDS: SpawnBand[] = [
   { fromSec: 90, weights: { grunt: 75, runner: 25, heavy: 0, rifleman: 0, elite: 0 } },
   { fromSec: 180, weights: { grunt: 55, runner: 25, heavy: 20, rifleman: 0, elite: 0 } },
   { fromSec: 270, weights: { grunt: 40, runner: 20, heavy: 20, rifleman: 20, elite: 0 } },
-  { fromSec: 420, weights: { grunt: 25, runner: 20, heavy: 20, rifleman: 20, elite: 15 } },
+  { fromSec: 420, weights: { grunt: 25, runner: 20, heavy: 20, rifleman: 20, elite: 10 } },
 ];
