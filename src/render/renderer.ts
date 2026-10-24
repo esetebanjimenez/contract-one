@@ -114,12 +114,15 @@ const TELEGRAPH_COLOR = 0xff4a1c;
 /** Enrage tell: red-orange outline pulsing every 0.5 s (Artist, M3). */
 const ENRAGE_OUTLINE = '#FF4A1C';
 const ENRAGE_PULSE_SEC = 0.5;
-/** design.md 16.7 effects (Artist): frame times, centred on the hit or landing point, last smoke frame fades. */
+/**
+ * design.md 16.7 effects (Artist): frame times, centred on the hit or landing point, last smoke frame fades.
+ * Slowed on Esteban's playtest (2026-10-24) so the blasts read: HE 0.5 s (was 0.25), frag 0.66 s (was 0.36).
+ */
 const BLAST_ANIM = {
-  he: { frames: ['fx/fx_he_00', 'fx/fx_he_01', 'fx/fx_he_02', 'fx/fx_he_03', 'fx/fx_he_04'] as ArtId[], frameMs: 50 },
+  he: { frames: ['fx/fx_he_00', 'fx/fx_he_01', 'fx/fx_he_02', 'fx/fx_he_03', 'fx/fx_he_04'] as ArtId[], frameMs: 100 },
   frag: {
     frames: ['fx/fx_frag_00', 'fx/fx_frag_01', 'fx/fx_frag_02', 'fx/fx_frag_03', 'fx/fx_frag_04', 'fx/fx_frag_05'] as ArtId[],
-    frameMs: 60,
+    frameMs: 110,
   },
 };
 const DRONE_ROTOR_MS = 60;
