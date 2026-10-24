@@ -66,7 +66,7 @@ HP scaling: see §12 (M2).
 - Soft caps: 250 enemies and 400 bullets (Programmer's numbers). Past the cap, spawns pause and the farthest enemies are recycled.
 
 ## 7. Scrap and levels
-- Kills drop Scrap pickups (pure cyan; no other cyan on screen). Pickups **never despawn** (Esteban, 2026-10-24). At the 300-pickup cap, a new drop adds its value to the oldest pickup on the ground (the player must go back for it). Magnet 70 px; inside it, pickups fly to the player at 300 px/s.
+- Kills drop Scrap pickups (pure cyan; no other cyan on screen). Pickups **never despawn** (Esteban, 2026-10-24). At the 300-pickup cap, a new drop adds its value to the pickup nearest the enemy's death spot, with a small cyan pop on that pickup so the drop reads (was: oldest pickup, which hid drops late in a run). Magnet 70 px; inside it, pickups fly to the player at 300 px/s.
 - Scrap needed for the next level: `5 + 6 × (level − 1)`. That means 5, 11, 17 and so on, and a typical run reaches level ~25–30 by 10:00.
 - A level-up pauses the game and shows **3 perk cards**. Tapping one picks it. There is no reroll in v1.
 - Overflow Scrap carries into the next level.
@@ -235,7 +235,7 @@ Goal: a run has a real ending. You survive to 10:00, kill the Warlord, and get a
 | Phase 3 adds (below 33%) | 12 Grunts in a ring every 8 s; ring every 2 s (1.5 s proposed, **on hold**); charge every 3.5 s |
 | Knockback | immune |
 | Phase change | 1 s stagger: he can't attack, flashes white, and every enemy bullet on screen is cleared |
-| Enrage | if still alive at 12:00 (2:00 into the fight): ring every 1.0 s, walk speed ×1.5. It must be lethal, not just a timer. Every run ends. |
+| Enrage | if still alive 2:00 on the fight clock (which starts when he's fully on-screen; not the 12:00 run time): ring every 1.0 s, walk speed ×1.5. It must be lethal, not just a timer. Every run ends. |
 
 ### 14.4 Win
 On the kill: 1 s slow-mo at 0.3×, every other enemy dies with no Scrap, the banner "CONTRACT COMPLETE" shows, then 2 s later the results screen.
@@ -327,7 +327,7 @@ Tier odds by player level (Common / Rare / Epic / Mythic):
 - Later: `explosive`, `drone` and `grenade` can enter as Mythic-only perks.
 
 ### 15.3 Scrap persistence
-- Pickups never despawn. At the 300 cap, a new drop adds its value to the oldest pickup on the ground.
+- Pickups never despawn. At the 300 cap, a new drop adds its value to the pickup nearest the death spot, with a cyan pop (changed from oldest, 2026-10-24).
 - Balance: with no despawn and with tiers, the player gets stronger. Levers in order: the cap rule above, then the enemy HP slope 0.12 → 0.14, aiming at the §12.4 targets. Both done; 0.14 is locked.
 
 ### 15.4 Regen
