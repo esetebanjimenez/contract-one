@@ -107,6 +107,7 @@ export class Hud {
       return;
     }
     this.modal.hidden = false;
+    this.modal.classList.toggle('levelup', w.phase === 'levelup' && !results);
     if (w.phase === 'levelup') {
       this.modal.innerHTML =
         `<div class="title">LEVEL UP</div>` +
