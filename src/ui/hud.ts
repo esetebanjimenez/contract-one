@@ -25,7 +25,7 @@ export class Hud {
     root.insertAdjacentHTML(
       'beforeend',
       `<div class="hud"><div class="bars"><div class="hpbar"><div class="fill hp"></div></div><div class="xpbar"><div class="fill xp"></div></div></div><div class="label"></div>` +
-        `<div class="timer"></div><div class="bossbar" hidden><div class="fill boss"></div><div class="bname">${BOSS.name}</div></div></div>` +
+        `<div class="timer"></div><div class="bossbar" hidden><div class="fill boss"></div><div class="bname">${BOSS.name}</div></div><div class="enraged" hidden>ENRAGED</div></div>` +
         `<div class="banner" hidden></div><div class="modal" hidden></div>`,
     );
     this.bar = root.querySelector('.hud')!;
@@ -37,7 +37,10 @@ export class Hud {
     this.bossBar = this.bar.querySelector('.bossbar')!;
     this.bossFill = this.bar.querySelector('.fill.boss')!;
     this.banner = root.querySelector('.banner')!;
+    this.enraged = this.bar.querySelector('.enraged')!;
   }
+
+  private enraged: HTMLDivElement;
 
   private timer: HTMLDivElement;
   private bossBar: HTMLDivElement;
@@ -62,6 +65,7 @@ export class Hud {
       this.timer.classList.toggle('red', left <= RUN.timerRedLastSec);
     }
     this.bossBar.hidden = left > 0 || w.won;
+    this.enraged.hidden = !(boss && boss.hp > 0 && !w.won && w.phase !== 'dead' && w.time >= RUN.enrageSec);
     if (left <= 0) this.bossFill.style.width = boss ? `${(100 * Math.max(0, boss.hp)) / boss.maxHp}%` : '100%';
     if (w.won) this.setBanner(outroSec < RUN.winResultsDelaySec ? 'CONTRACT COMPLETE' : '', 'win');
     else if (w.phase === 'dead')

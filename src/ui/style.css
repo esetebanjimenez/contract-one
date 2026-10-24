@@ -207,6 +207,18 @@
 .timer.red {
   color: #ff4a1c;
 }
+.enraged {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(48px * var(--s));
+  text-align: center;
+  font-family: 'Silkscreen', monospace;
+  font-size: calc(8px * var(--s));
+  color: #ff4a1c;
+  text-shadow: 0 calc(1px * var(--s)) 0 #14110f;
+}
+.enraged[hidden],
 .timer[hidden],
 .bossbar[hidden],
 .banner[hidden] {

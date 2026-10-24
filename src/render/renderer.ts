@@ -3,6 +3,7 @@ import { BOSS } from '../data/boss';
 import { JOYSTICK } from '../data/controls';
 import { LEVELS } from '../data/levels';
 import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
+import { RUN } from '../data/run';
 import { MERC_ART, RIFLEMAN_ART } from '../data/player';
 import type { World } from '../sim/world';
 import type { Controls } from '../ui/input';
@@ -59,6 +60,9 @@ const WARLORD_PIVOT = { x: 27 / 96, y: 44 / 96 };
 const WARLORD_WALK: ArtId[] = ['warlord_t1_walkA_00', 'warlord_t1_idle_00', 'warlord_t1_walkB_00', 'warlord_t1_idle_00'];
 const WARLORD_FRAME_MS = 180;
 const TELEGRAPH_COLOR = 0xff4a1c;
+/** Enrage tell: red-orange outline pulsing every 0.5 s (Artist, M3). */
+const ENRAGE_OUTLINE = '#FF4A1C';
+const ENRAGE_PULSE_SEC = 0.5;
 const CACHE_SCALE = 1.5; // 12 px Scrap cache from the 8 px Scrap sprite (design.md 13.4)
 
 /** Grows a list of sprites on demand and hides the unused tail each frame. */
@@ -86,6 +90,7 @@ export class Renderer {
   private tex = {} as Record<ArtId, Texture>;
   private eliteTex = {} as Record<string, Texture>;
   private flashTex = {} as Record<string, Texture>;
+  private enrageTex = {} as Record<string, Texture>;
   private ground!: TilingSprite;
   private world = new Container();
   private pickups!: Pool;
@@ -115,6 +120,7 @@ export class Renderer {
     const enemyArt = new Set<ArtId>([...Object.values(ENEMY_ART), ...Object.values(ENEMY_WALK).flatMap((a) => a.frames)]);
     for (const id of [...WARLORD_WALK, 'warlord_t1_windup_00', 'warlord_t1_phase2_00', 'warlord_t1_phase3_00'] as ArtId[]) {
       this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
+      this.enrageTex[id] = outlined(this.tex[id], ENRAGE_OUTLINE);
     }
     for (const id of enemyArt) {
       this.eliteTex[id] = outlined(this.tex[id], BONE_WHITE);
@@ -150,7 +156,8 @@ export class Renderer {
     else if (b.phase === 2) art = 'warlord_t1_phase2_00';
     else art = b.moving ? WARLORD_WALK[Math.floor((w.time * 1000) / WARLORD_FRAME_MS) % WARLORD_WALK.length] : 'warlord_t1_idle_00';
     const stagger = b.state === 'stagger' && Math.floor(b.stateT * 10) % 2 === 0;
-    const tex = b.flash > 0 || stagger ? this.flashTex[art] : this.tex[art];
+    const pulse = w.time >= RUN.enrageSec && Math.floor((w.time - RUN.enrageSec) / (ENRAGE_PULSE_SEC / 2)) % 2 === 0;
+    const tex = b.flash > 0 || stagger ? this.flashTex[art] : pulse ? this.enrageTex[art] : this.tex[art];
     if (s.texture !== tex) s.texture = tex;
     s.position.set(Math.round(b.x), Math.round(b.y));
     s.rotation = b.facing;
