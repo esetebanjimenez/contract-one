@@ -6,7 +6,7 @@ import { SPAWN } from '../src/data/spawns';
 import { PERKS } from '../src/data/perks';
 import { computeStats, drawOffer, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
-import { choosePerk, createWorld, isRingWave, rifleInterval, riflemenAlive, spawnRate, step } from '../src/sim/world';
+import { choosePerk, createWorld, isRingWave, killEnemy, rifleInterval, riflemenAlive, spawnRate, step } from '../src/sim/world';
 import { runBot } from '../tools/bots';
 
 describe('perk tiers', () => {
@@ -78,6 +78,17 @@ describe('levels and perks', () => {
       step(w, { mx: 0, my: 0 });
     }
     expect(w.player.hp).toBe(51);
+  });
+  it('past the pickup cap, drops add their value to the oldest grounded piece', () => {
+    const w = createWorld(1);
+    while (w.enemies.length === 0) step(w, { mx: 0, my: 0 });
+    w.pickups.length = 0;
+    for (let i = 0; i < CAPS.pickups; i++) w.pickups.push({ x: 300, y: 300, value: 1, age: 0, flying: i === 0, cache: false });
+    killEnemy(w, 0);
+    expect(w.pickups).toHaveLength(CAPS.pickups);
+    expect(w.pickups[0].value).toBe(1);
+    expect(w.pickups[1].value).toBeGreaterThan(1);
+    expect(w.scrap).toBe(0);
   });
   it('pauses for a level-up and applies the pick', () => {
     const w = createWorld(1);

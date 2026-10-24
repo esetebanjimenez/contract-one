@@ -352,13 +352,18 @@ function addScrap(w: World, v: number): void {
   }
 }
 
-function killEnemy(w: World, i: number): void {
+export function killEnemy(w: World, i: number): void {
   const e = w.enemies[i];
   w.kills++;
   const scrap = e.def.scrap * (e.elite ? ELITE.scrap : 1);
   w.scrapDropped += scrap;
   if (w.pickups.length < CAPS.pickups) w.pickups.push({ x: e.x, y: e.y, value: scrap, age: 0, flying: false, cache: e.elite });
-  else addScrap(w, scrap); // past the cap, drops fly straight to the player (design.md 15.3)
+  else {
+    // Past the cap, the value goes onto the oldest piece still on the ground, so the player has to
+    // go back for it (design.md 15.3). Pickups are kept in spawn order.
+    const oldest = w.pickups.find((k) => !k.flying) ?? w.pickups[0];
+    oldest.value += scrap;
+  }
   w.enemies[i] = w.enemies[w.enemies.length - 1];
   w.enemies.pop();
 }
