@@ -370,3 +370,10 @@ Applies to the Rifleman and the Elite Rifleman. Replaces the fixed fire interval
 - Levels stop during the arena (§14.9), so sheet DPS holds through the fight. Landing about 60–70% of shots while dodging gives roughly 85–100 s, inside the 60–120 s target, for any build.
 - Lever if fights miss: the 60 multiplier.
 - Level 50 at 10:00 for kite-smart: wait for Esteban's next run. If it holds for a human, the first lever is the Scrap needed per level.
+
+### 16.6 Current kit on the level-up screen (Esteban, 2026-10-24)
+- A "YOUR KIT" strip under the 2×2 card grid shows only the perks taken so far.
+- Each cell is the 16 px perk icon plus its current total in 8 px Silkscreen, written the same way as the effect line ("+75%", "+3", "-2", "+90"). Cells are 56 px wide, 6 per row, so 12 perks make 2 rows. Order is the §15.2 table order.
+- Exception to the "never an icon without its name" rule: allowed here only, because the names are on the cards just above it and on the results screen.
+- If a card offers a perk the player already has, that perk's cell gets a 1 px outline in the card's tier colour.
+- Art: the Artist mocks it for Esteban's okay. The joystick is off during level-up, so the strip may sit in the bottom third.
