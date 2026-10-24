@@ -145,9 +145,11 @@ Every 60 s: a 5 s burst, which may exceed the cap by up to 40 for its duration. 
 - **Encirclement:** from 3:00, every second wave (3:00, 5:00, 7:00, 9:00) is a **full ring** of Grunts spawned just off-screen all around the player. The player must break through it, not outrun it.
 
 ### 12.4 M2 tuning targets
-- **Reference bot = collector** (fights and collects, the way real players play): reaches 10:00 in **60–80%** of runs.
-- **Exploit check = kite / kite-smart** (pure fleeing): must reach 10:00 in **≤50%** of runs. Pure running away should not be a winning strategy.
-- Median level at 10:00 for the collector: 25–35.
+- Every bot auto-fires, so moving while shooting is the intended play, not an exploit.
+- **Reference bot = kite-smart** (skilled player): reaches 10:00 in **60–80%** of runs.
+- **Collector** (greedy player, detours for pickups): reaches 10:00 in **≥40%** of runs. Greed is risky but viable.
+- **Kite** (naive player): reaches 10:00 in **20–50%** of runs.
+- Median level at 10:00 for kite-smart: 25–35.
 - Idle still dies before 2:00.
 - Scrap collected ≥70% for a **collector** bot (kites in small loops, sweeps back through drops). Judge this value only with that bot; a wide-circling bot is not the reference.
 
