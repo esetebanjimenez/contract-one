@@ -1,4 +1,4 @@
-import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
+import { MAX_VIEW_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 import { LEVELS, scrapForLevel } from '../data/levels';
 import { PERK_RULES, type PerkId } from '../data/perks';
@@ -89,7 +89,8 @@ export interface World {
 }
 
 const HALF_W = NATIVE_WIDTH / 2;
-const HALF_H = NATIVE_HEIGHT / 2;
+// Spawns and "off-screen" use the tallest view, so nothing pops in on tall phones; the sim stays deterministic.
+const HALF_H = MAX_VIEW_HEIGHT / 2;
 
 export function createWorld(seed: number): World {
   const stacks = emptyStacks();
@@ -203,7 +204,7 @@ function farthest(w: World, ok: (e: Enemy, offscreen: boolean) => boolean): numb
     if (e.elite) continue;
     const dx = e.x - w.player.x;
     const dy = e.y - w.player.y;
-    const off = Math.abs(dx) > NATIVE_WIDTH / 2 || Math.abs(dy) > NATIVE_HEIGHT / 2;
+    const off = Math.abs(dx) > NATIVE_WIDTH / 2 || Math.abs(dy) > HALF_H;
     if (!ok(e, off)) continue;
     const d = dx * dx + dy * dy;
     if (d > fd) {

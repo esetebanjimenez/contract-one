@@ -88,6 +88,7 @@ export class Renderer {
   private lastY = 0;
   private fx = new Graphics();
   private stick = new Graphics();
+  private viewH = NATIVE_HEIGHT;
 
   constructor(private readonly app: Application) {}
 
@@ -103,7 +104,7 @@ export class Renderer {
       this.eliteTex[id] = outlined(this.tex[id], BONE_WHITE);
       this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
     }
-    this.ground = new TilingSprite({ texture: this.tex.ground_sand_00, width: NATIVE_WIDTH, height: NATIVE_HEIGHT });
+    this.ground = new TilingSprite({ texture: this.tex.ground_sand_00, width: NATIVE_WIDTH, height: this.viewH });
     const layers = [new Container(), new Container(), new Container(), new Container(), new Container()];
     this.pickups = new Pool(layers[0]);
     this.enemies = new Pool(layers[1]);
@@ -118,10 +119,16 @@ export class Renderer {
     this.app.stage.addChild(this.ground, this.world, this.stick);
   }
 
+  /** Called when the screen's aspect ratio changes the visible height. */
+  setViewHeight(h: number): void {
+    this.viewH = h;
+    if (this.ground) this.ground.height = h;
+  }
+
   draw(w: World, controls: Controls, dtSec: number): void {
     const p = w.player;
     const camX = Math.round(p.x - NATIVE_WIDTH / 2);
-    const camY = Math.round(p.y - NATIVE_HEIGHT / 2);
+    const camY = Math.round(p.y - this.viewH / 2);
     this.world.position.set(-camX, -camY);
     this.ground.tilePosition.set(-camX, -camY);
 
