@@ -13,6 +13,7 @@
     "format:check": "prettier --check src tools tests",
     "sim": "tsx tools/sim.ts",
     "smoke": "tsx tools/smoke.ts",
+    "sim:report": "tsx tools/sim-report.ts",
     "shots:build": "vite build --config vite.shots.config.ts",
     "shots": "tsx tools/shots/capture.ts",
     "bench": "tsx tools/bench.ts"

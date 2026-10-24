@@ -1,0 +1,34 @@
+name: Sim table
+# Posts a short bot sim as a PR comment when a PR touches gameplay data. Misses are warnings, never a failure.
+on:
+  pull_request:
+    # Gameplay data, plus the sim tooling itself.
+    paths: ['src/data/**', 'tools/bots.ts', 'tools/sim-report.ts', '.github/workflows/sim-table.yml']
+permissions:
+  contents: read
+  pull-requests: write
+concurrency:
+  group: sim-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  sim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run the sim
+        run: |
+          RUNS=8 pnpm -s sim:report > sim.md
+          printf '\n<sub>Commit %s</sub>\n' "${{ github.event.pull_request.head.sha }}" >> sim.md
+          cat sim.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Post or update the PR comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment ${{ github.event.pull_request.number }} --body-file sim.md --edit-last --create-if-none
