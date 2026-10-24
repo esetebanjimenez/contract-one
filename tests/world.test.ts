@@ -6,7 +6,19 @@ import { SPAWN } from '../src/data/spawns';
 import { PERKS } from '../src/data/perks';
 import { computeStats, drawOffer, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
-import { choosePerk, createWorld, isRingWave, killEnemy, rifleInterval, riflemenAlive, spawnRate, step } from '../src/sim/world';
+import { bossHp } from '../src/data/boss';
+import { checkPhase } from '../src/sim/boss';
+import {
+  choosePerk,
+  createWorld,
+  inPressureWave,
+  isRingWave,
+  killEnemy,
+  rifleInterval,
+  riflemenAlive,
+  spawnRate,
+  step,
+} from '../src/sim/world';
 import { runBot } from '../tools/bots';
 
 describe('perk tiers', () => {
@@ -161,5 +173,84 @@ describe('sim', () => {
   });
   it('makes every second wave from 3:00 a full ring', () => {
     expect([120, 180, 240, 300, 420, 540].map((t) => isRingWave(t + 1))).toEqual([false, true, false, true, true, true]);
+  });
+});
+
+describe('M3 contract', () => {
+  const godMode = (seed: number) => {
+    const w = createWorld(seed);
+    w.player.hp = w.stats.maxHp = 1e9;
+    return w;
+  };
+  const run = (w: ReturnType<typeof createWorld>, sec: number) => {
+    for (let i = 0; i < Math.round(sec / DT); i++) {
+      if (w.phase === 'levelup') {
+        w.phase = 'play';
+        w.pendingLevels = 0;
+      }
+      step(w, { mx: 0, my: 0 });
+    }
+  };
+  it('scales boss HP with level and clamps it', () => {
+    expect(bossHp(20)).toBe(2000);
+    expect(bossHp(30)).toBe(4000);
+    expect(bossHp(5)).toBe(2000);
+    expect(bossHp(60)).toBe(5000);
+  });
+  it('stops pressure waves from 9:30', () => {
+    expect(inPressureWave(541)).toBe(true);
+    expect(inPressureWave(571)).toBe(false);
+    expect(inPressureWave(661)).toBe(false);
+  });
+  it('spawns the Warlord after the 3 s warning, off-screen and undamageable until he is in view', () => {
+    const w = godMode(3);
+    w.tick = Math.round(602.9 / DT);
+    run(w, 0.05);
+    expect(w.boss).toBeNull();
+    run(w, 0.2);
+    expect(w.boss).not.toBeNull();
+    expect(w.boss!.damageable).toBe(false);
+    run(w, 10);
+    expect(w.boss!.damageable).toBe(true);
+    expect(w.bossArrivedAt).toBeGreaterThan(603);
+  });
+  it('staggers and clears enemy bullets on a phase change', () => {
+    const w = godMode(4);
+    w.tick = Math.round(603 / DT);
+    run(w, 10);
+    const b = w.boss!;
+    w.enemyBullets.push({ ...w.player, vx: 1, vy: 0 } as unknown as (typeof w.enemyBullets)[number]);
+    b.hp = b.maxHp * 0.6;
+    checkPhase(b, {
+      time: w.time,
+      level: w.level,
+      player: w.player,
+      enemyBullets: w.enemyBullets,
+      hitPlayer: () => {},
+      spawnAddsRing: () => {},
+    });
+    expect(b.phase).toBe(2);
+    expect(b.state).toBe('stagger');
+    expect(w.enemyBullets.length).toBe(0);
+  });
+  it('wins on the kill: other enemies die with no Scrap and the boss bar stops', () => {
+    const w = godMode(5);
+    w.tick = Math.round(603 / DT);
+    run(w, 10);
+    w.boss!.hp = 1;
+    w.boss!.x = w.player.x + 60;
+    w.boss!.y = w.player.y;
+    for (const e of w.enemies) e.x += 1000; // nothing closer than the boss to target
+    const pickups = w.pickups.length;
+    for (let i = 0; i < 600 && !w.won; i++) run(w, DT);
+    expect(w.won).toBe(true);
+    expect(w.enemies.length).toBe(0);
+    expect(w.enemyBullets.length).toBe(0);
+    expect(w.pickups.length).toBeLessThanOrEqual(pickups + 2);
+    expect(w.bossDamage).toBeGreaterThan(0);
+    const kills = w.kills;
+    run(w, 2);
+    expect(w.enemies.length).toBe(0);
+    expect(w.kills).toBe(kills);
   });
 });

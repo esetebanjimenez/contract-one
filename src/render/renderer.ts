@@ -1,4 +1,5 @@
 import { Application, Assets, Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
+import { BOSS } from '../data/boss';
 import { JOYSTICK } from '../data/controls';
 import { LEVELS } from '../data/levels';
 import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
@@ -23,6 +24,12 @@ const ART = [
   'bullet_player_00',
   'bullet_enemy_00',
   'scrap_00',
+  'warlord_t1_idle_00',
+  'warlord_t1_walkA_00',
+  'warlord_t1_walkB_00',
+  'warlord_t1_windup_00',
+  'warlord_t1_phase2_00',
+  'warlord_t1_phase3_00',
 ] as const;
 type ArtId = (typeof ART)[number];
 
@@ -47,6 +54,11 @@ const ENEMY_WALK: Record<string, { frames: ArtId[]; frameMs: number }> = {
   runner: { frames: ['runner_t1_walkA_00', 'runner_t1_walk_00', 'runner_t1_walkB_00', 'runner_t1_walk_00'], frameMs: 90 },
   heavy: { frames: ['heavy_t1_walkA_00', 'heavy_t1_walk_00', 'heavy_t1_walkB_00', 'heavy_t1_walk_00'], frameMs: 160 },
 };
+/** Warlord: 96x96 facing right, body centre at (27,44); A-idle-B-idle walk at 180 ms (Artist, M3). */
+const WARLORD_PIVOT = { x: 27 / 96, y: 44 / 96 };
+const WARLORD_WALK: ArtId[] = ['warlord_t1_walkA_00', 'warlord_t1_idle_00', 'warlord_t1_walkB_00', 'warlord_t1_idle_00'];
+const WARLORD_FRAME_MS = 180;
+const TELEGRAPH_COLOR = 0xff4a1c;
 const CACHE_SCALE = 1.5; // 12 px Scrap cache from the 8 px Scrap sprite (design.md 13.4)
 
 /** Grows a list of sprites on demand and hides the unused tail each frame. */
@@ -81,6 +93,7 @@ export class Renderer {
   private enemyBullets!: Pool;
   private bullets!: Pool;
   private merc!: Sprite;
+  private warlord!: Sprite;
   private shadow = new Graphics();
   private facing = 0;
   private walkMs = 0;
@@ -100,6 +113,9 @@ export class Renderer {
       this.tex[id] = t;
     }
     const enemyArt = new Set<ArtId>([...Object.values(ENEMY_ART), ...Object.values(ENEMY_WALK).flatMap((a) => a.frames)]);
+    for (const id of [...WARLORD_WALK, 'warlord_t1_windup_00', 'warlord_t1_phase2_00', 'warlord_t1_phase3_00'] as ArtId[]) {
+      this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
+    }
     for (const id of enemyArt) {
       this.eliteTex[id] = outlined(this.tex[id], BONE_WHITE);
       this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
@@ -114,9 +130,42 @@ export class Renderer {
     this.merc.anchor.set(MERC_ART.bodyCenter.x / MERC_ART.size.w, MERC_ART.bodyCenter.y / MERC_ART.size.h);
     // Soft shadow under the merc so the coyote helmet separates from the sand (Artist, M2).
     this.shadow.ellipse(0, 0, MERC_ART.shadow.rx, MERC_ART.shadow.ry).fill({ color: 0x000000, alpha: MERC_ART.shadow.alpha });
+    this.warlord = new Sprite(this.tex.warlord_t1_idle_00);
+    this.warlord.anchor.set(WARLORD_PIVOT.x, WARLORD_PIVOT.y);
+    this.warlord.visible = false;
+    layers[1].addChild(this.warlord);
     layers[2].addChild(this.shadow, this.merc);
     this.world.addChild(layers[0], layers[1], this.fx, layers[2], layers[3], layers[4]);
     this.app.stage.addChild(this.ground, this.world, this.stick);
+  }
+
+  private drawWarlord(w: World): void {
+    const b = w.boss;
+    const s = this.warlord;
+    s.visible = !!b && b.hp > 0;
+    if (!b || b.hp <= 0) return;
+    let art: ArtId;
+    if (b.state === 'telegraph') art = 'warlord_t1_windup_00';
+    else if (b.phase === 3) art = 'warlord_t1_phase3_00';
+    else if (b.phase === 2) art = 'warlord_t1_phase2_00';
+    else art = b.moving ? WARLORD_WALK[Math.floor((w.time * 1000) / WARLORD_FRAME_MS) % WARLORD_WALK.length] : 'warlord_t1_idle_00';
+    const stagger = b.state === 'stagger' && Math.floor(b.stateT * 10) % 2 === 0;
+    const tex = b.flash > 0 || stagger ? this.flashTex[art] : this.tex[art];
+    if (s.texture !== tex) s.texture = tex;
+    s.position.set(Math.round(b.x), Math.round(b.y));
+    s.rotation = b.facing;
+    if (b.state === 'telegraph') {
+      // Locked charge lane, red-orange, from his edge to the end of the charge.
+      const x0 = b.x + b.dirX * BOSS.radius;
+      const y0 = b.y + b.dirY * BOSS.radius;
+      const x1 = b.x + b.dirX * BOSS.charge.distance;
+      const y1 = b.y + b.dirY * BOSS.charge.distance;
+      const blink = Math.floor(b.stateT * 12) % 2 === 0;
+      this.fx
+        .moveTo(Math.round(x0), Math.round(y0))
+        .lineTo(Math.round(x1), Math.round(y1))
+        .stroke({ color: TELEGRAPH_COLOR, width: 3, alpha: blink ? 0.9 : 0.5 });
+    }
   }
 
   /** Called when the screen's aspect ratio changes the visible height. */
@@ -135,7 +184,8 @@ export class Renderer {
     w.pickups.forEach((k, i) => {
       const s = this.pickups.get(i, this.tex.scrap_00);
       s.position.set(Math.round(k.x), Math.round(k.y));
-      s.scale.set(k.cache ? CACHE_SCALE : 1);
+      // Merged pieces worth 5+ use the cache look, same sprite as Elite caches.
+      s.scale.set(k.cache || k.value >= 5 ? CACHE_SCALE : 1);
       s.alpha = k.age > LEVELS.pickupLifetimeSec - 3 ? (Math.floor(k.age * 8) % 2 ? 0.3 : 1) : 1;
     });
     this.pickups.hideFrom(w.pickups.length);
@@ -179,6 +229,7 @@ export class Renderer {
       }
     });
     this.enemies.hideFrom(w.enemies.length);
+    this.drawWarlord(w);
 
     w.enemyBullets.forEach((b, i) => this.enemyBullets.get(i, this.tex.bullet_enemy_00).position.set(Math.round(b.x), Math.round(b.y)));
     this.enemyBullets.hideFrom(w.enemyBullets.length);

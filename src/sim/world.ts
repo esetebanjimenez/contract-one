@@ -1,10 +1,13 @@
+import { BOSS } from '../data/boss';
 import { MAX_VIEW_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 import { LEVELS, scrapForLevel } from '../data/levels';
 import { PERK_RULES, perkDef, type PerkId } from '../data/perks';
 import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
+import { RUN } from '../data/run';
 import { SPAWN, SPAWN_BANDS } from '../data/spawns';
+import { checkPhase, createBoss, updateBoss, type Boss, type BossHost } from './boss';
 import { SpatialGrid } from './grid';
 import { computeStats, drawOffer, emptyStacks, type Offer, type PerkStacks, type PlayerStats } from './perks';
 import { createRng } from './rng';
@@ -87,6 +90,11 @@ export interface World {
   peakEnemies: number;
   peakBullets: number;
   grid: SpatialGrid;
+  boss: Boss | null;
+  bossDamage: number; // damage dealt to the Warlord
+  won: boolean; // the Warlord is dead; the UI plays the outro and shows results
+  wonAt: number; // run time of the kill
+  bossArrivedAt: number; // run time he became damageable (-1 before)
 }
 
 const HALF_W = NATIVE_WIDTH / 2;
@@ -123,6 +131,11 @@ export function createWorld(seed: number): World {
     peakEnemies: 0,
     peakBullets: 0,
     grid: new SpatialGrid(GRID_CELL),
+    boss: null,
+    bossDamage: 0,
+    won: false,
+    wonAt: 0,
+    bossArrivedAt: -1,
   };
 }
 
@@ -131,6 +144,8 @@ export function spawnRate(t: number): number {
 }
 
 export function inPressureWave(t: number): boolean {
+  // No waves or rings from 9:30, so the Warlord's arrival isn't buried (design.md 14.1).
+  if (t >= RUN.inboundAtSec) return false;
   return t >= SPAWN.pressureEverySec && t % SPAWN.pressureEverySec < SPAWN.pressureDurationSec;
 }
 
@@ -255,12 +270,15 @@ function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef):
 }
 
 function updateSpawns(w: World, input: Input): void {
+  if (w.won) return;
   const pressure = inPressureWave(w.time);
   // Anti-flee: pressure arrives ahead of the player's movement, random when standing still.
   if (Math.hypot(input.mx, input.my) > 0.01) w.pressureAngle = Math.atan2(input.my, input.mx);
   else if (w.tick % Math.round(SPAWN.pressureEverySec / DT) === 0) w.pressureAngle = w.rng() * Math.PI * 2;
   const ring = pressure && isRingWave(w.time);
-  w.spawnAcc += spawnRate(w.time) * (pressure ? SPAWN.pressureMultiplier : 1) * DT;
+  // From 10:00 the rate holds at 30% of the 10:00 rate (design.md 14.2).
+  const rate = w.time >= RUN.contractSec ? spawnRate(RUN.contractSec) * RUN.bossSpawnRateMul : spawnRate(w.time);
+  w.spawnAcc += rate * (pressure ? SPAWN.pressureMultiplier : 1) * DT;
   while (w.spawnAcc >= 1) {
     w.spawnAcc -= 1;
     const arc = (SPAWN.pressureArcDeg * Math.PI) / 180;
@@ -269,9 +287,18 @@ function updateSpawns(w: World, input: Input): void {
   }
 }
 
-function nearestEnemy(w: World, range: number): Enemy | undefined {
-  let best: Enemy | undefined;
+function nearestEnemy(w: World, range: number): { x: number; y: number } | undefined {
+  let best: { x: number; y: number } | undefined;
   let bd = range * range;
+  const b = w.boss;
+  if (b && b.damageable && b.hp > 0) {
+    // Measured to his edge, so the big body gets targeted when he is close.
+    const d = Math.max(0, Math.hypot(b.x - w.player.x, b.y - w.player.y) - BOSS.radius) ** 2;
+    if (d < bd) {
+      bd = d;
+      best = b;
+    }
+  }
   for (const e of w.enemies) {
     const d = (e.x - w.player.x) ** 2 + (e.y - w.player.y) ** 2;
     if (d < bd) {
@@ -334,7 +361,7 @@ function retarget(w: World, bl: Bullet, from: Enemy, speed: number): boolean {
 
 function damagePlayer(w: World, dmg: number): void {
   const p = w.player;
-  if (p.invuln > 0) return;
+  if (p.invuln > 0 || w.won) return;
   p.hp -= Math.max(1, dmg - w.stats.armor);
   p.invuln = PLAYER.invulnSec;
   if (p.hp <= 0) {
@@ -449,6 +476,8 @@ export function step(w: World, input: Input): void {
     if (d < e.def.radius + PLAYER.hitRadius) damagePlayer(w, contactDamage(e, w.time));
   }
 
+  updateWarlord(w);
+
   fire(w);
   if (p.hasTarget) p.facing = p.aim;
   else if (p.moving) p.facing = Math.atan2(input.my, input.mx);
@@ -483,6 +512,21 @@ export function step(w: World, input: Input): void {
         if (e.hp <= 0) dead.push(i);
         hitEnemy = e;
       });
+    }
+    const wb = w.boss;
+    if (!spent && !hitEnemy && wb && wb.damageable && wb.hp > 0 && !bl.hit.includes(-1)) {
+      const rr = BOSS.radius + PLAYER.bulletRadius;
+      if ((wb.x - bl.x) ** 2 + (wb.y - bl.y) ** 2 <= rr * rr) {
+        const crit = w.stats.crit > 0 && w.rng() < w.stats.crit;
+        const dmg = Math.min(wb.hp, bl.damage * (crit ? PERK_RULES.critMultiplier : 1));
+        wb.hp -= dmg;
+        w.bossDamage += dmg;
+        if (wb.state !== 'stagger') wb.flash = DT;
+        bl.hit.push(-1);
+        spent = true; // pierce and ricochet stop on the Warlord
+        if (wb.hp <= 0) winContract(w);
+        else checkPhase(wb, bossHost(w));
+      }
     }
     if (hitEnemy) {
       if (bl.pierceLeft > 0) bl.pierceLeft--;
@@ -540,7 +584,44 @@ export function step(w: World, input: Input): void {
   w.peakEnemies = Math.max(w.peakEnemies, w.enemies.length);
   w.peakBullets = Math.max(w.peakBullets, w.bullets.length + w.enemyBullets.length);
 
-  if (w.phase === 'play' && w.pendingLevels > 0) openLevelUp(w);
+  if (w.won && (w.enemies.length || w.enemyBullets.length)) clearField(w);
+  if (w.phase === 'play' && w.pendingLevels > 0 && !w.won) openLevelUp(w);
+}
+
+function bossHost(w: World): BossHost {
+  return {
+    time: w.time,
+    level: w.level,
+    player: w.player,
+    enemyBullets: w.enemyBullets,
+    hitPlayer: (dmg) => damagePlayer(w, dmg),
+    spawnAddsRing: (count) => {
+      for (let i = 0; i < count; i++) spawnOne(w, (i / count) * Math.PI * 2, true, ENEMIES.grunt);
+    },
+  };
+}
+
+function updateWarlord(w: World): void {
+  if (w.won) return;
+  if (!w.boss && w.time >= RUN.contractSec + RUN.warningSec) w.boss = createBoss(bossHost(w));
+  const b = w.boss;
+  if (!b || b.hp <= 0) return;
+  updateBoss(b, bossHost(w));
+  if (b.damageable && w.bossArrivedAt < 0) w.bossArrivedAt = w.time;
+}
+
+/** Kill: every other enemy dies with no Scrap and enemy bullets clear (design.md 14.4). */
+function winContract(w: World): void {
+  w.won = true;
+  w.wonAt = w.time;
+  w.kills += 1;
+}
+
+/** Runs at the end of the tick, outside the grid queries that still index the enemy list. */
+function clearField(w: World): void {
+  w.kills += w.enemies.length;
+  w.enemies.length = 0;
+  w.enemyBullets.length = 0;
 }
 
 function openLevelUp(w: World): void {

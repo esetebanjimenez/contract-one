@@ -1,6 +1,41 @@
 import { PERKS, type PerkId } from '../src/data/perks';
 import { DT } from '../src/data/sim';
+import { BOSS } from '../src/data/boss';
+import { RUN } from '../src/data/run';
 import { choosePerk, createWorld, step, type Input, type World } from '../src/sim/world';
+
+/**
+ * The Warlord counts as one big enemy: keep away from his body and step sideways off the line of a
+ * telegraphed or running charge. Returns a unit-ish force; callers weight it like their other threats.
+ */
+function bossAvoid(w: World, range: number): { x: number; y: number; threat: number } {
+  const b = w.boss;
+  if (!b || b.hp <= 0 || w.won) return { x: 0, y: 0, threat: 0 };
+  const p = w.player;
+  const dx = p.x - b.x;
+  const dy = p.y - b.y;
+  const d = Math.hypot(dx, dy) || 1;
+  let x = 0;
+  let y = 0;
+  let threat = 0;
+  if (d < range + BOSS.radius) {
+    const k = (range + BOSS.radius - d) / range;
+    x += (dx / d) * k;
+    y += (dy / d) * k;
+    threat += k;
+  }
+  if (b.state === 'telegraph' || b.state === 'charge') {
+    const along = dx * b.dirX + dy * b.dirY;
+    const side = dx * -b.dirY + dy * b.dirX;
+    if (along > -BOSS.radius && along < BOSS.charge.distance + BOSS.radius && Math.abs(side) < BOSS.radius + 20) {
+      const s = Math.sign(side) || 1;
+      x += -b.dirY * s * 2;
+      y += b.dirX * s * 2;
+      threat += 2;
+    }
+  }
+  return { x, y, threat };
+}
 
 export type Bot = 'idle' | 'kite' | 'kite-smart' | 'collector';
 
@@ -29,6 +64,9 @@ function kiteInput(w: World): Input {
     fx += ((-b.vy / v) * s * 3) / Math.sqrt(d2);
     fy += ((b.vx / v) * s * 3) / Math.sqrt(d2);
   }
+  const ba = bossAvoid(w, 130);
+  fx += ba.x * 0.05;
+  fy += ba.y * 0.05;
   // Orbit around the origin so the bot does not drift off forever.
   fx += (-p.y * 0.00002 - p.x * 0.00001) * 1;
   fy += (p.x * 0.00002 - p.y * 0.00001) * 1;
@@ -67,6 +105,10 @@ function collectorInput(w: World): Input {
     ay += ((b.vx / v) * s * 40) / Math.sqrt(d2);
     threat += 1;
   }
+  const ba = bossAvoid(w, 100);
+  ax += ba.x;
+  ay += ba.y;
+  threat += ba.threat;
   let sx = 0;
   let sy = 0;
   let best = 160 * 160;
@@ -114,6 +156,9 @@ export interface RunResult {
   bot: Bot;
   survivedSec: number;
   reachedBoss: boolean;
+  bossKilled: boolean;
+  fightSec: number; // arrival to kill, or to death/timeout
+  enraged: boolean;
   level: number;
   kills: number;
   scrapPct: number;
@@ -123,11 +168,11 @@ export interface RunResult {
   stepMsAvg: number;
 }
 
-export function runBot(seed: number, bot: Bot, maxSec = 600): RunResult {
+export function runBot(seed: number, bot: Bot, maxSec = RUN.enrageSec + 120): RunResult {
   const w = createWorld(seed);
   const maxTicks = Math.round(maxSec / DT);
   const t0 = performance.now();
-  while (w.tick < maxTicks && w.phase !== 'dead') {
+  while (w.tick < maxTicks && w.phase !== 'dead' && !w.won) {
     if (w.phase === 'levelup') {
       pick(w, bot);
       continue;
@@ -139,7 +184,10 @@ export function runBot(seed: number, bot: Bot, maxSec = 600): RunResult {
     seed,
     bot,
     survivedSec: w.time,
-    reachedBoss: w.phase !== 'dead',
+    reachedBoss: w.time >= RUN.contractSec,
+    bossKilled: w.won,
+    fightSec: w.bossArrivedAt < 0 ? 0 : (w.won ? w.wonAt : w.time) - w.bossArrivedAt,
+    enraged: w.time >= RUN.enrageSec,
     level: w.level,
     kills: w.kills,
     scrapPct: (100 * w.scrapCollected) / Math.max(1, w.scrapDropped),

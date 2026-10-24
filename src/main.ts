@@ -1,5 +1,6 @@
 import { Application } from 'pixi.js';
 import { MAX_VIEW_HEIGHT, NATIVE_HEIGHT, NATIVE_WIDTH } from './data/display';
+import { RUN } from './data/run';
 import { DT } from './data/sim';
 import { Renderer } from './render/renderer';
 import { choosePerk, createWorld, step } from './sim/world';
@@ -54,13 +55,21 @@ async function boot(): Promise<void> {
     (id) => choosePerk(world, id),
     () => {
       world = createWorld(Date.now() >>> 0);
+      outro = 0;
       controls.reset();
     },
   );
 
   let acc = 0;
+  let outro = 0; // real seconds since the win or the death
   app.ticker.add((t) => {
-    acc = Math.min(acc + t.deltaMS / 1000, 0.25);
+    const dt = t.deltaMS / 1000;
+    const ended = world.won || world.phase === 'dead';
+    if (ended) outro += dt;
+    // On the kill: 1 s of slow-mo at 0.3x, then normal speed while the banner shows (design.md 14.4).
+    const timeScale = world.won && outro < RUN.winSlowMoSec ? RUN.winSlowMoScale : 1;
+    acc = Math.min(acc + dt * timeScale, 0.25);
+    if (world.won && Hud.resultsDue(world, outro)) acc = 0;
     while (acc >= DT) {
       acc -= DT;
       if (world.phase !== 'play') {
@@ -69,9 +78,9 @@ async function boot(): Promise<void> {
       }
       step(world, controls.read());
     }
-    if (world.phase !== 'play') controls.reset();
-    renderer.draw(world, controls, t.deltaMS / 1000);
-    hud.update(world);
+    if (world.phase !== 'play' || Hud.resultsDue(world, outro)) controls.reset();
+    renderer.draw(world, controls, dt * timeScale);
+    hud.update(world, outro);
   });
 }
 

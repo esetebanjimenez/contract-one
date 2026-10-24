@@ -1,6 +1,10 @@
+import { BOSS } from '../data/boss';
 import { scrapForLevel } from '../data/levels';
 import { TIERS, effectText, perkDef, type PerkId } from '../data/perks';
+import { RUN } from '../data/run';
 import type { World } from '../sim/world';
+
+const mmss = (sec: number): string => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
 const ICON_BASE = `${import.meta.env.BASE_URL}art/perks/`;
 
@@ -20,18 +24,64 @@ export class Hud {
   ) {
     root.insertAdjacentHTML(
       'beforeend',
-      `<div class="hud"><div class="bars"><div class="hpbar"><div class="fill hp"></div></div><div class="xpbar"><div class="fill xp"></div></div></div><div class="label"></div></div><div class="modal" hidden></div>`,
+      `<div class="hud"><div class="bars"><div class="hpbar"><div class="fill hp"></div></div><div class="xpbar"><div class="fill xp"></div></div></div><div class="label"></div>` +
+        `<div class="timer"></div><div class="bossbar" hidden><div class="fill boss"></div><div class="bname">${BOSS.name}</div></div></div>` +
+        `<div class="banner" hidden></div><div class="modal" hidden></div>`,
     );
     this.bar = root.querySelector('.hud')!;
     this.hp = this.bar.querySelector('.fill.hp')!;
     this.xp = this.bar.querySelector('.fill.xp')!;
     this.label = this.bar.querySelector('.label')!;
     this.modal = root.querySelector('.modal')!;
+    this.timer = this.bar.querySelector('.timer')!;
+    this.bossBar = this.bar.querySelector('.bossbar')!;
+    this.bossFill = this.bar.querySelector('.fill.boss')!;
+    this.banner = root.querySelector('.banner')!;
+  }
+
+  private timer: HTMLDivElement;
+  private bossBar: HTMLDivElement;
+  private bossFill: HTMLDivElement;
+  private banner: HTMLDivElement;
+
+  private setBanner(text: string, cls = ''): void {
+    const show = text !== '';
+    if (this.banner.hidden === !show && this.banner.textContent === text) return;
+    this.banner.hidden = !show;
+    this.banner.textContent = text;
+    this.banner.className = `banner ${cls}`;
+  }
+
+  /** Contract timer before 10:00, then the Warlord's HP bar; banners for inbound, warning, win and KIA. */
+  private updateContract(w: World, outroSec: number): void {
+    const left = RUN.contractSec - w.time;
+    const boss = w.boss;
+    this.timer.hidden = left <= 0;
+    if (left > 0) {
+      this.timer.textContent = `TARGET IN ${mmss(Math.ceil(left))}`;
+      this.timer.classList.toggle('red', left <= RUN.timerRedLastSec);
+    }
+    this.bossBar.hidden = left > 0 || w.won;
+    if (left <= 0) this.bossFill.style.width = boss ? `${(100 * Math.max(0, boss.hp)) / boss.maxHp}%` : '100%';
+    if (w.won) this.setBanner(outroSec < RUN.winResultsDelaySec ? 'CONTRACT COMPLETE' : '', 'win');
+    else if (w.phase === 'dead')
+      this.setBanner(outroSec >= RUN.loseFreezeSec && outroSec < RUN.loseFreezeSec + RUN.loseBannerSec ? 'KIA' : '', 'kia');
+    else if (w.time >= RUN.inboundAtSec && w.time < RUN.inboundAtSec + RUN.inboundBannerSec) this.setBanner('TARGET INBOUND');
+    else if (w.time >= RUN.contractSec && w.time < RUN.contractSec + RUN.warningSec) this.setBanner('WARNING', 'warn');
+    else this.setBanner('');
+  }
+
+  /** True once the outro has played and the results screen should show. */
+  static resultsDue(w: World, outroSec: number): boolean {
+    if (w.won) return outroSec >= RUN.winResultsDelaySec;
+    if (w.phase === 'dead') return outroSec >= RUN.loseFreezeSec + RUN.loseBannerSec;
+    return false;
   }
 
   private lastHp = 0;
 
-  update(w: World): void {
+  update(w: World, outroSec = 0): void {
+    this.updateContract(w, outroSec);
     // Short white tick on the HP bar whenever HP goes up (regen, Plate Carrier).
     if (w.player.hp > this.lastHp && this.lastHp > 0) {
       this.hp.classList.remove('tick');
@@ -42,11 +92,12 @@ export class Hud {
     this.hp.style.width = `${(100 * w.player.hp) / w.stats.maxHp}%`;
     this.xp.style.width = `${(100 * w.scrap) / scrapForLevel(w.level)}%`;
     const t = Math.floor(w.time);
-    this.label.textContent = `LV ${w.level}   ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}   KILLS ${w.kills}`;
-    const key = w.phase + w.offer.map((o) => o.id + o.tier).join();
+    this.label.textContent = `LV ${w.level}   ${mmss(t)}   KILLS ${w.kills}`;
+    const results = Hud.resultsDue(w, outroSec);
+    const key = (results ? 'results' : w.phase === 'dead' ? 'play' : w.phase) + w.offer.map((o) => o.id + o.tier).join();
     if (key === this.shownPhase) return;
     this.shownPhase = key;
-    if (w.phase === 'play') {
+    if (!results && w.phase !== 'levelup') {
       this.modal.hidden = true;
       return;
     }
@@ -74,9 +125,33 @@ export class Hud {
         .querySelectorAll<HTMLButtonElement>('.card')
         .forEach((b) => b.addEventListener('click', () => this.onPick(b.dataset.id as PerkId)));
     } else {
-      const t2 = Math.floor(w.time);
-      this.modal.innerHTML = `<div class="title">KIA</div><div class="stats">Survived ${Math.floor(t2 / 60)}:${String(t2 % 60).padStart(2, '0')}<br>Level ${w.level}<br>Kills ${w.kills}</div><button class="card restart">REDEPLOY</button>`;
-      this.modal.querySelector('.restart')!.addEventListener('click', () => this.onRestart());
+      this.showResults(w);
     }
+  }
+
+  private showResults(w: World): void {
+    const boss = w.boss;
+    const hpLeft =
+      !w.won && boss && boss.hp > 0 ? `<div class="hpleft">TARGET HP LEFT: ${Math.ceil((100 * boss.hp) / boss.maxHp)}%</div>` : '';
+    const stat = (k: string, v: string | number): string => `<div class="row"><span>${k}</span><span>${v}</span></div>`;
+    const perks = (Object.keys(w.stacks) as PerkId[])
+      .filter((id) => w.stacks[id] > 0)
+      .map((id) => {
+        const d = perkDef(id);
+        // Icon always next to its name (design.md 15.2).
+        return `<div class="perk"><img src="${ICON_BASE}perk_${id}_00.png" alt=""><span class="pn">${d.name}</span><span class="pv">${effectText(d, w.stacks[id])}</span></div>`;
+      })
+      .join('');
+    this.modal.innerHTML =
+      `<div class="results ${w.won ? 'won' : 'failed'}">` +
+      `<div class="title">${w.won ? 'CONTRACT COMPLETE' : 'CONTRACT FAILED'}</div>${hpLeft}` +
+      `<div class="stats">${stat('TIME', mmss(w.won ? w.wonAt : w.time))}${stat('LEVEL', w.level)}${stat('KILLS', w.kills)}` +
+      `${stat('SCRAP', w.scrapCollected)}${stat('BOSS DAMAGE', Math.round(w.bossDamage))}</div>` +
+      `<div class="perks">${perks || '<div class="none">NO PERKS</div>'}</div>` +
+      `<button class="card restart newc" disabled>NEW CONTRACT</button></div>`;
+    const btn = this.modal.querySelector<HTMLButtonElement>('.newc')!;
+    // Locked briefly so a joystick release can't tap it by accident (design.md 14.6).
+    setTimeout(() => (btn.disabled = false), RUN.resultsInputLockSec * 1000);
+    btn.addEventListener('click', () => this.onRestart());
   }
 }
