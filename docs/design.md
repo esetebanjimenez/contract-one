@@ -373,7 +373,7 @@ Applies to the Rifleman and the Elite Rifleman. Replaces the fixed fire interval
 
 ### 16.6 Current kit on the level-up screen (Esteban, 2026-10-24)
 - A "YOUR KIT" strip under the 2×2 card grid shows only the perks taken so far.
-- Each cell is the 16 px perk icon plus its current total in 8 px Silkscreen, written the same way as the effect line ("+75%", "+3", "-2", "+90"). Cells are 56 px wide, 6 per row, so 12 perks make 2 rows. Order is the §15.2 table order.
+- Each cell is the 16 px perk icon plus its current total in 8 px Silkscreen, written the same way as the effect line ("+75%", "+3", "-2", "+90"). Cells are 36 px wide, 6 per row, in a 220 px panel aligned with the card grid (Artist's mock `levelup_kit_hl_native.png`, okayed by Esteban 2026-10-24). Order is the §15.2 table order.
 - Exception to the "never an icon without its name" rule: allowed here only, because the names are on the cards just above it and on the results screen.
 - If a card offers a perk the player already has, that perk's cell gets a 1 px outline in the card's tier colour.
 - Art: the Artist mocks it for Esteban's okay. The joystick is off during level-up, so the strip may sit in the bottom third.
