@@ -40,6 +40,9 @@ There is no meta-progression in v1. Death shows run stats and a Restart button.
 | Pierce | 0 |
 | Crit | 0% (x2 damage) |
 | Pickup magnet | 40 px |
+| Hitbox | 7 px radius circle at the body centre (not the sprite centre) |
+
+Facing: the whole sprite rotates (0° = facing right). It faces the auto-aim target when one is in range, otherwise the move direction, and turns within ~0.1 s.
 
 ## 5. Enemies
 All enemies spawn 24–48 px outside the visible area, from a random edge direction, and move toward the player.
@@ -63,7 +66,7 @@ HP scaling: all enemy HP x(1 + 0.08 × minutes elapsed).
 - Soft caps: 250 enemies and 400 bullets (Programmer's numbers). Past the cap, spawns pause and the farthest enemies are recycled.
 
 ## 7. Scrap and levels
-- Kills drop Scrap pickups (a cyan-green glint). Pickups despawn after 30 s.
+- Kills drop Scrap pickups (pure cyan; no other cyan on screen). Pickups despawn after 30 s.
 - Scrap needed for the next level: `5 + 6 × (level − 1)`. That means 5, 11, 17 and so on, and a typical run reaches level ~25–30 by 10:00.
 - A level-up pauses the game and shows **3 perk cards**. Tapping one picks it. There is no reroll in v1.
 - Overflow Scrap carries into the next level.
