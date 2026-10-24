@@ -305,6 +305,7 @@
 .results.failed .title {
   color: #ff4a1c;
 }
+.results .targets,
 .results .hpleft {
   font-size: calc(8px * var(--s));
   color: #e8e2d4;

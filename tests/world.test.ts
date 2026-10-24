@@ -6,7 +6,7 @@ import { SPAWN } from '../src/data/spawns';
 import { DRONE, GRENADE, PERKS, addStack } from '../src/data/perks';
 import { computeStats, drawOffer, softMove, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
-import { bossHp } from '../src/data/boss';
+import { BOSSES, LIEUTENANT_DOWN, bossHp } from '../src/data/boss';
 import { PLAYER } from '../src/data/player';
 import { checkPhase } from '../src/sim/boss';
 import {
@@ -22,8 +22,22 @@ import {
   spawnRate,
   step,
   volleyTargets,
+  type World,
 } from '../src/sim/world';
 import { runBot } from '../tools/bots';
+
+/** Jump the run clock and the contract clock together (they only differ once a fight has been fought). */
+function setClock(w: World, tick: number): void {
+  w.tick = tick;
+  w.contractTicks = tick;
+}
+
+/** One tick before target `i`'s fight: the next step locks the arena. */
+function toFight(w: World, i: number): void {
+  setClock(w, Math.round(BOSSES[i].atSec / DT) - 1);
+  w.target = i;
+  w.targetsDown = i;
+}
 
 describe('perk tiers', () => {
   it('scales values by tier and turns Rare whole-number rolls into Common', () => {
@@ -150,7 +164,7 @@ describe('sim', () => {
   it('Riflemen stop at their stop distance and shoot', () => {
     const w = createWorld(2);
     w.player.hp = w.stats.maxHp = 1e9;
-    w.tick = -1e9; // keep the spawner quiet
+    setClock(w, -1e9); // keep the spawner quiet
     w.enemies.push({
       id: 1,
       def: ENEMIES.rifleman,
@@ -172,7 +186,7 @@ describe('sim', () => {
   it('never exceeds the enemy cap plus the pressure-wave overflow', () => {
     const w = createWorld(5);
     w.player.hp = w.stats.maxHp = 1e9;
-    w.tick = 900 * 60;
+    setClock(w, 900 * 60);
     for (let i = 0; i < 600; i++) step(w, { mx: 0, my: 0 });
     expect(w.peakEnemies).toBeLessThanOrEqual(CAPS.enemies + SPAWN.pressureOverCap);
   });
@@ -198,7 +212,7 @@ describe('sim', () => {
   it('Riflemen stop 0.6 s with a glint before firing, and never fire while off-screen', () => {
     const w = createWorld(2);
     w.player.hp = w.stats.maxHp = 1e9;
-    w.tick = -1e9;
+    setClock(w, -1e9);
     w.enemies.push({
       id: 1,
       def: ENEMIES.rifleman,
@@ -223,7 +237,7 @@ describe('sim', () => {
     expect(e.aiming).toBe(false);
     // Off-screen: never stops to aim.
     const far = createWorld(2);
-    far.tick = -1e9;
+    setClock(far, -1e9);
     far.enemies.push({
       id: 1,
       def: ENEMIES.rifleman,
@@ -244,14 +258,25 @@ describe('sim', () => {
   it('keeps at most 30 Riflemen and replaces Grunts at the cap late in the run', () => {
     const w = createWorld(9);
     w.player.hp = w.stats.maxHp = 1e9;
-    w.tick = 240 * 60;
+    setClock(w, 240 * 60);
     for (let i = 0; i < 1800; i++) step(w, { mx: 0, my: 0 });
     expect(riflemenAlive(w)).toBeLessThanOrEqual(SPAWN.maxRiflemen);
     expect(w.enemies.some((e) => e.elite)).toBe(true);
     expect(w.enemies.some((e) => e.def.id === 'heavy')).toBe(true);
   });
-  it('makes every second wave from 2:00 a full ring (2:00 and 4:00)', () => {
-    expect([60, 120, 180, 240].map((t) => isRingWave(t + 1))).toEqual([false, true, false, true]);
+  it('makes the waves at 2:00, 4:00, 7:00, 8:00, 11:00 and 12:00 full rings', () => {
+    expect([60, 120, 180, 240, 360, 420, 480, 600, 660, 720].map((t) => isRingWave(t + 1))).toEqual([
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+    ]);
   });
 });
 
@@ -275,15 +300,21 @@ describe('M3 contract', () => {
     expect(bossHp({ damage: 20, fireRate: 10, projectiles: 4, crit: 0.5 }, 2)).toBe(40 * 20 * 10 * 2.5 * 1.5);
     expect(bossHp({ damage: 1000, fireRate: 10, projectiles: 10, crit: 1 }, 2)).toBe(40 * 1000 * 10 * 5.5 * 2);
   });
-  it('stops pressure waves from 4:30', () => {
+  it('stops pressure waves 0:30 before each fight and skips the fight minute', () => {
     expect(inPressureWave(241)).toBe(true);
     expect(inPressureWave(271)).toBe(false);
     expect(inPressureWave(301)).toBe(false);
+    expect(inPressureWave(361)).toBe(true);
+    expect(inPressureWave(511)).toBe(false);
+    expect(inPressureWave(541)).toBe(false);
+    expect(inPressureWave(721)).toBe(true);
+    expect(inPressureWave(751)).toBe(false);
   });
-  it('spawns the Warlord after the 3 s warning, off-screen and undamageable until he is in view', () => {
+  it('spawns the target after the 3 s warning, off-screen and undamageable until he is in view', () => {
     const w = godMode(3);
-    w.tick = Math.round(302.9 / DT);
-    run(w, 0.05);
+    toFight(w, 0);
+    run(w, 2.9);
+    expect(w.arena).not.toBeNull();
     expect(w.boss).toBeNull();
     run(w, 0.2);
     expect(w.boss).not.toBeNull();
@@ -294,7 +325,7 @@ describe('M3 contract', () => {
   });
   it('staggers and clears enemy bullets on a phase change', () => {
     const w = godMode(4);
-    w.tick = Math.round(603 / DT);
+    toFight(w, 0);
     run(w, 10);
     const b = w.boss!;
     w.enemyBullets.push({ ...w.player, vx: 1, vy: 0 } as unknown as (typeof w.enemyBullets)[number]);
@@ -313,9 +344,9 @@ describe('M3 contract', () => {
     expect(b.state).toBe('stagger');
     expect(w.enemyBullets.length).toBe(0);
   });
-  it('wins on the kill: other enemies die with no Scrap and the boss bar stops', () => {
+  it('wins on the Warlord kill: other enemies die with no Scrap and the boss bar stops', () => {
     const w = godMode(5);
-    w.tick = Math.round(603 / DT);
+    toFight(w, 2);
     run(w, 10);
     w.boss!.hp = 1;
     w.boss!.x = w.player.x + 60;
@@ -328,6 +359,7 @@ describe('M3 contract', () => {
     expect(w.enemyBullets.length).toBe(0);
     expect(w.pickups.length).toBeLessThanOrEqual(pickups + 2);
     expect(w.bossDamage).toBeGreaterThan(0);
+    expect(w.targetsDown).toBe(3);
     const kills = w.kills;
     run(w, 2);
     expect(w.enemies.length).toBe(0);
@@ -335,7 +367,7 @@ describe('M3 contract', () => {
   });
   it('locks the arena at 5:00: enemies flee and despawn, spawns stop, the player is walled in', () => {
     const w = godMode(6);
-    w.tick = Math.round(299.9 / DT);
+    setClock(w, Math.round(299.9 / DT));
     run(w, 0.05);
     expect(w.arena).toBeNull();
     run(w, 0.1);
@@ -503,5 +535,74 @@ describe('16.7 attack perks', () => {
     place(w, 0, 60, 1e6);
     step(w, { mx: 0, my: 0 });
     expect(w.nextVolleyAt).toBeCloseTo(w.time + GRENADE.cooldownSec * 0.5, 6);
+  });
+});
+
+describe('three targets (design.md 16.11)', () => {
+  const godMode = (seed: number) => {
+    const w = createWorld(seed);
+    w.player.hp = w.stats.maxHp = 1e9;
+    return w;
+  };
+  const run = (w: World, sec: number) => {
+    for (let i = 0; i < Math.round(sec / DT); i++) {
+      if (w.phase === 'levelup') {
+        w.phase = 'play';
+        w.pendingLevels = 0;
+      }
+      step(w, { mx: 0, my: 0 });
+    }
+  };
+  const killTarget = (w: World) => {
+    w.boss!.hp = 1;
+    w.boss!.x = w.player.x + 60;
+    w.boss!.y = w.player.y;
+    for (const e of w.enemies) e.x += 1000;
+    const down = w.targetsDown;
+    for (let i = 0; i < 600 && w.targetsDown === down; i++) run(w, DT);
+  };
+  it('doubles the spawn rate to 4/s at 5:00, then every 5:00, capped at 10/s', () => {
+    expect(spawnRate(300)).toBeCloseTo(4, 5);
+    expect(spawnRate(540)).toBeCloseTo(4 * 2 ** (240 / 300), 5);
+    expect(spawnRate(600)).toBeCloseTo(8, 5);
+    expect(spawnRate(780)).toBe(10);
+  });
+  it('pauses the contract clock from the warning until the kill', () => {
+    const w = godMode(7);
+    toFight(w, 0);
+    run(w, 20);
+    expect(w.time).toBeGreaterThan(319);
+    expect(w.contractTime).toBeCloseTo(BOSSES[0].atSec, 5);
+  });
+  it('a lieutenant kill drops one level of Scrap, releases the arena after the tape fade and moves to the next target', () => {
+    const w = godMode(8);
+    toFight(w, 0);
+    run(w, 10);
+    const scrap = scrapForLevel(w.level + w.pendingLevels);
+    const pickups = w.pickups.length;
+    killTarget(w);
+    expect(w.won).toBe(false);
+    expect(w.targetsDown).toBe(1);
+    expect(w.downAt).toBeGreaterThan(0);
+    const pile = w.pickups.slice(pickups).reduce((s, p) => s + p.value, 0);
+    expect(pile).toBeGreaterThanOrEqual(scrap);
+    expect(w.arena).not.toBeNull();
+    run(w, LIEUTENANT_DOWN.tapeFadeSec + 0.05);
+    expect(w.arena).toBeNull();
+    expect(w.boss).toBeNull();
+    expect(w.target).toBe(1);
+    expect(w.fights[0].killedAt).toBeGreaterThan(w.fights[0].arrivedAt);
+    const resumed = w.contractTime;
+    run(w, 1);
+    expect(w.contractTime).toBeCloseTo(resumed + 1, 5);
+  });
+  it('sends LT. VIPER at contract 9:00 with 50x sheet DPS', () => {
+    const w = godMode(9);
+    toFight(w, 1);
+    run(w, 10);
+    expect(w.boss).not.toBeNull();
+    expect(w.boss!.target).toBe(1);
+    expect(w.boss!.maxHp).toBe(bossHp(w.stats, w.stats.crit, BOSSES[1].hpDpsSec));
+    expect(w.fights.at(-1)!.target).toBe(1);
   });
 });

@@ -91,7 +91,9 @@ function build(scene: Scene): World {
       x.bossArrivedAt >= 0 && x.time >= x.bossArrivedAt + 3 && !!x.boss && Math.hypot(x.boss.x - x.player.x, x.boss.y - x.player.y) < 160,
   );
   if (scene === 'results') {
-    // Kill him: the game plays the outro and shows the results screen.
+    // Call it the Warlord, all three targets down: the game plays the outro and shows the results screen.
+    w.targetsDown = 3;
+    w.fights[w.fights.length - 1].killedAt = w.time;
     w.bossDamage += w.boss!.hp;
     w.boss!.hp = 0;
     w.won = true;
