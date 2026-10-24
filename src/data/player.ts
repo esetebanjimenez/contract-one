@@ -22,6 +22,8 @@ export const MERC_ART = {
   size: { w: 32, h: 32 },
   bodyCenter: { x: 7, y: 16 }, // rotation pivot and hitbox centre
   turnRadPerSec: Math.PI / 0.1, // a half turn in about 0.1 s
+  walkFrameMs: 120, // walk cycle A, idle, B, idle while moving (Artist, M2)
+  shadow: { rx: 10, ry: 5, offsetY: 4, alpha: 0.3 },
 };
 
 export const RIFLEMAN_ART = { size: { w: 24, h: 24 }, bodyCenter: { x: 12, y: 12 } };

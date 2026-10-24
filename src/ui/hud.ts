@@ -2,6 +2,8 @@ import { scrapForLevel } from '../data/levels';
 import { PERKS, type PerkId } from '../data/perks';
 import type { World } from '../sim/world';
 
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+
 /** DOM overlay: top bar, perk cards and the death screen. Sized in native px via the --s CSS scale. */
 export class Hud {
   private bar: HTMLDivElement;
@@ -46,7 +48,7 @@ export class Hud {
         w.offer
           .map((id) => {
             const d = PERKS.find((p) => p.id === id)!;
-            return `<button class="card" data-id="${id}"><b>${d.name}</b><span>${d.text}</span><i>${w.stacks[id]}/${d.max}</i></button>`;
+            return `<button class="card" data-id="${id}"><b>${d.name} ${ROMAN[w.stacks[id]]}</b><span>${d.text}</span><i>${w.stacks[id]}/${d.max}</i></button>`;
           })
           .join('');
       this.modal

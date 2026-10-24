@@ -19,6 +19,8 @@ for (let i = 0; i < CAPS.enemies; i++) {
     maxHp: 1e9,
     fireTimer: (i % 20) / 10,
     facing: 1,
+    elite: false,
+    flash: 0,
   });
 }
 const steps = 1200;
@@ -26,7 +28,17 @@ const t0 = performance.now();
 for (let s = 0; s < steps; s++) {
   while (w.bullets.length < CAPS.playerBullets) {
     const a = Math.random() * Math.PI * 2;
-    w.bullets.push({ x: 0, y: 0, vx: Math.cos(a) * 360, vy: Math.sin(a) * 360, rangeLeft: 260, damage: 0, pierceLeft: 99, hit: [] });
+    w.bullets.push({
+      x: 0,
+      y: 0,
+      vx: Math.cos(a) * 360,
+      vy: Math.sin(a) * 360,
+      rangeLeft: 260,
+      damage: 0,
+      pierceLeft: 99,
+      bounces: 0,
+      hit: [],
+    });
   }
   step(w, { mx: Math.cos(s / 60), my: Math.sin(s / 60) });
 }
