@@ -449,10 +449,10 @@ Looks only. Damage, crit rolls and the sim are unchanged.
 
 **Look:**
 - Shown as a whole number, rounded (never 0; minimum 1). Over 9,999 shows as "10.2k".
-- Spawns above the enemy's head with a small random sideways offset (±6px), rises about 12px over 0.6s and fades out over the last third.
-- Font: Silkscreen pixel font from a pre-built font sheet, with a dark `#14110F` outline.
+- Spawns above the enemy's head with a small random sideways offset (±6px), pops in at 1.2× for 60ms, then rises 12px over 0.5s, fading out over the last third.
+- Font: Silkscreen pixel font from a pre-built font sheet, with a 1px `#14110F` outline.
 - **Normal:** white, 8px.
-- **Crit:** gold `#FFD678`, 16px, a short pop in, and a "!" after the number. (The Artist's pick, not red-orange, which means enemy danger, or blue, which means a rare card.)
+- **Crit:** gold `#FFC21C`, 16px (double size keeps the pixels crisp), with a "!" after the number. Approved by Esteban. It stays clear of red-orange (enemy danger), blue (rare card) and the pale-yellow `#FFE98A` bullets.
 - Drawn above enemies and effects, below the HUD.
 
 **Clutter rules:**
