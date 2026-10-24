@@ -76,12 +76,12 @@ Rules: perks are drawn without duplicates per offer, each stacks up to the liste
 
 | Id | Perk | Per stack | Max |
 |---|---|---|---|
-| `dmg` | Hollow Point | +15% damage | 5 |
+| `dmg` | Hollow Points | +15% damage | 5 |
 | `rof` | Trigger Job | +12% fire rate | 5 |
 | `pierce` | AP Rounds | +1 pierce | 3 |
 | `multishot` | Extra Barrel | +1 projectile (10° spread) | 3 |
 | `move` | Light Kit | +8% move speed | 4 |
-| `maxhp` | Plate Rig | +20 max HP, heals 20 | 5 |
+| `maxhp` | Plate Carrier | +20 max HP, heals 20 | 5 |
 | `magnet` | Scrap Magnet | +30% pickup radius | 3 |
 | `crit` | Marksman | +5% crit chance | 5 |
 | `bspeed` | Hot Loads | +15% bullet speed and range | 3 |
@@ -90,7 +90,7 @@ Rules: perks are drawn without duplicates per offer, each stacks up to the liste
 | `explosive` | HE Rounds | 20% of hits explode (32 px, 50% dmg) | 3 |
 | `drone` | Drone Buddy | an orbiting drone, 5 dmg at 2/s | 2 (weight 0.6) |
 | `grenade` | Frag Out | a grenade every 4 s (−0.5 s per stack), 40 dmg, 48 px | 3 (weight 0.6) |
-| `armor` | Trauma Pads | −1 damage taken per hit (min 1) | 3 |
+| `armor` | Ceramic Plates | −1 damage taken per hit (min 1) | 3 |
 
 Vertical slice subset: `dmg`, `rof`, `pierce`, `multishot`, `move`, `maxhp`.
 
@@ -201,12 +201,12 @@ New in M2, all numbers only, with no new visuals beyond the card icon:
 | `crit` | Marksman | +5% crit chance (×2 damage) | 5 |
 | `bspeed` | Hot Loads | +15% bullet speed and range | 3 |
 | `regen` | Medkit | +1 HP every 2 s, with a tick on the HP bar | 3 |
-| `armor` | Trauma Pads | −1 damage taken per hit (min 1) | 3 |
+| `armor` | Ceramic Plates | −1 damage taken per hit (min 1) | 3 |
 | `ricochet` | Ricochet | bullets bounce to +1 target within 80 px | 2 |
 
 `explosive`, `drone` and `grenade` are held back until they get their own effects art.
 
-**Perk card:** a 16×16 icon, the perk name and a one-line effect with the stack count (for example "Hollow Point II — +15% damage"). The Artist needs **12 icons** for M2.
+**Perk card:** a 16×16 icon, the perk name and a one-line effect with the stack count (for example "Hollow Points II — +15% damage"). The Artist needs **12 icons** for M2.
 
 **Offer rule:** when the player has fewer than 2 damage-type perks (`dmg`, `rof`, `pierce`, `multishot`, `crit`, `ricochet`), at least one of the 3 cards must be a damage perk. That stops runs from stalling when the rolls are unlucky.
 
@@ -282,20 +282,20 @@ Whole-number perks are `pierce`, `multishot`, `ricochet`, `armor`, `regen`. They
 
 | Id | Name | Effect line | Common | Rare | Epic | Mythic | Max total |
 |---|---|---|---|---|---|---|---|
-| `dmg` | HOLLOW POINT | +{v}% damage | 15 | 23 | 30 | 45 | +75% |
+| `dmg` | HOLLOW POINTS | +{v}% damage | 15 | 23 | 30 | 45 | +75% |
 | `rof` | TRIGGER JOB | +{v}% fire rate | 12 | 18 | 24 | 36 | +60% |
 | `pierce` | AP ROUNDS | +{v} pierce | 1 | – | 2 | 3 | 3 |
 | `multishot` | EXTRA BARREL | +{v} bullets | 1 | – | 2 | 3 | 3 |
 | `move` | LIGHT KIT | +{v}% move speed | 8 | 12 | 16 | 24 | +32% |
-| `maxhp` | PLATE RIG | +{v} max HP, heal | 20 | 30 | 40 | 60 | +100 |
+| `maxhp` | PLATE CARRIER | +{v} max HP, heal | 20 | 30 | 40 | 60 | +100 |
 | `magnet` | SCRAP MAGNET | +{v}% magnet | 30 | 45 | 60 | 90 | +90% |
 | `crit` | MARKSMAN | +{v}% crit | 5 | 8 | 10 | 15 | 25% |
 | `bspeed` | HOT LOADS | +{v}% speed/range | 15 | 23 | 30 | 45 | +45% |
 | `regen` | MEDKIT | +{v} HP per 2s | 1 | – | 2 | 3 | 3 |
-| `armor` | TRAUMA PADS | -{v} dmg per hit | 1 | – | 2 | 3 | 3 |
+| `armor` | CERAMIC PLATES | -{v} dmg per hit | 1 | – | 2 | 3 | 3 |
 | `ricochet` | RICOCHET | +{v} bounces | 1 | – | 2 | 3 | 2 |
 
-Every name fits in 12 characters and every effect line in 16, so each stays on one line on the 104 px card (Silkscreen 8 px). "Max HP, heal" means the pick also heals by the same amount; "crit" is double damage. Use "bullet"/"bounce" when `{v}` is 1. A card for a perk that is one pick away from its max shows the value actually gained.
+Every name fits in 14 characters and every effect line in 16, so each stays on one line on the 104 px card (Silkscreen 8 px). "Max HP, heal" means the pick also heals by the same amount; "crit" is double damage. Use "bullet"/"bounce" when `{v}` is 1. A card for a perk that is one pick away from its max shows the value actually gained.
 
 Tier odds by player level (Common / Rare / Epic / Mythic):
 | Level | Odds |
@@ -304,7 +304,7 @@ Tier odds by player level (Common / Rare / Epic / Mythic):
 | 6–15 | 55 / 30 / 12 / 3 |
 | 16+ | 40 / 33 / 20 / 7 |
 
-- The card shows the tier name, the perk name under the icon, and the scaled effect ("EPIC — HOLLOW POINT — +30% damage"). The card uses the flavour name (HOLLOW POINT, AP ROUNDS…); the effect line underneath says what it does (Esteban, 2026-10-24). **An icon is never shown without its name**, anywhere.
+- The card shows the tier name, the perk name under the icon, and the scaled effect ("EPIC — HOLLOW POINTS — +30% damage"). The card uses the flavour name (HOLLOW POINTS, AP ROUNDS…); the effect line underneath says what it does (Esteban, 2026-10-24). **An icon is never shown without its name**, anywhere.
 - Tier colour goes on the card frame and title bar (approved: Common `#9AA0A6`, Rare `#3D6BFF`, Epic `#A44DFF`, Mythic `#FFC233` with a slow twinkle). The attack, defence and utility category stays as the coloured border on the icon tile (approved by Esteban).
 - Later: `explosive`, `drone` and `grenade` can enter as Mythic-only perks.
 
