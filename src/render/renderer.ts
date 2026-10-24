@@ -13,6 +13,9 @@ const ART = [
   'merc_t1_walkA_00',
   'merc_t1_walkB_00',
   'grunt_t1_walk_00',
+  'runner_t1_walk_00',
+  'runner_t1_walkA_00',
+  'runner_t1_walkB_00',
   'rifleman_t1_idle_00',
   'bullet_player_00',
   'bullet_enemy_00',
@@ -22,7 +25,7 @@ type ArtId = (typeof ART)[number];
 
 const ENEMY_ART: Record<string, ArtId> = {
   grunt: 'grunt_t1_walk_00',
-  runner: 'grunt_t1_walk_00',
+  runner: 'runner_t1_walk_00',
   heavy: 'grunt_t1_walk_00',
   rifleman: 'rifleman_t1_idle_00',
 };
@@ -30,11 +33,16 @@ const ENEMY_ART: Record<string, ArtId> = {
 /** Placeholder looks until the Artist's Runner, Heavy and Elite sprites land: scale and tint of existing art. */
 const PLACEHOLDER: Record<string, { scale: number; tint: number }> = {
   grunt: { scale: 1, tint: 0xffffff },
-  runner: { scale: 0.8, tint: 0xc8d0ff },
+  runner: { scale: 1, tint: 0xffffff },
   heavy: { scale: 1.4, tint: 0x9a9a9a },
   rifleman: { scale: 1, tint: 0xffffff },
 };
 const ELITE_SCALE = 1.25;
+
+/** Enemy walk cycles: frames played in order while alive (Artist, M2). */
+const ENEMY_WALK: Record<string, { frames: ArtId[]; frameMs: number }> = {
+  runner: { frames: ['runner_t1_walkA_00', 'runner_t1_walk_00', 'runner_t1_walkB_00', 'runner_t1_walk_00'], frameMs: 90 },
+};
 const CACHE_SCALE = 1.5; // 12 px Scrap cache from the 8 px Scrap sprite (design.md 13.4)
 
 /** Grows a list of sprites on demand and hides the unused tail each frame. */
@@ -86,7 +94,8 @@ export class Renderer {
       t.source.scaleMode = 'nearest';
       this.tex[id] = t;
     }
-    for (const id of new Set(Object.values(ENEMY_ART))) {
+    const enemyArt = new Set<ArtId>([...Object.values(ENEMY_ART), ...Object.values(ENEMY_WALK).flatMap((a) => a.frames)]);
+    for (const id of enemyArt) {
       this.eliteTex[id] = outlined(this.tex[id], BONE_WHITE);
       this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
     }
@@ -122,7 +131,8 @@ export class Renderer {
 
     this.fx.clear();
     w.enemies.forEach((e, i) => {
-      const art = ENEMY_ART[e.def.id];
+      const anim = ENEMY_WALK[e.def.id];
+      const art = anim ? anim.frames[Math.floor((w.time * 1000 + e.id * 37) / anim.frameMs) % anim.frames.length] : ENEMY_ART[e.def.id];
       // Heavies flash white for one frame per hit; Elites carry a baked bone-white outline.
       const tex = e.flash > 0 ? this.flashTex[art] : e.elite ? this.eliteTex[art] : this.tex[art];
       const s = this.enemies.get(i, tex);
@@ -131,7 +141,12 @@ export class Renderer {
       const look = PLACEHOLDER[e.def.id];
       const sc = look.scale * (e.elite ? ELITE_SCALE : 1);
       s.tint = e.flash > 0 ? 0xffffff : look.tint;
-      if (r) {
+      if (e.def.id === 'runner') {
+        // Top-down Runners face right in the art and rotate toward the player they charge.
+        s.anchor.set(0.5);
+        s.rotation = Math.atan2(p.y - e.y, p.x - e.x);
+        s.scale.set(sc);
+      } else if (r) {
         // Riflemen rotate as a whole sprite toward the player, like the merc.
         s.anchor.set(RIFLEMAN_ART.bodyCenter.x / RIFLEMAN_ART.size.w, RIFLEMAN_ART.bodyCenter.y / RIFLEMAN_ART.size.h);
         s.rotation = Math.atan2(p.y - e.y, p.x - e.x);

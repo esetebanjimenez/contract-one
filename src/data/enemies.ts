@@ -23,7 +23,7 @@ export interface EnemyDef {
 /** design.md sections 5 and 12. */
 export const ENEMIES: Record<string, EnemyDef> = {
   grunt: { id: 'grunt', hp: 10, speed: 45, contactDamage: 8, scrap: 1, radius: 8 },
-  runner: { id: 'runner', hp: 6, speed: 95, contactDamage: 6, scrap: 1, radius: 7, groupMin: 3, groupMax: 5 },
+  runner: { id: 'runner', hp: 6, speed: 95, contactDamage: 6, scrap: 1, radius: 8, groupMin: 3, groupMax: 5 },
   heavy: { id: 'heavy', hp: 60, speed: 30, contactDamage: 15, scrap: 5, radius: 12, knockbackImmune: true },
   rifleman: {
     id: 'rifleman',
