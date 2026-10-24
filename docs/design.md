@@ -135,7 +135,7 @@ When enemies are at the cap, each new spawn replaces the **farthest Grunt** with
 | 4:30–7:00 | 40 | 20 | 20 | 20 | – |
 | 7:00–10:00 | 25 | 20 | 20 | 20 | 15 |
 
-**Live tuning (M2, `d74a8f2`):** HP slope 0.12, contact slope 0.03, Runner speed 95, Elite share 10% in the 7:00–10:00 band, Scrap no longer despawns. These override the starting values above; `src/data/` is the source of truth.
+**Live tuning (`2454f0c`):** HP slope 0.14 (locked; step 2 sim: kite-smart 75% L23, collector 94% L36, kite 69% L26, idle dies 1:16), contact slope 0.03, Runner speed 95, Elite share 10% in the 7:00–10:00 band, Scrap no longer despawns. These override the starting values above; `src/data/` is the source of truth.
 
 Ranged cap: at most 30 Riflemen alive, so bullets stay readable.
 
@@ -151,7 +151,8 @@ Every 60 s: a 5 s burst, which may exceed the cap by up to 40 for its duration. 
 - **Reference bot = kite-smart** (skilled player): reaches 10:00 in **60–80%** of runs.
 - **Collector** (greedy player, detours for pickups): reaches 10:00 in **≥40%** of runs. Greed is risky but viable.
 - **Kite** (naive player): reaches 10:00 in **20–50%** of runs.
-- Median level at 10:00 for kite-smart: 25–35.
+- Median level at 10:00 for kite-smart: 20–35 (lowered from 25–35 because tiered perks give more power per level).
+- Kite is above its target at 69%. Leave the waves as they are and look at kite again after the M3 boss sim, because the boss is the main filter for a naive player.
 - Idle still dies before 2:00.
 - Scrap collected ≥70% for a **collector** bot (kites in small loops, sweeps back through drops). Judge this value only with that bot; a wide-circling bot is not the reference.
 
@@ -310,7 +311,7 @@ Tier odds by player level (Common / Rare / Epic / Mythic):
 
 ### 15.3 Scrap persistence
 - Pickups never despawn. At the 300 cap, a new drop adds its value to the oldest pickup on the ground.
-- Balance: with no despawn and with tiers, the player gets stronger. Levers in order: the cap rule above, then the enemy HP slope 0.12 → 0.14, aiming at the §12.4 targets.
+- Balance: with no despawn and with tiers, the player gets stronger. Levers in order: the cap rule above, then the enemy HP slope 0.12 → 0.14, aiming at the §12.4 targets. Both done; 0.14 is locked.
 
 ### 15.4 Regen
 - Reported as not working in the playtest; Programmer to check.
