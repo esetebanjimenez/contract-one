@@ -518,7 +518,7 @@ Esteban's win at 5:52 (level 22, 23,594 boss damage, about a 52 s fight) showed 
 **Sim targets (kite-smart; Esteban's runs come first)**
 - Reaches Lieutenant 1 in 80–95% of runs, kills him in 70–85% of fights (Esteban's run says he's the opener, not a wall).
 - Kills Lieutenant 2 in 55–75% of fights reached, and the Warlord in 40–60% of fights reached.
-- Every fight lasts 60–120 s. Enrage in under 10% of each fight.
+- Fight length: Lieutenant 1 **40–90 s** (the opener; Esteban's kill took about 52 s), Lieutenant 2 and the Warlord 60–120 s. Enrage in under 10% of each fight.
 - Report the level and boss HP at each spawn, plus contract completion rate; no target yet.
 - `tools/sim-report.ts` gets these targets in the same PR.
 
