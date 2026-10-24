@@ -1,16 +1,50 @@
 /**
  * Screenshot scenes for CI (never deployed: built only by vite.shots.config.ts).
- * ?scene=levelup | boss | results fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
+ * ?scene=levelup | boss | results | grunts fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
  */
 import { boot } from '../../src/game';
+import { ENEMIES, gruntWeapon, type GruntWeapon } from '../../src/data/enemies';
+import { PLAYER } from '../../src/data/player';
 import { createWorld, step, type World } from '../../src/sim/world';
 import { playUntil } from '../bots';
 
-export type Scene = 'levelup' | 'boss' | 'results';
+export type Scene = 'levelup' | 'boss' | 'results' | 'grunts';
 const SEED = 7;
 
 function build(scene: Scene): World {
   const w = createWorld(SEED);
+  if (scene === 'grunts') {
+    // Grunts only until 0:45: a crowd closing in on the merc, so their weapons are easy to check.
+    w.player.invuln = 1e9;
+    playUntil(w, 'idle', (x) => x.time >= 30);
+    w.player.invuln = 0;
+    w.player.hp = w.stats.maxHp;
+    // A ring of four Grunts per weapon (ids picked by weapon), the inner ones touching so their swing shows.
+    const want: Record<GruntWeapon, number> = { shovel: 4, baton: 4, sledge: 4 };
+    let n = 0;
+    for (let id = 100000; n < 12; id++) {
+      const k = gruntWeapon(id);
+      if (want[k] === 0) continue;
+      want[k]--;
+      const a = (n / 12) * Math.PI * 2;
+      const r = n % 4 === 0 ? ENEMIES.grunt.radius + PLAYER.hitRadius - 2 : 40 + (n % 3) * 22;
+      w.enemies.push({
+        id,
+        def: ENEMIES.grunt,
+        x: w.player.x + Math.cos(a) * r,
+        y: w.player.y + Math.sin(a) * r,
+        hp: 1e6,
+        maxHp: 1e6,
+        fireTimer: 0,
+        facing: Math.cos(a) > 0 ? -1 : 1,
+        elite: false,
+        flash: 0,
+        aiming: false,
+      });
+      n++;
+    }
+    return w;
+  }
   if (scene === 'levelup') {
     // A mid-run kit, then one more level-up so the cards and the YOUR KIT strip show.
     playUntil(w, 'kite-smart', (x) => x.time >= 150);
