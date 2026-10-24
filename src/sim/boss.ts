@@ -24,6 +24,7 @@ export interface Boss {
   facing: number; // radians
   flash: number;
   damageable: boolean;
+  arrivedAt: number; // run time he became damageable (-1 before)
   moving: boolean;
 }
 
@@ -73,16 +74,22 @@ export function createBoss(h: BossHost): Boss {
     facing: Math.PI / 2,
     flash: 0,
     damageable: false,
+    arrivedAt: -1,
     moving: true,
   };
 }
 
-function enraged(h: BossHost): boolean {
-  return h.time >= RUN.enrageSec;
+/** Seconds he has been enraged (negative before), on the fight clock. */
+export function enragedFor(b: Boss, time: number): number {
+  return b.arrivedAt < 0 ? -1 : time - b.arrivedAt - RUN.enrageFightSec;
+}
+
+function enraged(b: Boss, h: BossHost): boolean {
+  return enragedFor(b, h.time) >= 0;
 }
 
 function ringEvery(b: Boss, h: BossHost): number {
-  if (enraged(h)) return BOSS.enrage.ringEverySec;
+  if (enraged(b, h)) return BOSS.enrage.ringEverySec;
   return b.phase === 3 ? BOSS.phase3.ringEverySec : BOSS.ring.everySec;
 }
 
@@ -130,7 +137,7 @@ export function updateBoss(b: Boss, h: BossHost): void {
   const dy = p.y - b.y;
   const d = Math.hypot(dx, dy) || 1;
   if (b.flash > 0) b.flash -= DT;
-  const speed = BOSS.speed * (enraged(h) ? BOSS.enrage.speedMul : 1);
+  const speed = BOSS.speed * (enraged(b, h) ? BOSS.enrage.speedMul : 1);
   b.moving = false;
 
   switch (b.state) {
@@ -146,6 +153,7 @@ export function updateBoss(b: Boss, h: BossHost): void {
         : Math.abs(b.x - p.x) <= HALF_W - BOSS.radius && Math.abs(b.y - p.y) <= HALF_H - BOSS.radius;
       if (inside) {
         b.damageable = true;
+        b.arrivedAt = h.time;
         b.state = 'walk';
       }
       break;
@@ -206,7 +214,7 @@ export function updateBoss(b: Boss, h: BossHost): void {
   }
 
   if (b.state !== 'enter' && b.state !== 'stagger') {
-    if (b.phase >= 2 || enraged(h)) {
+    if (b.phase >= 2 || enraged(b, h)) {
       b.ringCd -= DT;
       if (b.ringCd <= 0) {
         b.ringCd += ringEvery(b, h);

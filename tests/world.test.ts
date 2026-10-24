@@ -91,20 +91,28 @@ describe('levels and perks', () => {
     }
     expect(w.player.hp).toBe(51);
   });
-  it('past the pickup cap, drops add their value to the oldest grounded piece', () => {
+  it('past the pickup cap, drops add their value to the grounded piece nearest the kill, with a pop', () => {
     const w = createWorld(1);
     while (w.enemies.length === 0) step(w, { mx: 0, my: 0 });
     w.pickups.length = 0;
-    for (let i = 0; i < CAPS.pickups; i++) w.pickups.push({ x: 300, y: 300, value: 1, age: 0, flying: i === 0, cache: false });
+    const e = w.enemies[0];
+    for (let i = 0; i < CAPS.pickups; i++) w.pickups.push({ x: 3000, y: 3000, value: 1, age: 0, flying: false, cache: false, pop: 0 });
+    w.pickups[5].x = e.x + 10;
+    w.pickups[5].y = e.y;
+    w.pickups[6].x = e.x + 1;
+    w.pickups[6].y = e.y;
+    w.pickups[6].flying = true;
     killEnemy(w, 0);
     expect(w.pickups).toHaveLength(CAPS.pickups);
+    expect(w.pickups[6].value).toBe(1);
+    expect(w.pickups[5].value).toBeGreaterThan(1);
+    expect(w.pickups[5].pop).toBeGreaterThan(0);
     expect(w.pickups[0].value).toBe(1);
-    expect(w.pickups[1].value).toBeGreaterThan(1);
     expect(w.scrap).toBe(0);
   });
   it('pauses for a level-up and applies the pick', () => {
     const w = createWorld(1);
-    w.pickups.push({ x: 0, y: 0, value: 5, age: 0, flying: true, cache: false });
+    w.pickups.push({ x: 0, y: 0, value: 5, age: 0, flying: true, cache: false, pop: 0 });
     step(w, { mx: 0, my: 0 });
     expect(w.phase).toBe('levelup');
     expect(w.offer).toHaveLength(3);

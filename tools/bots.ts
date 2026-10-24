@@ -2,6 +2,7 @@ import { PERKS, type PerkId } from '../src/data/perks';
 import { DT } from '../src/data/sim';
 import { BOSS } from '../src/data/boss';
 import { RUN } from '../src/data/run';
+import { enragedFor } from '../src/sim/boss';
 import { choosePerk, createWorld, step, type Input, type World } from '../src/sim/world';
 
 /**
@@ -169,7 +170,7 @@ export interface RunResult {
   stepMsAvg: number;
 }
 
-export function runBot(seed: number, bot: Bot, maxSec = RUN.enrageSec + 120): RunResult {
+export function runBot(seed: number, bot: Bot, maxSec = RUN.contractSec + 60 + RUN.enrageFightSec + 120): RunResult {
   const w = createWorld(seed);
   const maxTicks = Math.round(maxSec / DT);
   const t0 = performance.now();
@@ -191,7 +192,7 @@ export function runBot(seed: number, bot: Bot, maxSec = RUN.enrageSec + 120): Ru
     levelAt10,
     bossKilled: w.won,
     fightSec: w.bossArrivedAt < 0 ? 0 : (w.won ? w.wonAt : w.time) - w.bossArrivedAt,
-    enraged: w.time >= RUN.enrageSec,
+    enraged: !!w.boss && enragedFor(w.boss, w.time) >= 0,
     level: w.level,
     kills: w.kills,
     scrapPct: (100 * w.scrapCollected) / Math.max(1, w.scrapDropped),

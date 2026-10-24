@@ -5,6 +5,7 @@ import { LEVELS } from '../data/levels';
 import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { RUN } from '../data/run';
 import { MERC_ART, RIFLEMAN_ART } from '../data/player';
+import { enragedFor } from '../sim/boss';
 import type { World } from '../sim/world';
 import type { Controls } from '../ui/input';
 import { BONE_WHITE, outlined, silhouette } from './bake';
@@ -195,7 +196,8 @@ export class Renderer {
     else if (b.phase === 2) art = 'warlord_t1_phase2_00';
     else art = b.moving ? WARLORD_WALK[Math.floor((w.time * 1000) / WARLORD_FRAME_MS) % WARLORD_WALK.length] : 'warlord_t1_idle_00';
     const stagger = b.state === 'stagger' && Math.floor(b.stateT * 10) % 2 === 0;
-    const pulse = w.time >= RUN.enrageSec && Math.floor((w.time - RUN.enrageSec) / (ENRAGE_PULSE_SEC / 2)) % 2 === 0;
+    const ef = enragedFor(b, w.time);
+    const pulse = ef >= 0 && Math.floor(ef / (ENRAGE_PULSE_SEC / 2)) % 2 === 0;
     const tex = b.flash > 0 || stagger ? this.flashTex[art] : pulse ? this.enrageTex[art] : this.tex[art];
     if (s.texture !== tex) s.texture = tex;
     s.position.set(Math.round(b.x), Math.round(b.y));
@@ -239,6 +241,12 @@ export class Renderer {
     this.pickups.hideFrom(w.pickups.length);
 
     this.fx.clear();
+    // Cyan pop where a merged drop lands.
+    for (const k of w.pickups) {
+      if (k.pop <= 0) continue;
+      const r = 4 + (1 - k.pop / 0.25) * 6;
+      this.fx.circle(Math.round(k.x), Math.round(k.y), r).stroke({ color: 0x3fd8ff, width: 1, alpha: k.pop / 0.25 });
+    }
     w.enemies.forEach((e, i) => {
       const anim = ENEMY_WALK[e.def.id];
       const art = anim ? anim.frames[Math.floor((w.time * 1000 + e.id * 37) / anim.frameMs) % anim.frames.length] : ENEMY_ART[e.def.id];

@@ -2,6 +2,7 @@ import { BOSS } from '../data/boss';
 import { scrapForLevel } from '../data/levels';
 import { RATIONS, TIERS, effectText, perkDef, type OfferId, type PerkId } from '../data/perks';
 import { RUN } from '../data/run';
+import { enragedFor } from '../sim/boss';
 import type { World } from '../sim/world';
 
 const mmss = (sec: number): string => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
@@ -65,7 +66,7 @@ export class Hud {
       this.timer.classList.toggle('red', left <= RUN.timerRedLastSec);
     }
     this.bossBar.hidden = left > 0 || w.won;
-    this.enraged.hidden = !(boss && boss.hp > 0 && !w.won && w.phase !== 'dead' && w.time >= RUN.enrageSec);
+    this.enraged.hidden = !(boss && boss.hp > 0 && !w.won && w.phase !== 'dead' && enragedFor(boss, w.time) >= 0);
     if (left <= 0) this.bossFill.style.width = boss ? `${(100 * Math.max(0, boss.hp)) / boss.maxHp}%` : '100%';
     if (w.won) this.setBanner(outroSec < RUN.winResultsDelaySec ? 'CONTRACT COMPLETE' : '', 'win');
     else if (w.phase === 'dead')
@@ -117,7 +118,7 @@ export class Hud {
               return (
                 `<button class="card tier-none" data-id="${o.id}" style="--tc:${RATIONS.color}">` +
                 `<div class="tbar"></div>` +
-                `<div class="tile"><img src="${ICON_BASE}perk_${o.id}_00.png" alt=""></div>` +
+                `<div class="tile"></div>` + // icon waits on Esteban's okay
                 `<div class="pname">${RATIONS.name}</div><div class="rule"></div>` +
                 `<div class="eff">${RATIONS.text.toUpperCase()}</div></button>`
               );

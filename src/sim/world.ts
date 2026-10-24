@@ -57,6 +57,7 @@ export interface Pickup {
   age: number;
   flying: boolean;
   cache: boolean; // Elite Scrap cache
+  pop: number; // seconds left of the cyan merge pop
 }
 
 export type Phase = 'play' | 'levelup' | 'dead';
@@ -396,6 +397,8 @@ function addScrap(w: World, v: number): void {
   }
 }
 
+const MERGE_POP_SEC = 0.25;
+
 export function killEnemy(w: World, i: number): void {
   const e = w.enemies[i];
   w.kills++;
@@ -403,12 +406,23 @@ export function killEnemy(w: World, i: number): void {
   w.scrapDropped += scrap;
   if (scrap === 0) {
     // Phase 3 adds drop nothing.
-  } else if (w.pickups.length < CAPS.pickups) w.pickups.push({ x: e.x, y: e.y, value: scrap, age: 0, flying: false, cache: e.elite });
+  } else if (w.pickups.length < CAPS.pickups)
+    w.pickups.push({ x: e.x, y: e.y, value: scrap, age: 0, flying: false, cache: e.elite, pop: 0 });
   else {
-    // Past the cap, the value goes onto the oldest piece still on the ground, so the player has to
-    // go back for it (design.md 15.3). Pickups are kept in spawn order.
-    const oldest = w.pickups.find((k) => !k.flying) ?? w.pickups[0];
-    oldest.value += scrap;
+    // Past the cap, the value goes onto the piece on the ground nearest to where the enemy died,
+    // with a cyan pop so the drop is seen landing (design.md 15.3).
+    let near = w.pickups[0];
+    let nd = Infinity;
+    for (const k of w.pickups) {
+      if (k.flying) continue;
+      const d = (k.x - e.x) ** 2 + (k.y - e.y) ** 2;
+      if (d < nd) {
+        nd = d;
+        near = k;
+      }
+    }
+    near.value += scrap;
+    near.pop = MERGE_POP_SEC;
   }
   w.enemies[i] = w.enemies[w.enemies.length - 1];
   w.enemies.pop();
@@ -597,6 +611,7 @@ export function step(w: World, input: Input): void {
   for (let i = w.pickups.length - 1; i >= 0; i--) {
     const k = w.pickups[i];
     k.age += DT;
+    if (k.pop > 0) k.pop -= DT;
     const dx = p.x - k.x;
     const dy = p.y - k.y;
     const d = Math.hypot(dx, dy);

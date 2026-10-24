@@ -10,7 +10,7 @@ export const RUN = {
   arenaBandPx: 8, // hazard-tape band; the walls are its inner edge
   arenaGrowSec: 0.5,
   fleeSpeedMul: 1.5,
-  enrageSec: 720, // 12:00
+  enrageFightSec: 120, // enrage 2:00 after he is fully on-screen (fight clock, design.md 14.3)
   // Presentation (real seconds, UI only).
   winSlowMoSec: 1,
   winSlowMoScale: 0.3,
