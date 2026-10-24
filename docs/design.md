@@ -294,7 +294,7 @@ Each offered card rolls a tier independently.
 | Epic | purple | ×2 | +2 |
 | Mythic | gold (deep gold, not the pale yellow of player bullets) | ×3 | +3 |
 
-Whole-number perks are `pierce`, `multishot`, `ricochet`, `armor`, `regen`. They have no Rare version: a Rare roll on one of them becomes Common. Each perk's max applies to the **total effect**, not the number of picks, and the excess is lost.
+Whole-number perks are `pierce`, `multishot`, `ricochet`, `armor`, `regen`. They have no Rare version: a Rare roll on one of them becomes Common. ~~Each perk's max applies to the total effect.~~ **No caps** since §16.1: the Max total column is no longer used.
 
 **Card labels and values** (name in the title bar, effect line under the icon; `{v}` is the tier value):
 
@@ -338,3 +338,26 @@ Tier odds by player level (Common / Rare / Epic / Mythic):
 - When every perk is at its max, the level-up shows one fallback card: **FIELD RATIONS**, "Heal 25 HP", tier-less in a grey frame. It always appears, so a level-up is never empty. The XP bar keeps showing.
 - If only some perks are maxed, maxed perks drop out of the draw and the card count falls to what's left (at least 1, using the fallback if needed).
 - Playtest flag: Esteban hit level 49 by 11:05 with every perk maxed, against ~23 for the bots at 10:00, so humans collect far more Scrap. Esteban found the fight hard, so we leave the level curve alone until the arena playtest.
+
+## 16. Playtest 2 changes (Esteban, 2026-10-24, run at 10:23, level 41, win)
+
+### 16.1 No perk caps
+- Every perk stacks with no upper limit. Ignore the Max total column in §15.2.
+- Guards: armor never reduces a hit below 1 damage. Crit stops at 100% and then leaves the draw.
+- FIELD RATIONS (§15.5) stays as the fallback for an empty draw.
+- Perf watch: uncapped `multishot`, `pierce` and `ricochet` raise the bullet count. Programmer flags it if the frame rate dips, and then we add a soft limit on bullets on screen, not a perk cap.
+
+### 16.2 Four cards per level-up
+- 4 cards, not 3, in a 2×2 grid, centred, same 104×124 card. Each card still rolls its tier independently, and no perk appears twice in one offer.
+
+### 16.3 Scrap clumping
+- Once a second, any group of **8 or more** pickups within **24 px** of each other merges into one pickup at their centre, holding the total value.
+- A pickup worth 5 or more drops shows as the 12 px Elite cache sprite. Smaller ones stay the 8 px Scrap.
+- The 300 cap (§15.3) stays as the backstop.
+
+### 16.4 Shooters stop to fire
+Applies to the Rifleman and the Elite Rifleman. Replaces the fixed fire interval (§5, §12.1).
+- They fire only when **fully on-screen**.
+- Cycle: stop for **0.6 s** with a red-orange muzzle glint (the telegraph), fire (1 shot, or the Elite's 3-shot spread), then move for at least **2.0 s** before they can stop again.
+- Late-game scaling: the move time drops by 0.05 s per minute, to a minimum of 1.4 s. The telegraph never shortens.
+- Lever if shooters are too weak: the move time first, then the share of Riflemen in the band mix.
