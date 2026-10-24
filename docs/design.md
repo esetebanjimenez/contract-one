@@ -72,6 +72,8 @@ HP scaling: see §12 (M2).
 - Overflow Scrap carries into the next level.
 
 ## 8. Perk pool v1
+> **Superseded:** live values, tiers and labels are in §15.2, and caps were removed in §16.1. `explosive`, `drone` and `grenade` are not in the game yet; they're held back for effects art (§13.6).
+
 Rules: perks are drawn without duplicates per offer, each stacks up to the listed max, and a maxed perk leaves the pool. Weight is 1 unless listed otherwise.
 
 | Id | Perk | Per stack | Max |
