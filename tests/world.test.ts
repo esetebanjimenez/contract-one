@@ -269,10 +269,10 @@ describe('M3 contract', () => {
       step(w, { mx: 0, my: 0 });
     }
   };
-  it('sets boss HP to 60x sheet DPS at spawn, minimum 2000, no upper clamp', () => {
+  it('sets boss HP to 40x sheet DPS at spawn, extra bullets at half, minimum 2000, no upper clamp', () => {
     expect(bossHp({ damage: PLAYER.damage, fireRate: PLAYER.fireRate, projectiles: 1, crit: 0 }, 2)).toBe(2000);
-    expect(bossHp({ damage: 20, fireRate: 10, projectiles: 4, crit: 0.5 }, 2)).toBe(60 * 20 * 10 * 4 * 1.5);
-    expect(bossHp({ damage: 1000, fireRate: 10, projectiles: 10, crit: 1 }, 2)).toBe(60 * 1000 * 10 * 10 * 2);
+    expect(bossHp({ damage: 20, fireRate: 10, projectiles: 4, crit: 0.5 }, 2)).toBe(40 * 20 * 10 * 2.5 * 1.5);
+    expect(bossHp({ damage: 1000, fireRate: 10, projectiles: 10, crit: 1 }, 2)).toBe(40 * 1000 * 10 * 5.5 * 2);
   });
   it('stops pressure waves from 9:30', () => {
     expect(inPressureWave(541)).toBe(true);

@@ -1,7 +1,8 @@
 /** The Warlord (design.md 14.3). */
 export const BOSS = {
   name: 'THE WARLORD',
-  hpDpsSec: 60, // HP = 60 x the player's single-target sheet DPS at spawn (design.md 16.5)
+  hpDpsSec: 40, // HP = 40 x the player's single-target sheet DPS at spawn (design.md 16.5)
+  hpExtraBulletWeight: 0.5,
   hpMin: 2000, // no upper clamp
   radius: 30,
   speed: 35,
@@ -23,9 +24,12 @@ export interface DpsStats {
   crit: number; // chance, 0..1
 }
 
-/** Single-target sheet DPS: damage x shots/s x bullets x crit factor. Pierce and ricochet don't count. */
+/**
+ * Single-target sheet DPS (design.md 16.5): damage x shots/s x (1 + 0.5 x extra bullets) x crit factor.
+ * Extra bullets count half since many miss one target. Pierce and ricochet don't count.
+ */
 export function sheetDps(s: DpsStats, critMultiplier: number): number {
-  return s.damage * s.fireRate * s.projectiles * (1 + Math.min(1, s.crit) * (critMultiplier - 1));
+  return s.damage * s.fireRate * (1 + BOSS.hpExtraBulletWeight * (s.projectiles - 1)) * (1 + Math.min(1, s.crit) * (critMultiplier - 1));
 }
 
 export function bossHp(s: DpsStats, critMultiplier: number): number {

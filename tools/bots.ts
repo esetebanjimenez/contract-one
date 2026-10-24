@@ -161,6 +161,7 @@ export interface RunResult {
   bossKilled: boolean;
   fightSec: number; // arrival to kill, or to death/timeout
   bossHp: number; // Warlord HP at spawn (0 if he never came)
+  bossDamage: number; // damage dealt to him
   enraged: boolean;
   level: number;
   kills: number;
@@ -193,6 +194,7 @@ export function runBot(seed: number, bot: Bot, maxSec = RUN.contractSec + 60 + R
     levelAt10,
     bossKilled: w.won,
     bossHp: w.boss ? w.boss.maxHp : 0,
+    bossDamage: w.bossDamage,
     fightSec: w.bossArrivedAt < 0 ? 0 : (w.won ? w.wonAt : w.time) - w.bossArrivedAt,
     enraged: !!w.boss && enragedFor(w.boss, w.time) >= 0,
     level: w.level,

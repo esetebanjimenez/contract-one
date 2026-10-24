@@ -1,6 +1,6 @@
 import { BOSS } from '../data/boss';
 import { scrapForLevel } from '../data/levels';
-import { TIERS, effectText, perkDef, type PerkId } from '../data/perks';
+import { PERKS, TIERS, effectText, perkDef, type PerkId } from '../data/perks';
 import { RUN } from '../data/run';
 import { enragedFor } from '../sim/boss';
 import type { World } from '../sim/world';
@@ -125,13 +125,33 @@ export class Hud {
             );
           })
           .join('') +
-        `</div>`;
+        `</div>` +
+        this.kitStrip(w);
       this.modal
         .querySelectorAll<HTMLButtonElement>('.card')
         .forEach((b) => b.addEventListener('click', () => this.onPick(b.dataset.id as PerkId)));
     } else {
       this.showResults(w);
     }
+  }
+
+  /**
+   * YOUR KIT strip under the cards (design.md 16.6, Esteban-approved mock): owned perks as 16 px icon
+   * plus total, 36 px cells, 6 per row. The one place an icon shows without its name. A perk on offer
+   * that is already owned gets a 1 px outline in that card's tier colour.
+   */
+  private kitStrip(w: World): string {
+    const owned = PERKS.filter((d) => w.stacks[d.id] > 0);
+    if (owned.length === 0) return `<div class="tap">TAP A CARD</div>`;
+    const cells = owned
+      .map((d) => {
+        const o = w.offer.find((x) => x.id === d.id);
+        const hl = o ? `<span class="ko" style="border-color:${TIERS.find((t) => t.id === o.tier)!.color}"></span>` : '';
+        const v = effectText(d, Math.round(w.stacks[d.id] * 10) / 10).split(' ')[0];
+        return `<div class="kc">${hl}<img src="${ICON_BASE}perk_${d.id}_00.png" alt=""><span class="kv">${v}</span></div>`;
+      })
+      .join('');
+    return `<div class="tap">TAP A CARD</div><div class="kit"><div class="kt">YOUR KIT</div><div class="krows">${cells}</div></div>`;
   }
 
   private showResults(w: World): void {
