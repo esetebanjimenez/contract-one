@@ -1,5 +1,19 @@
 export type PerkId =
-  'dmg' | 'rof' | 'pierce' | 'multishot' | 'move' | 'maxhp' | 'magnet' | 'crit' | 'bspeed' | 'regen' | 'armor' | 'ricochet';
+  | 'dmg'
+  | 'rof'
+  | 'pierce'
+  | 'multishot'
+  | 'move'
+  | 'maxhp'
+  | 'magnet'
+  | 'crit'
+  | 'bspeed'
+  | 'regen'
+  | 'armor'
+  | 'ricochet'
+  | 'explosive'
+  | 'drone'
+  | 'grenade';
 
 export type TierId = 'common' | 'rare' | 'epic' | 'mythic';
 export type PerkCategory = 'attack' | 'defence' | 'utility';
@@ -161,6 +175,40 @@ export const PERKS: PerkDef[] = [
     damageType: true,
     category: 'attack',
   },
+  // design.md 16.7: normal tiers, no caps except HE stops at 100%.
+  {
+    id: 'explosive',
+    name: 'HE ROUNDS',
+    text: '+{v}% explode',
+    values: pct(10, 15, 20, 30),
+    maxTotal: 100, // stops at 100%, then leaves the draw
+    scale: 0.01,
+    weight: 1,
+    damageType: true,
+    category: 'attack',
+  },
+  {
+    id: 'drone',
+    name: 'DRONE BUDDY',
+    text: '+{v} drone{s}',
+    values: whole,
+    maxTotal: Infinity,
+    scale: 1,
+    weight: 0.6,
+    damageType: true,
+    category: 'utility',
+  },
+  {
+    id: 'grenade',
+    name: 'FRAG OUT',
+    text: '+{v} grenade{s}',
+    values: whole,
+    maxTotal: Infinity,
+    scale: 1,
+    weight: 0.6,
+    damageType: true,
+    category: 'attack',
+  },
 ];
 
 export interface TierDef {
@@ -190,6 +238,35 @@ export const PERK_RULES = {
   critMultiplier: 2,
   ricochetRange: 80,
 };
+
+/** HE ROUNDS (design.md 16.7): a hit that explodes deals this share of its damage to everything in the radius. */
+export const EXPLOSIVE = { radius: 32, damageShare: 0.5 };
+
+/** DRONE BUDDY (design.md 16.7). Past maxBodies, each extra drone adds overflowBonus damage to all drones. */
+export const DRONE = {
+  orbitPx: 28,
+  orbitRadPerSec: 2,
+  damage: 5,
+  shotsPerSec: 2,
+  maxBodies: 8,
+  overflowBonus: 0.125,
+  range: 220, // same reach as the merc's targeting
+};
+
+/** FRAG OUT (design.md 16.7). Past maxPerVolley, each extra grenade adds overflowBonus damage to the volley. */
+export const GRENADE = {
+  everySec: 4,
+  damage: 40,
+  radius: 48,
+  maxPerVolley: 8,
+  overflowBonus: 0.125,
+  flightSec: 0.5, // thrown from the merc, explodes where it lands
+};
+
+/** Bodies drawn and the damage multiplier from overflow, for drones and grenades. */
+export function overflow(n: number, max: number, bonus: number): { count: number; mul: number } {
+  return { count: Math.min(max, n), mul: 1 + bonus * Math.max(0, n - max) };
+}
 
 export function perkDef(id: PerkId): PerkDef {
   return PERKS.find((d) => d.id === id)!;

@@ -3,7 +3,7 @@ import { ENEMIES } from '../src/data/enemies';
 import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
 import { SPAWN } from '../src/data/spawns';
-import { PERKS } from '../src/data/perks';
+import { DRONE, GRENADE, PERKS } from '../src/data/perks';
 import { computeStats, drawOffer, softMove, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
 import { bossHp } from '../src/data/boss';
@@ -21,6 +21,7 @@ import {
   riflemenAlive,
   spawnRate,
   step,
+  volleyTargets,
 } from '../src/sim/world';
 import { runBot } from '../tools/bots';
 
@@ -362,5 +363,83 @@ describe('M3 contract', () => {
     expect(w.pickups).toHaveLength(8);
     expect(w.pickups[0]).toMatchObject({ x: 107, y: 50, value: 8 });
     expect(w.pickups[0].pop).toBeGreaterThan(0);
+  });
+});
+
+describe('16.7 attack perks', () => {
+  const quiet = (seed = 1) => {
+    const w = createWorld(seed);
+    w.player.hp = w.stats.maxHp = 1e9;
+    w.spawnAcc = -1e9; // no spawns
+    return w;
+  };
+  const place = (w: ReturnType<typeof createWorld>, x: number, y: number, hp = 1000) => {
+    const e = {
+      id: w.nextEnemyId++,
+      def: ENEMIES.heavy,
+      x,
+      y,
+      hp,
+      maxHp: hp,
+      fireTimer: 9,
+      aiming: false,
+      facing: 1 as const,
+      elite: false,
+      flash: 0,
+    };
+    w.enemies.push(e);
+    return e;
+  };
+  it('rolls drone and grenade like whole-number perks, HE like crit, and stops HE at 100%', () => {
+    const s = emptyStacks();
+    expect(makeOffer('drone', 'rare', s)).toEqual({ id: 'drone', tier: 'common', value: 1 });
+    expect(makeOffer('grenade', 'mythic', s).value).toBe(3);
+    expect(makeOffer('explosive', 'epic', s).value).toBe(20);
+    s.explosive = 90;
+    expect(makeOffer('explosive', 'mythic', s).value).toBe(10);
+    s.explosive = 100;
+    for (let i = 0; i < 50; i++) expect(drawOffer(s, 5, 20, 4, createRng(i)).some((o) => o.id === 'explosive')).toBe(false);
+  });
+  it('explodes every hit at 100% HE: half damage to neighbours within 32 px', () => {
+    const w = quiet();
+    w.stacks.explosive = 100;
+    w.stats = computeStats(w.stacks);
+    const a = place(w, 60, 0);
+    const b = place(w, 80, 0);
+    for (let i = 0; i < 120 && a.hp === 1000; i++) step(w, { mx: 0, my: 0 });
+    const hit = 1000 - a.hp;
+    expect(hit).toBeCloseTo(w.stats.damage * 1.5, 5); // the hit plus its own blast
+    expect(1000 - b.hp).toBeCloseTo(w.stats.damage * 0.5, 5);
+    expect(w.blasts.some((x) => x.kind === 'he')).toBe(true);
+  });
+  it('draws at most 8 drones; extra ones add 12.5% damage each', () => {
+    const w = quiet();
+    w.stacks.drone = 10;
+    w.stats = computeStats(w.stacks);
+    place(w, 0, 100, 1e6);
+    for (let i = 0; i < 60; i++) step(w, { mx: 0, my: 0 });
+    expect(w.drones.length).toBe(8);
+    const shot = w.bullets.find((b) => !b.explodes);
+    expect(shot?.damage).toBeCloseTo(DRONE.damage * 1.25, 5);
+  });
+  it('throws grenades at the densest cluster and blasts 40 dmg in 48 px', () => {
+    const w = quiet();
+    w.stacks.grenade = 1;
+    w.stats = computeStats(w.stacks);
+    for (let i = 0; i < 5; i++) place(w, -80 + i * 6, 60);
+    const lone = place(w, 90, -60);
+    w.grid.clear();
+    w.enemies.forEach((e, i) => w.grid.insert(i, e.x, e.y));
+    const t = volleyTargets(w, 1)[0];
+    expect(t.x).toBeLessThan(-40);
+    for (let i = 0; i < Math.round((GRENADE.flightSec + 0.2) / DT); i++) step(w, { mx: 0, my: 0 });
+    const cluster = w.enemies.filter((e) => e !== lone && e.y === 60);
+    expect(cluster.every((e) => e.hp <= 1000 - GRENADE.damage + 1e-6)).toBe(true);
+  });
+  it('adds drone and grenade DPS to boss HP in full and scales gun DPS by HE', () => {
+    const base = { damage: 20, fireRate: 10, projectiles: 1, crit: 0 };
+    expect(bossHp({ ...base, explosive: 1 }, 2)).toBe(40 * 200 * 1.5);
+    expect(bossHp({ ...base, drones: 10, damageMul: 2 }, 2)).toBe(40 * (200 + 8 * 5 * 2 * 1.25 * 2));
+    expect(bossHp({ ...base, grenades: 3 }, 2)).toBe(40 * (200 + (3 * 40) / 4));
   });
 });
