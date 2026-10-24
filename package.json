@@ -12,6 +12,7 @@
     "format": "prettier --write src tools tests",
     "format:check": "prettier --check src tools tests",
     "sim": "tsx tools/sim.ts",
+    "smoke": "tsx tools/smoke.ts",
     "bench": "tsx tools/bench.ts"
   },
   "dependencies": {
