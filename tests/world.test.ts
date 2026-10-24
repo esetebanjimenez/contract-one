@@ -191,11 +191,11 @@ describe('M3 contract', () => {
       step(w, { mx: 0, my: 0 });
     }
   };
-  it('scales boss HP with level and clamps it', () => {
+  it('keeps boss HP at a flat 2000 inside the clamp', () => {
     expect(bossHp(20)).toBe(2000);
-    expect(bossHp(30)).toBe(4000);
+    expect(bossHp(30)).toBe(2000);
     expect(bossHp(5)).toBe(2000);
-    expect(bossHp(60)).toBe(5000);
+    expect(bossHp(60)).toBe(2000);
   });
   it('stops pressure waves from 9:30', () => {
     expect(inPressureWave(541)).toBe(true);

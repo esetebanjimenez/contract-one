@@ -6,7 +6,7 @@ export const RUN = {
   inboundBannerSec: 2,
   warningSec: 3, // warning banner at 10:00, then he walks in
   bossSpawnRateMul: 0.3, // normal spawns at 30% of the 10:00 rate during the fight
-  enrageSec: 780, // 13:00
+  enrageSec: 720, // 12:00
   // Presentation (real seconds, UI only).
   winSlowMoSec: 1,
   winSlowMoScale: 0.3,

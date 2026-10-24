@@ -156,6 +156,7 @@ export interface RunResult {
   bot: Bot;
   survivedSec: number;
   reachedBoss: boolean;
+  levelAt10: number; // level when the contract timer hit 10:00 (or at death before it)
   bossKilled: boolean;
   fightSec: number; // arrival to kill, or to death/timeout
   enraged: boolean;
@@ -172,7 +173,9 @@ export function runBot(seed: number, bot: Bot, maxSec = RUN.enrageSec + 120): Ru
   const w = createWorld(seed);
   const maxTicks = Math.round(maxSec / DT);
   const t0 = performance.now();
+  let levelAt10 = 0;
   while (w.tick < maxTicks && w.phase !== 'dead' && !w.won) {
+    if (w.time < RUN.contractSec) levelAt10 = w.level;
     if (w.phase === 'levelup') {
       pick(w, bot);
       continue;
@@ -185,6 +188,7 @@ export function runBot(seed: number, bot: Bot, maxSec = RUN.enrageSec + 120): Ru
     bot,
     survivedSec: w.time,
     reachedBoss: w.time >= RUN.contractSec,
+    levelAt10,
     bossKilled: w.won,
     fightSec: w.bossArrivedAt < 0 ? 0 : (w.won ? w.wonAt : w.time) - w.bossArrivedAt,
     enraged: w.time >= RUN.enrageSec,

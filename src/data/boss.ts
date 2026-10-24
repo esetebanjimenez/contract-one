@@ -2,7 +2,7 @@
 export const BOSS = {
   name: 'THE WARLORD',
   hpBase: 2000,
-  hpPerLevel: 0.1, // HP = base x (1 + 0.1 x (level - 20)), clamped
+  hpPerLevel: 0, // flat 2000 at every level (design.md 14.3, rerun 2); formula kept for later tuning
   hpLevelRef: 20,
   hpMin: 2000,
   hpMax: 5000,
@@ -16,7 +16,7 @@ export const BOSS = {
   phase3Below: 0.33,
   phase3: { adds: 12, addsEverySec: 8, ringEverySec: 2, chargeEverySec: 3.5 },
   staggerSec: 1, // phase change: no attacks, white flash, enemy bullets cleared
-  enrage: { ringEverySec: 1.5, speedMul: 1.5 },
+  enrage: { ringEverySec: 1.0, speedMul: 1.5 },
 };
 
 export function bossHp(level: number): number {
