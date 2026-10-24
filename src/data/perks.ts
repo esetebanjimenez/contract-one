@@ -13,7 +13,8 @@ export type PerkId =
   | 'ricochet'
   | 'explosive'
   | 'drone'
-  | 'grenade';
+  | 'grenade'
+  | 'cooldown';
 
 export type TierId = 'common' | 'rare' | 'epic' | 'mythic';
 export type PerkCategory = 'attack' | 'defence' | 'utility';
@@ -209,7 +210,30 @@ export const PERKS: PerkDef[] = [
     damageType: true,
     category: 'attack',
   },
+  // design.md 16.9: special-attack cooldown. Picks multiply, so the stack holds the combined cut.
+  {
+    id: 'cooldown',
+    name: 'FAST HANDS',
+    text: '-{v}% cooldown',
+    values: pct(10, 15, 20, 30),
+    maxTotal: Infinity,
+    scale: 0.01,
+    weight: 0.6,
+    damageType: false,
+    category: 'utility',
+  },
 ];
+
+/** Perks that multiply instead of add (design.md 16.9): new total = 100 - (100 - total) x (1 - v / 100). */
+export const MULTIPLICATIVE: ReadonlySet<PerkId> = new Set<PerkId>(['cooldown']);
+
+/** Special attacks (design.md 16.9): FAST HANDS is only offered once the player owns one. */
+export const SPECIAL_ATTACKS: readonly PerkId[] = ['grenade'];
+
+/** The stack after gaining v of perk id. */
+export function addStack(id: PerkId, total: number, v: number): number {
+  return MULTIPLICATIVE.has(id) ? 100 - (100 - total) * (1 - v / 100) : total + v;
+}
 
 export interface TierDef {
   id: TierId;
@@ -253,9 +277,9 @@ export const DRONE = {
   range: 220, // same reach as the merc's targeting
 };
 
-/** FRAG OUT (design.md 16.7). Past maxPerVolley, each extra grenade adds overflowBonus damage to the volley. */
+/** FRAG OUT (design.md 16.7, 16.9: a special attack on a cooldown). Past maxPerVolley, each extra grenade adds overflowBonus damage to the volley. */
 export const GRENADE = {
-  everySec: 4,
+  cooldownSec: 4, // before FAST HANDS
   damage: 40,
   radius: 48,
   maxPerVolley: 8,

@@ -150,6 +150,7 @@ const PRIORITY: PerkId[] = [
   'explosive',
   'grenade',
   'drone',
+  'cooldown',
   'ricochet',
   'maxhp',
   'armor',
