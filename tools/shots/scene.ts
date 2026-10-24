@@ -1,14 +1,15 @@
 /**
  * Screenshot scenes for CI (never deployed: built only by vite.shots.config.ts).
- * ?scene=levelup | boss | results | grunts fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
+ * ?scene=levelup | boss | results | grunts | numbers fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
  */
 import { boot } from '../../src/game';
 import { ENEMIES, gruntWeapon, type GruntWeapon } from '../../src/data/enemies';
 import { PLAYER } from '../../src/data/player';
+import { computeStats } from '../../src/sim/perks';
 import { createWorld, step, type World } from '../../src/sim/world';
 import { playUntil } from '../bots';
 
-export type Scene = 'levelup' | 'boss' | 'results' | 'grunts';
+export type Scene = 'levelup' | 'boss' | 'results' | 'grunts' | 'numbers';
 const SEED = 7;
 
 function build(scene: Scene): World {
@@ -43,6 +44,35 @@ function build(scene: Scene): World {
       });
       n++;
     }
+    return w;
+  }
+  if (scene === 'numbers') {
+    // A busy late-run fight with HE, drones, extra bullets and crits (design.md 16.10 done-when).
+    w.player.invuln = 1e9;
+    playUntil(w, 'kite-smart', (x) => x.time >= 150);
+    Object.assign(w.stacks, { explosive: w.stacks.explosive + 40, drone: w.stacks.drone + 3, crit: w.stacks.crit + 25 });
+    w.stats = computeStats(w.stacks);
+    // A pack of tough Brutes all round the merc, so the gun, drones and blasts land at once.
+    for (let n = 0; n < 18; n++) {
+      const a = (n / 18) * Math.PI * 2;
+      const r = 45 + (n % 3) * 30;
+      w.enemies.push({
+        id: w.nextEnemyId++,
+        def: ENEMIES.heavy,
+        x: w.player.x + Math.cos(a) * r,
+        y: w.player.y + Math.sin(a) * r,
+        hp: 4000,
+        maxHp: 4000,
+        fireTimer: 9,
+        facing: Math.cos(a) > 0 ? -1 : 1,
+        elite: false,
+        flash: 0,
+        aiming: false,
+      });
+    }
+    playUntil(w, 'idle', (x) => x.time >= 150.4);
+    w.player.invuln = 3; // the capture, not the run
+    w.player.hp = w.stats.maxHp;
     return w;
   }
   if (scene === 'levelup') {

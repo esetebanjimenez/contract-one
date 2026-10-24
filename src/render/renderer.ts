@@ -11,6 +11,7 @@ import { enragedFor } from '../sim/boss';
 import type { World } from '../sim/world';
 import type { Controls } from '../ui/input';
 import { BONE_WHITE, outlined, silhouette } from './bake';
+import { DamageNumbers } from './damage-numbers';
 
 const ART = [
   'ground_sand_00',
@@ -177,6 +178,7 @@ export class Renderer {
   private bandTape: TilingSprite[] = [];
   private bandLine = new Graphics();
   private viewH = NATIVE_HEIGHT;
+  private numbers = new DamageNumbers();
 
   constructor(private readonly app: Application) {}
 
@@ -221,7 +223,9 @@ export class Renderer {
     this.drones = new Pool(drones);
     this.grenades = new Pool(grenades);
     // Blasts draw above enemies (Artist, 16.7); drones fly over the merc; grenades arc over everything on the ground.
-    this.world.addChild(layers[0], layers[1], this.fx, layers[5], layers[2], drones, grenades, layers[3], layers[4]);
+    // Damage numbers sit above everything in the arena, below the HUD (design.md 16.10).
+    this.world.addChild(layers[0], layers[1], this.fx, layers[5], layers[2], drones, grenades, layers[3], layers[4], this.numbers.layer);
+    await this.numbers.load();
     // Hazard-tape arena edge (Artist, design.md 14.9): 4 px diagonal stripes, red-orange and dark.
     const tape = Texture.from(hazardTape());
     tape.source.scaleMode = 'nearest';
@@ -383,6 +387,7 @@ export class Renderer {
       s.alpha = f === anim.frames.length - 1 ? 1 - (ms - f * anim.frameMs) / anim.frameMs : 1;
     }
     this.blasts.hideFrom(nb);
+    this.numbers.draw(w);
     const rotor: ArtId = Math.floor((w.time * 1000) / DRONE_ROTOR_MS) % 2 ? 'fx/drone_01' : 'fx/drone_00';
     w.drones.forEach((d, i) => {
       const s = this.drones.get(i, this.tex[rotor]);
