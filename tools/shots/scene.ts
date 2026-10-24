@@ -24,10 +24,7 @@ function build(scene: Scene): World {
     w,
     'kite-smart',
     (x) =>
-      x.bossArrivedAt >= 0 &&
-      x.time >= x.bossArrivedAt + 3 &&
-      !!x.boss &&
-      Math.hypot(x.boss.x - x.player.x, x.boss.y - x.player.y) < 160,
+      x.bossArrivedAt >= 0 && x.time >= x.bossArrivedAt + 3 && !!x.boss && Math.hypot(x.boss.x - x.player.x, x.boss.y - x.player.y) < 160,
   );
   if (scene === 'results') {
     // Kill him: the game plays the outro and shows the results screen.
