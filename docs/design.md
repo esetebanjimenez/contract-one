@@ -147,3 +147,56 @@ Every 60 s: a 5 s burst from one direction, which may exceed the cap by up to 40
 - Scrap collected ≥70% for a **collector** bot (kites in small loops, sweeps back through drops). Judge this value only with that bot; a wide-circling bot is not the reference.
 
 Levers in order if targets miss: HP slope (0.15) first, then the Elite share, then the Rifleman fire interval.
+
+## 13. M2 content: new enemy tiers and perks
+Stats are in §5 and scaling in §12. This section adds behaviour, silhouettes and the M2 perk set.
+
+### 13.1 Silhouette rule
+Each enemy type is told apart by **size and shape first**, colour second. Sizes are body sizes at native resolution:
+
+| Enemy | Size | Shape read |
+|---|---|---|
+| Runner | 16 px | small, lean, leaning forward |
+| Grunt | 20 px | baseline |
+| Rifleman | 24 px | rifle pointing at the player |
+| Heavy | 28 px | wide and square, shield in front |
+| Elite | base type ×1.25 | same shape plus a bone-white 1 px outline |
+
+Reserved colours that no enemy body may use: red-orange (enemy bullets), cyan (Scrap), pale yellow (player bullets) and NVG green (the player).
+
+### 13.2 Runner (`runner`)
+- **Behaviour:** heads straight for the player at 85 px/s, with no flocking, and arrives in groups of 3–5 from the same edge.
+- **Look:** a crouched knife-man in charcoal, with a maroon scarf trailing behind that shows his direction. Two run frames swap every 100 ms.
+- **Role:** punishes standing still and pushes the player to keep moving.
+
+### 13.3 Heavy (`heavy`)
+- **Behaviour:** walks slowly toward the player at 30 px/s and is **immune to knockback**. His shield is visual only and blocks nothing.
+- **Look:** a wide body in charcoal plate with a slate riot shield in front and a maroon visor slit. Two heavy-step frames swap every 200 ms.
+- **Role:** soaks bullets, makes the player value Pierce and damage, and forms walls that close escape routes.
+- **Hit feedback:** a 1-frame white flash on every hit, so the player can see damage landing on a high-HP target.
+
+### 13.4 Elite (`elite_grunt`, `elite_runner`, `elite_heavy`, `elite_rifleman`)
+- An Elite reuses its base sprite at ×1.25 scale with a bone-white outline. **No new art is needed** beyond the outline pass, which can be drawn in code.
+- Stats are ×3 HP, ×1.1 speed and ×1.5 contact damage, as in §5. An Elite Rifleman fires a 3-shot spread.
+- **Drop:** one **Scrap cache** worth ×4, drawn as a larger cyan pickup (12 px) so it reads as a reward.
+
+### 13.5 Knockback (new, small)
+Every player bullet hit pushes the enemy back 4 px, and Heavies and the boss are immune. It gives hits weight and lets the player open small gaps in a crowd.
+
+### 13.6 M2 perks: 6 more, 12 in total
+New in M2, all numbers only, with no new visuals beyond the card icon:
+
+| Id | Perk | Per stack | Max |
+|---|---|---|---|
+| `magnet` | Scrap Magnet | +30% pickup radius | 3 |
+| `crit` | Marksman | +5% crit chance (×2 damage) | 5 |
+| `bspeed` | Hot Loads | +15% bullet speed and range | 3 |
+| `regen` | Medkit | +1 HP every 5 s | 3 |
+| `armor` | Ceramic Plates | −1 damage taken per hit (min 1) | 3 |
+| `ricochet` | Ricochet | bullets bounce to +1 target within 80 px | 2 |
+
+`explosive`, `drone` and `grenade` are held back until they get their own effects art.
+
+**Perk card:** a 16×16 icon, the perk name and a one-line effect with the stack count (for example "Hollow Points II — +15% damage"). The Artist needs **12 icons** for M2.
+
+**Offer rule:** when the player has fewer than 2 damage-type perks (`dmg`, `rof`, `pierce`, `multishot`, `crit`, `ricochet`), at least one of the 3 cards must be a damage perk. That stops runs from stalling when the rolls are unlucky.
