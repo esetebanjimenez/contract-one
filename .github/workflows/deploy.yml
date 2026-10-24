@@ -31,6 +31,14 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm smoke
+      - name: Screenshots (level-up with kit strip, boss, results)
+        run: pnpm shots:build && pnpm shots
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots/*.png
+          if-no-files-found: warn
       - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:

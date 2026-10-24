@@ -188,6 +188,18 @@ export interface RunResult {
   stepMsAvg: number;
 }
 
+/** Plays `bot` on `w` (picking perks) until `done` is true, the run ends, or maxSec of run time. */
+export function playUntil(w: World, bot: Bot, done: (w: World) => boolean, maxSec = 900): void {
+  const maxTicks = Math.round(maxSec / DT);
+  while (w.tick < maxTicks && w.phase !== 'dead' && !w.won && !done(w)) {
+    if (w.phase === 'levelup') {
+      pick(w, bot);
+      continue;
+    }
+    step(w, bot === 'idle' ? { mx: 0, my: 0 } : bot === 'collector' ? collectorInput(w) : kiteInput(w));
+  }
+}
+
 export function runBot(seed: number, bot: Bot, maxSec = RUN.contractSec + 60 + RUN.enrageFightSec + 120): RunResult {
   const w = createWorld(seed);
   const maxTicks = Math.round(maxSec / DT);
