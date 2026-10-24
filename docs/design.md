@@ -12,11 +12,11 @@ Owner: Game Designer. All numbers are starting values; they live in `src/data/` 
 | Time | Event |
 |---|---|
 | 0:00 | Drop-in. Grunts only. |
-| 1:30 | Runners join. |
-| 3:00 | Heavies join. |
-| 4:30 | Riflemen (first shooters) join. |
-| 7:00 | Elite variants start appearing. |
-| 10:00 | **Contract target: The Warlord** arrives. Normal spawns drop to 30%. |
+| 0:45 | Runners join. |
+| 1:30 | Heavies join. |
+| 2:15 | Riflemen (first shooters) join. |
+| 3:30 | Elite variants start appearing. |
+| 5:00 | **Contract target: The Warlord** arrives (§16.8; was 10:00). The boss arena starts (§14.9). |
 | Boss dead | Run won, then the results screen. |
 
 There is no meta-progression in v1. Death shows run stats and a Restart button.
@@ -217,9 +217,9 @@ New in M2, all numbers only, with no new visuals beyond the card icon:
 Goal: a run has a real ending. You survive to 10:00, kill the Warlord, and get a result screen.
 
 ### 14.1 Contract timer
-- **HUD:** top-centre, `TARGET IN 9:59`, counting down from 10:00. White, and red-orange for the last 10 s.
-- **9:30:** a banner reads "TARGET INBOUND", shown for 2 s. Pressure waves and rings stop from 9:30, so the arrival isn't buried.
-- **10:00:** the timer is replaced by the boss HP bar (full width, top, with the name "THE WARLORD").
+- **HUD:** top-centre, `TARGET IN 4:59`, counting down from 5:00 (§16.8; was 10:00). White, and red-orange for the last 10 s.
+- **4:30** (was 9:30): a banner reads "TARGET INBOUND", shown for 2 s. Pressure waves and rings stop from 4:30, so the arrival isn't buried.
+- **5:00** (was 10:00): the timer is replaced by the boss HP bar (full width, top, with the name "THE WARLORD").
 
 ### 14.2 Boss arrival
 - A 3 s warning (§9), then he walks in from the top edge, 120 px off-screen. He can't be damaged until fully on-screen.
@@ -263,7 +263,7 @@ At 0 HP: a 0.5 s freeze, the banner "KIA", then the results screen. If the boss 
 - **Data:** every value above goes in `src/data/boss.ts`, with the timer and banner times in `src/data/run.ts`.
 
 ### 14.9 Boss arena (M3.1, Esteban playtest 2026-10-24)
-At 10:00, when the boss warning starts:
+At 5:00 (§16.8; was 10:00), when the boss warning starts:
 - **Clear-out:** every non-boss enemy turns and flees directly away from the player at 1.5× its speed. Fleeing enemies do no contact damage, can't be hit, drop no Scrap, and despawn once off-screen. Enemy bullets already in flight are cleared.
 - **Lock:** the camera freezes where it is. The visible world below the HUD strip is the arena, and its edges are solid walls for the player. The bottom-third joystick zone is still part of the arena.
 - **Boss:** walks in from the top edge as before. Once he's fully inside, the walls hold him too. A charge that hits a wall stops there. His bullets despawn at the walls.
@@ -396,3 +396,28 @@ These replace the "Mythic-only" note in §15.2. They roll tiers like every other
 - Drone and grenade are whole-number perks, so a Rare roll becomes Common (§15.2).
 - **Boss HP (§16.5):** sheet DPS adds drone DPS and grenade DPS in full, and multiplies bullet DPS by (1 + 0.5 × HE chance).
 - Art (Artist, needs Esteban's okay): a small explosion, a drone sprite, a grenade, and a 48 px blast. Category tiles: HE and FRAG OUT are attack, DRONE BUDDY is utility.
+
+### 16.8 The Warlord arrives at 5:00 (Esteban, 2026-10-24)
+Esteban's run 3 (win at 11:13, level 53, 96,962 boss damage) showed the build outgrowing the run by 10:00. Bringing the boss in earlier keeps the player from becoming overpowered and leaves room for more bosses later without making runs longer.
+
+**Step 1 (now):**
+- The Warlord arrives at **5:00** instead of 10:00. The arena (§14.9), phases, numbers (§14.3), enrage on a 2:00 fight clock (§14.3, §14.10), win and lose (§14.4–14.6) are unchanged.
+- Timer `TARGET IN 4:59`, "TARGET INBOUND" banner and the stop on waves and rings at 4:30.
+- Boss HP stays 40 × sheet DPS at spawn (§16.5). It follows the player's weaker build at 5:00 on its own, so no separate HP change.
+- **Enemy timeline at half the old times**, so a 5:00 run still sees every enemy type:
+
+| Band | Grunt | Runner | Heavy | Rifleman | Elite |
+|---|---|---|---|---|---|
+| 0:00–0:45 | 100 | – | – | – | – |
+| 0:45–1:30 | 75 | 25 | – | – | – |
+| 1:30–2:15 | 55 | 25 | 20 | – | – |
+| 2:15–3:30 | 40 | 20 | 20 | 20 | – |
+| 3:30–5:00 | 30 | 20 | 20 | 20 | 10 |
+
+- Pressure waves stay every 60 s (1:00–4:00). Full rings at 2:00 and 4:00 (was 3:00, 5:00, 7:00, 9:00); Heavies join the ring from 4:00.
+- Spawn rate (§6) and per-minute scaling (§12.1, HP slope 0.14) stay on the clock as they are. At 5:00 that is ~×1.7 enemy HP. The level curve (§7) is unchanged.
+- **Targets (sim, then Esteban's run first):** kite-smart reaches 5:00 in 80–95% of runs at level ~20–30; kite-smart kills the boss in 40–60% of fights; fight length 60–120 s; enrage in under 10% of fights.
+- **Sim table on the `feat/` PR:** reach rate, level and boss HP at spawn, kill rate and median fight per bot.
+- **Levers if it's off:** boss HP multiplier (40) first, then Scrap per level, then the enemy bands.
+
+**Step 2 (parked until we add bosses):** three bosses per contract at 4:00, 8:00 and 12:00. The first two are lieutenants: arena fight, then the run carries on (camera unlocks, spawns resume). The Warlord is last and ends the contract.
