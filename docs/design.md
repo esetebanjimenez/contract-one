@@ -1,4 +1,4 @@
-# Contract One — Design Spec v0.1
+# Contract One — Design Spec v0.6
 
 Owner: Game Designer. All numbers are starting values; they live in `src/data/` and get tuned from the bot sim.
 
@@ -135,6 +135,8 @@ When enemies are at the cap, each new spawn replaces the **farthest Grunt** with
 | 4:30–7:00 | 40 | 20 | 20 | 20 | – |
 | 7:00–10:00 | 25 | 20 | 20 | 20 | 15 |
 
+**Live tuning (M2, `d74a8f2`):** HP slope 0.12, contact slope 0.03, Runner speed 95, Elite share 10% in the 7:00–10:00 band, Scrap lifetime 45 s. These override the starting values above; `src/data/` is the source of truth.
+
 Ranged cap: at most 30 Riflemen alive, so bullets stay readable.
 
 Replacement order at the cap: the farthest off-screen non-elite Grunt first; if none, the farthest off-screen non-elite enemy of any type. Spawning never stops at the cap.
@@ -207,3 +209,54 @@ New in M2, all numbers only, with no new visuals beyond the card icon:
 **Perk card:** a 16×16 icon, the perk name and a one-line effect with the stack count (for example "Hollow Points II — +15% damage"). The Artist needs **12 icons** for M2.
 
 **Offer rule:** when the player has fewer than 2 damage-type perks (`dmg`, `rof`, `pierce`, `multishot`, `crit`, `ricochet`), at least one of the 3 cards must be a damage perk. That stops runs from stalling when the rolls are unlucky.
+
+## 14. M3: the contract (timer, boss, win and lose)
+Goal: a run has a real ending. You survive to 10:00, kill the Warlord, and get a result screen.
+
+### 14.1 Contract timer
+- **HUD:** top-centre, `TARGET IN 9:59`, counting down from 10:00. White, and red-orange for the last 10 s.
+- **9:30:** a banner reads "TARGET INBOUND", shown for 2 s. Pressure waves and rings stop from 9:30, so the arrival isn't buried.
+- **10:00:** the timer is replaced by the boss HP bar (full width, top, with the name "THE WARLORD").
+
+### 14.2 Boss arrival
+- A 3 s warning (§9), then he walks in from the top edge, 120 px off-screen. He can't be damaged until fully on-screen.
+- Normal spawns drop to 30% of the rate at 10:00, the band mix stays at 7:00–10:00, and there are no waves or rings.
+- Scrap and level-ups continue during the fight.
+
+### 14.3 Boss numbers (refines §9)
+| Value | Start |
+|---|---|
+| HP | 2000 × (1 + 0.1 × (level − 20)), clamped 2000–5000, using the player level at arrival |
+| Body | about 80 px on a 96 px canvas, hitbox radius 30 |
+| Walk speed | 35 px/s toward the player |
+| Contact damage | 20 (not scaled by §12) |
+| Charge | every 5 s; 0.8 s telegraph line, then a 300 px dash at 140 px/s; 25 dmg |
+| Phase 2 ring (below 66%) | 16 bullets every 3 s, one rotating gap of 2 bullets, 120 px/s, 10 dmg |
+| Phase 3 adds (below 33%) | 12 Grunts in a ring every 8 s; ring every 2 s; charge every 3.5 s |
+| Knockback | immune |
+| Phase change | 1 s stagger: he can't attack, flashes white, and every enemy bullet on screen is cleared |
+| Enrage | if still alive at 13:00: ring every 1.5 s, walk speed ×1.5. Every run ends. |
+
+### 14.4 Win
+On the kill: 1 s slow-mo at 0.3×, every other enemy dies with no Scrap, the banner "CONTRACT COMPLETE" shows, then 2 s later the results screen.
+
+### 14.5 Lose
+At 0 HP: a 0.5 s freeze, the banner "KIA", then the results screen. If the boss was alive, show "TARGET HP LEFT: 34%".
+
+### 14.6 Results screen (win and lose)
+- Title: CONTRACT COMPLETE or CONTRACT FAILED.
+- Stats: time, level, kills, Scrap collected, and boss damage dealt.
+- The row of perks taken, as icons with stack counts.
+- One button, **New Contract**, in the bottom third (thumb reach). Input is locked for 0.8 s so a joystick release can't tap it by accident.
+- No meta-progression, no menus (§2).
+
+### 14.7 M3 tuning targets (bot sim: bots fight the boss with their usual movement)
+- Kite-smart kills the boss in **40–60%** of runs that reach 10:00.
+- Fight length for kite-smart: **60–120 s**.
+- The enrage fires in **under 10%** of fights.
+- Lever order if targets miss: boss HP base (2000), then the phase-2 ring interval, then charge damage.
+
+### 14.8 Needs
+- **Art:** the boss sprite (top-down, 96 px canvas, walk and charge pose), a telegraph line in red-orange, and the banner and results-screen look.
+- **Data:** every value above goes in `src/data/boss.ts`, with the timer and banner times in `src/data/run.ts`.
+
