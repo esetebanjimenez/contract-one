@@ -1,6 +1,8 @@
 import { BOSS } from '../data/boss';
 import { MAX_VIEW_HEIGHT, NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
-import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
+import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, GRUNT_WEAPONS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
+
+const GRUNT_SWING_SEC = (GRUNT_WEAPONS.windupMs + GRUNT_WEAPONS.strikeMs) / 1000;
 import { LEVELS, scrapForLevel } from '../data/levels';
 import { DRONE, EXPLOSIVE, GRENADE, PERK_RULES, overflow, perkDef, type PerkId } from '../data/perks';
 import { PLAYER } from '../data/player';
@@ -27,6 +29,7 @@ export interface Enemy {
   flash: number; // seconds of white hit-flash left
   fleeing?: boolean; // boss clear-out: runs off, harmless, can't be hit
   noScrap?: boolean; // phase 3 adds
+  swingAt?: number; // run time a Grunt's touch swing started (looks only; damage is unaffected)
 }
 
 /** The locked boss arena: camera position and the inner wall edges, in world px. */
@@ -744,7 +747,11 @@ export function step(w: World, input: Input): void {
         }
       }
     }
-    if (d < e.def.radius + PLAYER.hitRadius) damagePlayer(w, contactDamage(e, w.time));
+    if (d < e.def.radius + PLAYER.hitRadius) {
+      damagePlayer(w, contactDamage(e, w.time));
+      // Grunt swing (looks only): restart it once the last one has played while he keeps touching.
+      if (e.def.id === 'grunt' && (e.swingAt === undefined || w.time - e.swingAt >= GRUNT_SWING_SEC)) e.swingAt = w.time;
+    }
   }
 
   updateWarlord(w);

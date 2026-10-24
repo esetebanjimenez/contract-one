@@ -50,3 +50,32 @@ export const ELITE = { hp: 3, speed: 1.1, contact: 1.5, scrap: 4, rifleSpreadSho
 /** design.md 13.5: px pushed back per player bullet hit. */
 export const KNOCKBACK_PX = 4;
 export const ENEMY_BULLET_RADIUS = 4; // matches the outlined 8x8 sprite (design.md 15.1)
+
+/**
+ * Grunt weapons (Esteban, 2026-10-24): looks only. Every Grunt has the same HP, speed, hitbox and contact
+ * damage whatever he carries. Weights are the Designer's split. Each Grunt's weapon comes from a hash of
+ * his id, never from the run's RNG, so changing these weights can't move any spawn or sim result.
+ */
+export type GruntWeapon = 'shovel' | 'baton' | 'sledge';
+export const GRUNT_WEAPONS = {
+  weights: { shovel: 50, baton: 30, sledge: 20 } as Record<GruntWeapon, number>,
+  walkFrameMs: 150, // two walk frames alternate
+  // Swing on touch, animation only: the damage lands on the touch with no delay (Designer).
+  windupMs: 80,
+  strikeMs: 120,
+};
+
+/** Weighted pick from a hash of the enemy id: deterministic and independent of the run's RNG. */
+export function gruntWeapon(enemyId: number, weights: Record<GruntWeapon, number> = GRUNT_WEAPONS.weights): GruntWeapon {
+  let h = Math.imul(enemyId ^ 0x9e3779b9, 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  h ^= h >>> 16;
+  const ids = Object.keys(weights) as GruntWeapon[];
+  const total = ids.reduce((s, k) => s + weights[k], 0);
+  let roll = ((h >>> 0) / 0x100000000) * total;
+  for (const k of ids) {
+    roll -= weights[k];
+    if (roll < 0) return k;
+  }
+  return ids[ids.length - 1];
+}
