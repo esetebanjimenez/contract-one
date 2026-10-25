@@ -354,7 +354,9 @@ Tier odds by player level (Common / Rare / Epic / Mythic):
 - 4 cards, not 3, in a 2×2 grid, centred, same 104×124 card. Each card still rolls its tier independently, and no perk appears twice in one offer.
 
 ### 16.3 Scrap clumping
-- Once a second, any group of **8 or more** pickups within **24 px** of each other merges into one pickup at their centre, holding the total value.
+- Every **0.5 s**, any group of **3 or more** grounded pickups within **40 px** of each other merges into one pickup at their centre, holding the total value (Esteban, 2026-10-25; was 8 or more within 24 px once a second, which spread-out late-game drops almost never met).
+- Pickups more than **400 px** from the player (off screen) merge across **80 px** instead, so a trail left behind becomes a few large caches.
+- Flying pickups (inside the magnet) never merge.
 - A pickup worth 5 or more drops shows as the 12 px Elite cache sprite. Smaller ones stay the 8 px Scrap.
 - The 300 cap (§15.3) stays as the backstop.
 
@@ -494,7 +496,16 @@ Esteban's win at 5:52 (level 22, 23,594 boss damage, about a 52 s fight) showed 
 - **Phase 1:** charge (§14.3) plus the aimed burst, alternating every 3 s.
 - **Phase 2:** adds the 16-bullet ring every 3 s and the fan.
 - **Phase 3:** adds reinforcements every 8 s (8 Grunts and 4 Runners) and mines on each charge's start point.
-- All attacks are reused from Lieutenant 1 and 2, so the final fight needs no new attack code, only a new attack schedule.
+- Attacks are reused from Lieutenant 1 and 2, except ARTILLERY CALL below, which is his own.
+
+**ARTILLERY CALL (the Warlord only; Esteban, 2026-10-25).** Makes standing still punishable so the fight isn't solved by circling.
+- **Phase 2:** every 7 s. **Phase 3:** every 6 s. Not in phase 1.
+- He stops and plays a throw pose (raised arm) for 0.4 s, then 3 target circles appear at once (5 in phase 3): one centred on the player's position at that moment, the rest at random spots 80–140 px from the player, inside the arena walls. Circles never overlap each other or a mine.
+- Each circle is 36 px across: a red-orange `#FF4A1C` ring that fills inward over 1.5 s. In the last 0.4 s a grenade sprite arcs in from the Warlord; when the fill completes it explodes over the full circle.
+- **Damage:** 30 per circle (20 base × his ×1.5), once per circle; standing in two overlapping blasts can't happen since circles don't overlap. Ceramic Plates applies.
+- **With the charge:** he never charges while throwing. A throw pushes his next charge back by 1.0 s, and the ARTILLERY CALL timer pauses while a charge (telegraph + dash) runs. Rings, bursts, fan, mines and reinforcements keep their own timers.
+- **Art (Artist, Esteban okays):** throw pose for phases 2 and 3, the target ring, and a small thrown grenade. Explosion reuses the mine blast.
+- **Tuning levers, in order:** circle count, interval, damage. Warlord fight stays inside 60–120 s (§16.11).
 
 **Between fights**
 - **On a lieutenant kill:** 0.5 s slow-mo, a "LIEUTENANT DOWN" banner for 2 s, then the hazard tape fades out over 0.5 s, the camera unlocks and waves resume. There are no spawns within 200 px of the player for the first 3 s.
