@@ -7,7 +7,7 @@ import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { RUN } from '../data/run';
 import { GRUNT_WEAPONS, gruntWeapon, type GruntWeapon } from '../data/enemies';
 import { MERC_ART, RIFLEMAN_ART } from '../data/player';
-import { enragedFor, mineArmed } from '../sim/boss';
+import { bossRadius, enragedFor, mineArmed } from '../sim/boss';
 import type { World } from '../sim/world';
 import type { Controls } from '../ui/input';
 import { BONE_WHITE, outlined, silhouette } from './bake';
@@ -109,6 +109,7 @@ export function gruntFrame(weapon: GruntWeapon, id: number, time: number, swingA
 
 /** Warlord: 96x96 facing right, body centre at (27,44); A-idle-B-idle walk at 180 ms (Artist, M3). */
 const WARLORD_PIVOT = { x: 27 / 96, y: 44 / 96 };
+const WARLORD_ART_RADIUS = 30; // body radius today's 96x96 sprite is drawn for
 const WARLORD_WALK: ArtId[] = ['warlord_t1_walkA_00', 'warlord_t1_idle_00', 'warlord_t1_walkB_00', 'warlord_t1_idle_00'];
 const WARLORD_FRAME_MS = 180;
 const TELEGRAPH_COLOR = 0xff4a1c;
@@ -300,20 +301,23 @@ export class Renderer {
     if (s.texture !== tex) s.texture = tex;
     s.position.set(Math.round(b.x), Math.round(b.y));
     s.rotation = b.facing;
+    // Today's 96x96 sprite stands in for every target, scaled to his body (the Warlord to 128x128).
+    const r = bossRadius(b);
+    s.scale.set(r / WARLORD_ART_RADIUS);
     if (b.aimT >= 0) {
       // LT. VIPER's aim line: thin while it tracks, brighter and blinking once locked.
       const locked = b.aimT >= VIPER.burst.trackSec;
       const len = 320;
       const blink = Math.floor(b.aimT * 20) % 2 === 0;
       this.fx
-        .moveTo(Math.round(b.x + b.aimX * BOSS.radius), Math.round(b.y + b.aimY * BOSS.radius))
+        .moveTo(Math.round(b.x + b.aimX * r), Math.round(b.y + b.aimY * r))
         .lineTo(Math.round(b.x + b.aimX * len), Math.round(b.y + b.aimY * len))
         .stroke({ color: TELEGRAPH_COLOR, width: locked ? 2 : 1, alpha: locked ? (blink ? 0.95 : 0.6) : 0.45 });
     }
     if (b.state === 'telegraph') {
       // Locked charge lane, red-orange, from his edge to the end of the charge.
-      const x0 = b.x + b.dirX * BOSS.radius;
-      const y0 = b.y + b.dirY * BOSS.radius;
+      const x0 = b.x + b.dirX * r;
+      const y0 = b.y + b.dirY * r;
       const x1 = b.x + b.dirX * BOSS.charge.distance;
       const y1 = b.y + b.dirY * BOSS.charge.distance;
       const blink = Math.floor(b.stateT * 12) % 2 === 0;

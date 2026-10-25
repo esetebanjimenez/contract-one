@@ -6,9 +6,9 @@ import { SPAWN } from '../src/data/spawns';
 import { DRONE, GRENADE, PERKS, addStack } from '../src/data/perks';
 import { computeStats, drawOffer, softMove, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
-import { BOSSES, LIEUTENANT_DOWN, VIPER, bossHp } from '../src/data/boss';
+import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, WARLORD, bossHp } from '../src/data/boss';
 import { PLAYER } from '../src/data/player';
-import { checkPhase, createBoss, updateBoss, type Boss, type BossHost, type Mine } from '../src/sim/boss';
+import { bossRadius, checkPhase, createBoss, updateBoss, type Boss, type BossHost, type Mine } from '../src/sim/boss';
 import {
   choosePerk,
   createWorld,
@@ -741,5 +741,128 @@ describe('LT. VIPER (design.md 16.11)', () => {
     for (let i = 0; i < 600 && w.targetsDown < 2; i++) step(w, { mx: 0, my: 0 });
     expect(w.targetsDown).toBe(2);
     expect(w.mines.length).toBe(0);
+  });
+});
+
+describe('THE WARLORD (design.md 16.11)', () => {
+  const host = () => {
+    const h = {
+      time: 0,
+      level: 10,
+      stats: { damage: 10, fireRate: 5, projectiles: 1, crit: 0 },
+      player: { x: 0, y: 0 },
+      enemyBullets: [] as BossHost['enemyBullets'],
+      arena: null,
+      mines: [] as Mine[],
+      hits: [] as number[],
+      adds: [] as [number, string | undefined][],
+      hitPlayer(dmg: number) {
+        h.hits.push(dmg);
+      },
+      spawnAddsRing(count: number, kind?: 'grunt' | 'runner') {
+        h.adds.push([count, kind]);
+      },
+    };
+    return h;
+  };
+  const warlord = (h: ReturnType<typeof host>) => {
+    const b = createBoss(h, 2);
+    b.x = 0;
+    b.y = -400;
+    b.state = 'walk';
+    b.damageable = true;
+    b.arrivedAt = 0;
+    return b;
+  };
+  /** Steps until `until` holds (or `sec` runs out), keeping the player out of his way. */
+  const tickUntil = (b: Boss, h: ReturnType<typeof host>, sec: number, until: () => boolean) => {
+    for (let i = 0; i < Math.round(sec / DT); i++) {
+      h.time += DT;
+      h.player.x = b.x + 300;
+      h.player.y = b.y;
+      updateBoss(b, h);
+      if (until()) return true;
+    }
+    return false;
+  };
+  it('has a bigger body than the lieutenants, for his 128x128 sprite', () => {
+    const h = host();
+    expect(bossRadius(warlord(h))).toBe(40);
+    expect(bossRadius(createBoss(h, 0))).toBe(30);
+    expect(bossRadius(createBoss(h, 1))).toBe(26);
+  });
+  it('takes turns between the charge and the aimed burst, one every 3 s', () => {
+    const h = host();
+    const b = warlord(h);
+    expect(tickUntil(b, h, WARLORD.firstAttackSec + 0.1, () => b.state === 'telegraph')).toBe(true);
+    expect(tickUntil(b, h, 5, () => b.state === 'walk')).toBe(true);
+    // Next is the burst, not another charge.
+    let charged = false;
+    expect(
+      tickUntil(b, h, WARLORD.attackEverySec + 0.1, () => {
+        charged ||= b.state === 'telegraph';
+        return b.aimT >= 0;
+      }),
+    ).toBe(true);
+    expect(charged).toBe(false);
+    expect(tickUntil(b, h, 1.2, () => h.enemyBullets.length === VIPER.burst.bullets)).toBe(true);
+    for (const s of h.enemyBullets) expect(s.damage).toBe(VIPER.burst.damage * BOSSES[2].damageScale);
+    // Then the charge again, 3 s after the burst started.
+    expect(tickUntil(b, h, WARLORD.attackEverySec, () => b.state === 'telegraph')).toBe(true);
+  });
+  it('adds the 16-bullet ring every 3 s and the fan in phase 2', () => {
+    const h = host();
+    const b = warlord(h);
+    b.phase = 2;
+    b.chargeCd = 99;
+    b.ringCd = DT;
+    b.fanCd = 99;
+    tickUntil(b, h, 0.05, () => false);
+    const ring = BOSS.ring.bullets - BOSS.ring.gapBullets;
+    expect(h.enemyBullets.length).toBe(ring);
+    tickUntil(b, h, WARLORD.ringEverySec - 0.1, () => false);
+    expect(h.enemyBullets.length).toBe(ring);
+    tickUntil(b, h, 0.2, () => false);
+    expect(h.enemyBullets.length).toBe(2 * ring);
+    h.enemyBullets.length = 0;
+    b.ringCd = 99;
+    b.fanCd = DT;
+    tickUntil(b, h, 0.05, () => false);
+    expect(h.enemyBullets.length).toBe(VIPER.fan.bullets);
+  });
+  it('calls 8 Grunts and 4 Runners every 8 s and mines each charge start in phase 3', () => {
+    const h = host();
+    const b = warlord(h);
+    b.phase = 3;
+    b.chargeCd = DT;
+    b.ringCd = 99;
+    b.fanCd = 99;
+    tickUntil(b, h, 0.05, () => false);
+    expect(h.adds).toEqual([
+      [WARLORD.adds.grunts, 'grunt'],
+      [WARLORD.adds.runners, 'runner'],
+    ]);
+    const start = { x: 0, y: 0 };
+    expect(
+      tickUntil(b, h, 2, () => {
+        if (b.state === 'telegraph') Object.assign(start, { x: b.x, y: b.y });
+        return b.state === 'charge';
+      }),
+    ).toBe(true);
+    expect(h.mines.length).toBe(WARLORD.chargeMines);
+    expect(h.mines[0].x).toBeCloseTo(start.x, 5);
+    expect(h.mines[0].y).toBeCloseTo(start.y, 5);
+    tickUntil(b, h, WARLORD.adds.everySec, () => false);
+    expect(h.adds.length).toBe(4);
+  });
+  it('hits for 30 on contact', () => {
+    const h = host();
+    const b = warlord(h);
+    b.chargeCd = 99;
+    h.player.x = b.x + 30;
+    h.player.y = b.y;
+    h.time += DT;
+    updateBoss(b, h);
+    expect(h.hits).toEqual([WARLORD.contactDamage]);
   });
 });

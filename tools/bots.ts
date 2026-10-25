@@ -2,6 +2,7 @@ import { PERKS, type PerkId } from '../src/data/perks';
 import { DT } from '../src/data/sim';
 import { BOSS, BOSSES } from '../src/data/boss';
 import { RUN } from '../src/data/run';
+import { bossRadius } from '../src/sim/boss';
 import { choosePerk, createWorld, step, type Input, type World } from '../src/sim/world';
 
 /**
@@ -18,8 +19,9 @@ function bossAvoid(w: World, range: number): { x: number; y: number; threat: num
   let x = 0;
   let y = 0;
   let threat = 0;
-  if (d < range + BOSS.radius) {
-    const k = (range + BOSS.radius - d) / range;
+  const r = bossRadius(b);
+  if (d < range + r) {
+    const k = (range + r - d) / range;
     x += (dx / d) * k;
     y += (dy / d) * k;
     threat += k;
@@ -27,7 +29,7 @@ function bossAvoid(w: World, range: number): { x: number; y: number; threat: num
   if (b.state === 'telegraph' || b.state === 'charge') {
     const along = dx * b.dirX + dy * b.dirY;
     const side = dx * -b.dirY + dy * b.dirX;
-    if (along > -BOSS.radius && along < BOSS.charge.distance + BOSS.radius && Math.abs(side) < BOSS.radius + 20) {
+    if (along > -r && along < BOSS.charge.distance + r && Math.abs(side) < r + 20) {
       const s = Math.sign(side) || 1;
       x += -b.dirY * s * 2;
       y += b.dirX * s * 2;

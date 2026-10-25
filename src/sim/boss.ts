@@ -1,4 +1,4 @@
-import { BOSS, BOSSES, VIPER, bossHp, type DpsStats } from '../data/boss';
+import { BOSS, BOSSES, VIPER, WARLORD, bossHp, type DpsStats } from '../data/boss';
 import { PERK_RULES } from '../data/perks';
 import { MAX_VIEW_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { PLAYER } from '../data/player';
@@ -37,6 +37,8 @@ export interface Boss {
   burstCd: number;
   fanCd: number;
   mineCd: number;
+  // THE WARLORD only: his next scheduled attack is a charge (else an aimed burst).
+  nextCharge: boolean;
 }
 
 /** LT. VIPER's mine (design.md 16.11): arms after a second, then waits for the player or its fuse. */
@@ -53,6 +55,15 @@ export function mineArmed(m: Mine): boolean {
 
 function isGunner(b: Boss): boolean {
   return BOSSES[b.target].style === 'gunner';
+}
+
+function isWarlord(b: Boss): boolean {
+  return BOSSES[b.target].style === 'warlord';
+}
+
+/** His body and hit radius (design.md 16.11: the Warlord's bigger sprite gets a bigger body). */
+export function bossRadius(b: Boss): number {
+  return BOSSES[b.target].radius;
 }
 
 /** Minimal world surface the boss needs, so this file stays independent of world.ts. */
@@ -76,7 +87,7 @@ export interface BossHost {
   arena: { x0: number; y0: number; x1: number; y1: number } | null;
   mines: Mine[];
   hitPlayer(dmg: number): void;
-  spawnAddsRing(count: number, kind?: 'grunt' | 'runner'): void;
+  spawnAddsRing(count: number, kind?: 'grunt' | 'runner', angleOffset?: number): void;
 }
 
 const HALF_W = NATIVE_WIDTH / 2;
@@ -94,7 +105,7 @@ export function createBoss(h: BossHost, target = 0): Boss {
     phase: 1,
     state: 'enter',
     stateT: 0,
-    chargeCd: BOSS.charge.everySec,
+    chargeCd: BOSSES[target].style === 'warlord' ? WARLORD.firstAttackSec : BOSS.charge.everySec,
     ringCd: BOSS.ring.everySec,
     addsCd: 0,
     dirX: 0,
@@ -114,6 +125,7 @@ export function createBoss(h: BossHost, target = 0): Boss {
     burstCd: VIPER.burst.firstAfterSec,
     fanCd: VIPER.fan.firstAfterSec,
     mineCd: 0,
+    nextCharge: true,
   };
 }
 
@@ -128,6 +140,7 @@ function enraged(b: Boss, h: BossHost): boolean {
 
 function ringEvery(b: Boss, h: BossHost): number {
   if (enraged(b, h)) return BOSS.enrage.ringEverySec;
+  if (isWarlord(b)) return WARLORD.ringEverySec;
   return b.phase === 3 ? BOSS.phase3.ringEverySec : BOSS.ring.everySec;
 }
 
@@ -194,13 +207,9 @@ function gunnerWalk(b: Boss, dx: number, dy: number, d: number, speed: number): 
   b.moving = true;
 }
 
-/** LT. VIPER's attacks by phase (design.md 16.11). */
-function gunnerAttacks(b: Boss, h: BossHost, dx: number, dy: number, d: number): void {
+/** The aimed burst in flight: the line tracks, locks, then the bullets go down it. */
+function tickBurst(b: Boss, h: BossHost, dx: number, dy: number, d: number): void {
   const B = VIPER.burst;
-  if (b.aimT < 0 && b.burstLeft === 0) {
-    b.burstCd -= DT;
-    if (b.burstCd <= 0) b.aimT = 0;
-  }
   if (b.aimT >= 0) {
     if (b.aimT < B.trackSec) {
       b.aimX = dx / d;
@@ -223,17 +232,28 @@ function gunnerAttacks(b: Boss, h: BossHost, dx: number, dy: number, d: number):
       if (b.burstLeft === 0) b.burstCd = B.everySec - B.trackSec - B.lockSec - (B.bullets - 1) * B.shotGapSec;
     }
   }
-  if (b.phase >= 2) {
-    const F = VIPER.fan;
-    b.fanCd -= DT;
-    // Alternates with the burst: a fan that comes due mid-burst waits for it to finish.
-    if (b.fanCd <= 0 && b.aimT < 0 && b.burstLeft === 0) {
-      b.fanCd += F.everySec;
-      const base = Math.atan2(dy, dx);
-      const spread = (F.spreadDeg * Math.PI) / 180;
-      for (let i = 0; i < F.bullets; i++) shoot(b, h, base + (i / (F.bullets - 1) - 0.5) * spread, F.speed, F.damage, F.range);
-    }
+}
+
+/** The fan, every 4 s from phase 2; one that comes due mid-burst waits for it to finish. */
+function tickFan(b: Boss, h: BossHost, dx: number, dy: number): void {
+  const F = VIPER.fan;
+  b.fanCd -= DT;
+  if (b.fanCd <= 0 && b.aimT < 0 && b.burstLeft === 0) {
+    b.fanCd += F.everySec;
+    const base = Math.atan2(dy, dx);
+    const spread = (F.spreadDeg * Math.PI) / 180;
+    for (let i = 0; i < F.bullets; i++) shoot(b, h, base + (i / (F.bullets - 1) - 0.5) * spread, F.speed, F.damage, F.range);
   }
+}
+
+/** LT. VIPER's attacks by phase (design.md 16.11). */
+function gunnerAttacks(b: Boss, h: BossHost, dx: number, dy: number, d: number): void {
+  if (b.aimT < 0 && b.burstLeft === 0) {
+    b.burstCd -= DT;
+    if (b.burstCd <= 0) b.aimT = 0;
+  }
+  tickBurst(b, h, dx, dy, d);
+  if (b.phase >= 2) tickFan(b, h, dx, dy);
   if (b.phase === 3) {
     const M = VIPER.mines;
     b.mineCd -= DT;
@@ -282,6 +302,13 @@ export function checkPhase(b: Boss, h: BossHost): void {
     b.mineCd = 0;
     b.chargeCd = Math.min(b.chargeCd, BOSS.phase3.chargeEverySec);
   }
+  if (isWarlord(b)) b.chargeCd = WARLORD.firstAttackSec;
+}
+
+/** Seconds from the end of a charge to his next attack. */
+function chargeEvery(b: Boss): number {
+  if (isWarlord(b)) return WARLORD.attackEverySec;
+  return b.phase === 3 ? BOSS.phase3.chargeEverySec : BOSS.charge.everySec;
 }
 
 export function updateBoss(b: Boss, h: BossHost): void {
@@ -291,6 +318,8 @@ export function updateBoss(b: Boss, h: BossHost): void {
   const d = Math.hypot(dx, dy) || 1;
   if (b.flash > 0) b.flash -= DT;
   const gunner = isGunner(b);
+  const warlord = isWarlord(b);
+  const r = bossRadius(b);
   const speed = (gunner ? VIPER.speed : BOSS.speed) * (enraged(b, h) ? BOSS.enrage.speedMul : 1);
   b.moving = false;
   updateMines(h);
@@ -304,8 +333,8 @@ export function updateBoss(b: Boss, h: BossHost): void {
       // Damageable (and attacking) once fully inside the tallest view.
       const a = h.arena;
       const inside = a
-        ? b.x >= a.x0 + BOSS.radius && b.x <= a.x1 - BOSS.radius && b.y >= a.y0 + BOSS.radius && b.y <= a.y1 - BOSS.radius
-        : Math.abs(b.x - p.x) <= HALF_W - BOSS.radius && Math.abs(b.y - p.y) <= HALF_H - BOSS.radius;
+        ? b.x >= a.x0 + r && b.x <= a.x1 - r && b.y >= a.y0 + r && b.y <= a.y1 - r
+        : Math.abs(b.x - p.x) <= HALF_W - r && Math.abs(b.y - p.y) <= HALF_H - r;
       if (inside) {
         b.damageable = true;
         b.arrivedAt = h.time;
@@ -328,7 +357,16 @@ export function updateBoss(b: Boss, h: BossHost): void {
       b.facing = Math.atan2(dy, dx);
       b.moving = true;
       b.chargeCd -= DT;
+      if (warlord && b.chargeCd <= 0 && (b.aimT >= 0 || b.burstLeft > 0)) break; // the burst finishes first
+      if (warlord && b.chargeCd <= 0 && !b.nextCharge) {
+        // His turn for the aimed burst: he keeps walking while the line tracks.
+        b.nextCharge = true;
+        b.chargeCd = WARLORD.attackEverySec;
+        b.aimT = 0;
+        break;
+      }
       if (b.chargeCd <= 0) {
+        b.nextCharge = false;
         b.state = 'telegraph';
         b.stateT = BOSS.charge.telegraphSec;
         b.dirX = dx / d;
@@ -342,6 +380,10 @@ export function updateBoss(b: Boss, h: BossHost): void {
       if (b.stateT <= 0) {
         b.state = 'charge';
         b.chargeLeft = BOSS.charge.distance;
+        if (warlord && b.phase === 3) {
+          for (let i = 0; i < WARLORD.chargeMines; i++)
+            h.mines.push({ x: b.x, y: b.y, age: 0, damage: VIPER.mines.damage * BOSSES[b.target].damageScale });
+        }
       }
       break;
     case 'charge': {
@@ -352,7 +394,7 @@ export function updateBoss(b: Boss, h: BossHost): void {
       b.moving = true;
       if (b.chargeLeft <= 0) {
         b.state = 'walk';
-        b.chargeCd = b.phase === 3 ? BOSS.phase3.chargeEverySec : BOSS.charge.everySec;
+        b.chargeCd = chargeEvery(b);
       }
       break;
     }
@@ -361,12 +403,12 @@ export function updateBoss(b: Boss, h: BossHost): void {
   // Once inside, the arena walls hold him; a charge that hits a wall stops there (design.md 14.9).
   const ar = h.arena;
   if (ar && b.damageable) {
-    const cx = Math.min(ar.x1 - BOSS.radius, Math.max(ar.x0 + BOSS.radius, b.x));
-    const cy = Math.min(ar.y1 - BOSS.radius, Math.max(ar.y0 + BOSS.radius, b.y));
+    const cx = Math.min(ar.x1 - r, Math.max(ar.x0 + r, b.x));
+    const cy = Math.min(ar.y1 - r, Math.max(ar.y0 + r, b.y));
     if ((cx !== b.x || cy !== b.y) && b.state === 'charge') {
       b.state = 'walk';
       b.chargeLeft = 0;
-      b.chargeCd = b.phase === 3 ? BOSS.phase3.chargeEverySec : BOSS.charge.everySec;
+      b.chargeCd = chargeEvery(b);
     }
     b.x = cx;
     b.y = cy;
@@ -380,6 +422,26 @@ export function updateBoss(b: Boss, h: BossHost): void {
       if (b.ringCd <= 0) {
         b.ringCd += BOSS.enrage.ringEverySec;
         fireRing(b, h);
+      }
+    }
+  } else if (warlord && b.state !== 'enter' && b.state !== 'stagger') {
+    if (b.state === 'walk') {
+      tickBurst(b, h, dx, dy, d);
+      if (b.phase >= 2) tickFan(b, h, dx, dy);
+    }
+    if (b.phase >= 2 || enraged(b, h)) {
+      b.ringCd -= DT;
+      if (b.ringCd <= 0) {
+        b.ringCd += ringEvery(b, h);
+        fireRing(b, h);
+      }
+    }
+    if (b.phase === 3) {
+      b.addsCd -= DT;
+      if (b.addsCd <= 0) {
+        b.addsCd += WARLORD.adds.everySec;
+        h.spawnAddsRing(WARLORD.adds.grunts, 'grunt');
+        h.spawnAddsRing(WARLORD.adds.runners, 'runner', Math.PI / WARLORD.adds.runners);
       }
     }
   } else if (!gunner && b.state !== 'enter' && b.state !== 'stagger') {
@@ -400,8 +462,9 @@ export function updateBoss(b: Boss, h: BossHost): void {
   }
 
   const cd = Math.hypot(p.x - b.x, p.y - b.y);
-  if (b.state !== 'enter' && cd < BOSS.radius + PLAYER.hitRadius) {
+  if (b.state !== 'enter' && cd < r + PLAYER.hitRadius) {
     if (gunner) h.hitPlayer(VIPER.contactDamage);
+    else if (warlord && b.state !== 'charge') h.hitPlayer(WARLORD.contactDamage);
     else h.hitPlayer((b.state === 'charge' ? BOSS.charge.damage : BOSS.contactDamage) * BOSSES[b.target].damageScale);
   }
 }

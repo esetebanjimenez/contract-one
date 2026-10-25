@@ -49,6 +49,14 @@ const checks: Check[] = [
     },
   },
   {
+    scene: 'warlord',
+    waitMs: 150,
+    ok: async (p) =>
+      (await p.evaluate(() => (window as unknown as { __world: { boss: { target: number } | null } }).__world.boss?.target)) === 2
+        ? null
+        : 'THE WARLORD is not in the fight',
+  },
+  {
     scene: 'grunts',
     waitMs: 300,
     ok: async (p) => {
