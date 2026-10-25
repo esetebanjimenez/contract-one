@@ -34,6 +34,10 @@ export interface PerkDef {
   weight: number;
   damageType: boolean; // counts toward the damage-perk offer rule
   category: PerkCategory;
+  /** design.md 16.12: 'crate' perks are only offered by supply crates, never at level-ups. */
+  pool: 'level' | 'crate';
+  /** Crate perks: the fixed gain per crate pick (display units, no tiers). */
+  crateStep?: number;
 }
 
 /** design.md 16.1: move speed gains past +60% count at half value. */
@@ -54,6 +58,7 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: true,
     category: 'attack',
+    pool: 'level',
   },
   {
     id: 'rof',
@@ -65,6 +70,7 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: true,
     category: 'attack',
+    pool: 'level',
   },
   {
     id: 'pierce',
@@ -76,6 +82,7 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: true,
     category: 'attack',
+    pool: 'level',
   },
   {
     id: 'multishot',
@@ -87,6 +94,8 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: true,
     category: 'attack',
+    pool: 'crate',
+    crateStep: 1,
   },
   {
     id: 'move',
@@ -98,6 +107,7 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: false,
     category: 'utility',
+    pool: 'level',
   },
   {
     id: 'maxhp',
@@ -109,6 +119,7 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: false,
     category: 'defence',
+    pool: 'level',
   },
   {
     id: 'magnet',
@@ -120,6 +131,7 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: false,
     category: 'utility',
+    pool: 'level',
   },
   {
     id: 'crit',
@@ -131,6 +143,7 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: true,
     category: 'attack',
+    pool: 'level',
   },
   {
     id: 'bspeed',
@@ -142,6 +155,7 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: false,
     category: 'utility',
+    pool: 'level',
   },
   {
     id: 'regen',
@@ -153,6 +167,7 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: false,
     category: 'defence',
+    pool: 'level',
   },
   {
     id: 'armor',
@@ -164,6 +179,7 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: false,
     category: 'defence',
+    pool: 'level',
   },
   {
     id: 'ricochet',
@@ -175,6 +191,7 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: true,
     category: 'attack',
+    pool: 'level',
   },
   // design.md 16.7: normal tiers, no caps except HE stops at 100%.
   {
@@ -187,6 +204,8 @@ export const PERKS: PerkDef[] = [
     weight: 1,
     damageType: true,
     category: 'attack',
+    pool: 'crate',
+    crateStep: 15,
   },
   {
     id: 'drone',
@@ -198,6 +217,8 @@ export const PERKS: PerkDef[] = [
     weight: 0.6,
     damageType: true,
     category: 'utility',
+    pool: 'crate',
+    crateStep: 1,
   },
   {
     id: 'grenade',
@@ -209,6 +230,8 @@ export const PERKS: PerkDef[] = [
     weight: 0.6,
     damageType: true,
     category: 'attack',
+    pool: 'crate',
+    crateStep: 1,
   },
   // design.md 16.9: special-attack cooldown. Picks multiply, so the stack holds the combined cut.
   {
@@ -221,8 +244,18 @@ export const PERKS: PerkDef[] = [
     weight: 0.6,
     damageType: false,
     category: 'utility',
+    pool: 'level',
   },
 ];
+
+/** Supply crates (design.md 16.12): cards per crate. Every elite and lieutenant drops one; crates never expire. */
+export const CRATE = {
+  cards: 3,
+  touchRadius: 14, // the player walks over it; the Scrap magnet never pulls it
+};
+
+/** The four perks only supply crates give (design.md 16.12). */
+export const CRATE_PERKS: readonly PerkId[] = PERKS.filter((d) => d.pool === 'crate').map((d) => d.id);
 
 /** Perks that multiply instead of add (design.md 16.9): new total = 100 - (100 - total) x (1 - v / 100). */
 export const MULTIPLICATIVE: ReadonlySet<PerkId> = new Set<PerkId>(['cooldown']);

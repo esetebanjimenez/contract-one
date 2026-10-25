@@ -22,12 +22,15 @@ interface Host {
 /** Seconds a number stays after its last hit. */
 export const DAMAGE_NUMBER_LIFE = DN.riseSec;
 
-/** Show a hit: normal hits merge into a live number on the same target; crits always get their own. */
-export function addDamageNumber(w: Host, key: number, x: number, y: number, dmg: number, crit: boolean): void {
+/**
+ * Show a hit: normal hits merge into a live number on the same target; crits always get their own.
+ * Bosses and elites (design.md 16.12) merge over the longer boss window.
+ */
+export function addDamageNumber(w: Host, key: number, x: number, y: number, dmg: number, crit: boolean, bossWindow = false): void {
   if (dmg <= 0) return;
   const list = w.damageNumbers;
   if (!crit) {
-    const win = key === BOSS_KEY ? DN.bossMergeSec : DN.mergeSec;
+    const win = key === BOSS_KEY || bossWindow ? DN.bossMergeSec : DN.mergeSec;
     for (let i = list.length - 1; i >= 0; i--) {
       const n = list[i];
       if (n.key === key && !n.crit && w.time - n.at <= win) {

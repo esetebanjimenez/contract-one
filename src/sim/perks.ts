@@ -109,7 +109,7 @@ export function makeOffer(id: PerkId, rolled: TierId, stacks: PerkStacks): Offer
  */
 export function drawOffer(stacks: PerkStacks, damagePicks: number, level: number, count: number, rng: () => number): Offer[] {
   const special = SPECIAL_ATTACKS.some((id) => stacks[id] > 0);
-  const pool = PERKS.filter((d) => stacks[d.id] < d.maxTotal && (d.id !== 'cooldown' || special));
+  const pool = PERKS.filter((d) => d.pool === 'level' && stacks[d.id] < d.maxTotal && (d.id !== 'cooldown' || special));
   const ids: PerkId[] = [];
   if (damagePicks < PERK_RULES.minDamagePerks) {
     const dmgPool = pool.filter((d) => d.damageType);
@@ -130,4 +130,17 @@ export function drawOffer(stacks: PerkStacks, damagePicks: number, level: number
     [ids[i], ids[j]] = [ids[j], ids[i]];
   }
   return ids.map((id) => makeOffer(id, rollTier(level, rng), stacks));
+}
+
+/**
+ * A supply crate's cards (design.md 16.12): up to `count` different crate perks, drawn evenly, each the
+ * perk's fixed crate step with no tier. A perk at its hard limit (HE at 100%) is left out.
+ */
+export function drawCrateOffer(stacks: PerkStacks, count: number, rng: () => number): Offer[] {
+  const pool = PERKS.filter((d) => d.pool === 'crate' && stacks[d.id] < d.maxTotal);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, count).map((d) => ({ id: d.id, tier: 'common', value: Math.min(d.crateStep!, d.maxTotal - stacks[d.id]) }));
 }

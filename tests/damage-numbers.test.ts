@@ -38,6 +38,16 @@ describe('damage numbers (16.10)', () => {
     expect(w.damageNumbers.length).toBe(1);
     expect(w.damageNumbers[0].value).toBe(20);
   });
+  it('gives elites the boss window too (design.md 16.12), not normal enemies', () => {
+    const w = host();
+    addDamageNumber(w, 7, 0, 0, 10, false, true);
+    addDamageNumber(w, 8, 0, 0, 10, false);
+    w.time = 0.22;
+    addDamageNumber(w, 7, 0, 0, 10, false, true);
+    addDamageNumber(w, 8, 0, 0, 10, false);
+    expect(w.damageNumbers.filter((n) => n.key === 7).length).toBe(1);
+    expect(w.damageNumbers.filter((n) => n.key === 8).length).toBe(2);
+  });
   it('caps at 40 and drops the oldest first', () => {
     const w = host();
     for (let i = 0; i < 45; i++) {
@@ -80,7 +90,7 @@ describe('damage numbers (16.10)', () => {
         fireTimer: 9,
         aiming: false,
         facing: 1,
-        elite: false,
+        veteran: false,
         flash: 0,
       });
     for (let i = 0; i < 120 && w.damageNumbers.length === 0; i++) step(w, { mx: 0, my: 0 });

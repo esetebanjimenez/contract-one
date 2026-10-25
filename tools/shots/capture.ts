@@ -29,6 +29,28 @@ const checks: Check[] = [
     },
   },
   {
+    scene: 'crate',
+    waitMs: 500,
+    ok: async (p) => {
+      const cards = await p.$$eval('.modal:not([hidden]) .cards .card', (e) => e.length);
+      const header = await p.$('.modal:not([hidden]) .title.crate img');
+      if (cards !== 3) return `expected 3 crate cards, saw ${cards}`;
+      return header ? null : 'no SUPPLY CRATE header';
+    },
+  },
+  {
+    scene: 'crates',
+    waitMs: 500,
+    ok: async (p) => {
+      const [n, elites] = await p.evaluate(() => {
+        const w = (window as unknown as { __world: { crates: unknown[]; enemies: { elite?: boolean }[] } }).__world;
+        return [w.crates.length, w.enemies.filter((e) => e.elite).length];
+      });
+      if (n !== 2) return `expected 2 crates on the ground, saw ${n}`;
+      return elites >= 1 ? null : 'no elite on screen';
+    },
+  },
+  {
     scene: 'boss',
     waitMs: 500,
     ok: async (p) =>

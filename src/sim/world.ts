@@ -1,19 +1,19 @@
 import { BOSSES, LIEUTENANT_DOWN } from '../data/boss';
 import { MAX_VIEW_HEIGHT, NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
-import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, GRUNT_WEAPONS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
+import { ELITE, ENEMIES, VETERAN, ENEMY_BULLET_RADIUS, GRUNT_WEAPONS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 
 const GRUNT_SWING_SEC = (GRUNT_WEAPONS.windupMs + GRUNT_WEAPONS.strikeMs) / 1000;
 import { LEVELS, scrapForLevel } from '../data/levels';
 import { DAMAGE_NUMBERS } from '../data/damage-numbers';
 import { BOSS_KEY, addDamageNumber, pruneDamageNumbers, type DamageNumber } from './damage-numbers';
-import { DRONE, EXPLOSIVE, GRENADE, PERK_RULES, addStack, overflow, perkDef, type PerkId } from '../data/perks';
+import { CRATE, CRATE_PERKS, DRONE, EXPLOSIVE, GRENADE, PERK_RULES, addStack, overflow, perkDef, type PerkId } from '../data/perks';
 import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { RUN } from '../data/run';
 import { SPAWN, SPAWN_BANDS } from '../data/spawns';
 import { bossRadius, checkPhase, createBoss, updateBoss, type Boss, type BossHost, type Mine } from './boss';
 import { SpatialGrid } from './grid';
-import { computeStats, drawOffer, emptyStacks, type Offer, type PerkStacks, type PlayerStats } from './perks';
+import { computeStats, drawCrateOffer, drawOffer, emptyStacks, type Offer, type PerkStacks, type PlayerStats } from './perks';
 import { createRng } from './rng';
 
 export interface Enemy {
@@ -27,7 +27,8 @@ export interface Enemy {
   aiming: boolean; // Riflemen: stopped with the muzzle glint, about to fire
   firedAt?: number; // run time of the last shot (1-frame white muzzle flash)
   facing: 1 | -1;
-  elite: boolean;
+  veteran: boolean; // design.md 16.12: the old Elite, spawning in mass
+  elite?: boolean; // the scheduled elite (design.md 16.12): bigger def, HP bar, drops a crate
   flash: number; // seconds of white hit-flash left
   fleeing?: boolean; // boss clear-out: runs off, harmless, can't be hit
   noScrap?: boolean; // phase 3 adds
@@ -96,7 +97,15 @@ export interface Pickup {
   pop: number; // seconds left of the cyan merge pop
 }
 
-export type Phase = 'play' | 'levelup' | 'dead';
+/** A supply crate on the ground (design.md 16.12). */
+export interface Crate {
+  x: number;
+  y: number;
+  age: number;
+  lt: boolean; // a lieutenant's crate (the bigger starred sprite); crates never expire, like Scrap
+}
+
+export type Phase = 'play' | 'levelup' | 'crate' | 'dead';
 
 export interface Input {
   mx: number; // movement vector, magnitude <= 1
@@ -111,6 +120,9 @@ export interface Fight {
   arrivedAt: number; // run time he became damageable (-1 before)
   killedAt: number; // run time of the kill (-1 if alive)
   damage: number; // damage dealt to him
+  crates: number; // supply crates opened before he spawned (design.md 16.12)
+  kit: Partial<Record<PerkId, number>>; // crate perks owned at his spawn
+  elites: number; // scheduled elites killed before he spawned (design.md 16.12)
 }
 
 export interface World {
@@ -143,6 +155,12 @@ export interface World {
   enemyBullets: Bullet[];
   mines: Mine[]; // LT. VIPER's (design.md 16.11); cleared when a fight ends
   pickups: Pickup[];
+  crates: Crate[];
+  nextEliteAt: number; // contract time of the next scheduled elite (design.md 16.12)
+  elitesSpawned: number;
+  elitesKilled: number;
+  cratesDropped: number;
+  cratesOpened: number;
   spawnAcc: number;
   regenAcc: number;
   pressureAngle: number;
@@ -200,6 +218,12 @@ export function createWorld(seed: number): World {
     enemyBullets: [],
     mines: [],
     pickups: [],
+    crates: [],
+    nextEliteAt: ELITE.firstSec,
+    elitesSpawned: 0,
+    elitesKilled: 0,
+    cratesDropped: 0,
+    cratesOpened: 0,
     spawnAcc: 0,
     regenAcc: 0,
     pressureAngle: 0,
@@ -267,24 +291,78 @@ function weighted<K extends string>(w: World, weights: Record<K, number>, exclud
   return keys[keys.length - 1];
 }
 
+function elitesAlive(w: World): number {
+  let n = 0;
+  for (const e of w.enemies) if (e.elite) n++;
+  return n;
+}
+
 export function riflemenAlive(w: World): number {
   let n = 0;
   for (const e of w.enemies) if (e.def.ranged) n++;
   return n;
 }
 
-function pickType(w: World, pressure: boolean): { def: EnemyDef; elite: boolean } {
+function pickType(w: World, pressure: boolean): { def: EnemyDef; veteran: boolean } {
   if (pressure) {
     const heavy = w.contractTime >= SPAWN.pressureHeavyFromSec && w.rng() < SPAWN.pressureHeavyShare;
-    return { def: heavy ? ENEMIES.heavy : ENEMIES.grunt, elite: false };
+    return { def: heavy ? ENEMIES.heavy : ENEMIES.grunt, veteran: false };
   }
   const weights = bandAt(w.contractTime).weights;
   type Kind = keyof typeof weights;
   const noRifle = riflemenAlive(w) >= SPAWN.maxRiflemen;
   const kind = weighted<Kind>(w, weights, noRifle ? ['rifleman'] : []);
-  if (kind !== 'elite') return { def: ENEMIES[kind], elite: false };
-  const base = weighted<Kind>(w, weights, noRifle ? ['elite', 'rifleman'] : ['elite']);
-  return { def: ENEMIES[base as Exclude<Kind, 'elite'>], elite: true };
+  if (kind !== 'veteran') return { def: ENEMIES[kind], veteran: false };
+  return { def: regularType(w, noRifle), veteran: true };
+}
+
+/** A regular type from the current band's weights, Veterans excluded. */
+function regularType(w: World, noRifle: boolean): EnemyDef {
+  const weights = bandAt(w.contractTime).weights;
+  type Kind = keyof typeof weights;
+  const base = weighted<Kind>(w, weights, noRifle ? ['veteran', 'rifleman'] : ['veteran']);
+  return ENEMIES[base as Exclude<Kind, 'veteran'>];
+}
+
+const eliteDefs = new Map<string, EnemyDef>();
+/** The elite's def (design.md 16.12): x1.5 size (hitbox too), x1.5 contact, x0.9 speed, flat Scrap. */
+export function eliteDef(def: EnemyDef): EnemyDef {
+  let d = eliteDefs.get(def.id);
+  if (!d) {
+    d = {
+      ...def,
+      radius: def.radius * ELITE.size,
+      contactDamage: def.contactDamage * ELITE.contact,
+      speed: def.speed * ELITE.speed,
+      scrap: ELITE.scrap,
+    };
+    eliteDefs.set(def.id, d);
+  }
+  return d;
+}
+
+/** The scheduled elite: off-screen like any enemy, off the cap (design.md 16.12). */
+function spawnElite(w: World): Enemy {
+  const def = eliteDef(regularType(w, riflemenAlive(w) >= SPAWN.maxRiflemen));
+  const p = edgePoint(w, w.rng() * Math.PI * 2);
+  const maxHp = def.hp * ELITE.hp * (1 + SCALING.hpPerMinute * (w.contractTime / 60));
+  const e: Enemy = {
+    id: w.nextEnemyId++,
+    def,
+    x: p.x,
+    y: p.y,
+    hp: maxHp,
+    maxHp,
+    fireTimer: rifleMoveSec(w.contractTime),
+    aiming: false,
+    facing: 1,
+    veteran: false,
+    elite: true,
+    flash: 0,
+  };
+  w.enemies.push(e);
+  w.elitesSpawned++;
+  return e;
 }
 
 /** A point just outside the visible rectangle in direction `angle` from the player. */
@@ -330,12 +408,12 @@ export function fullyOnScreen(w: World, e: Enemy): boolean {
 }
 
 export function contactDamage(e: Enemy, t: number): number {
-  return e.def.contactDamage * (e.elite ? ELITE.contact : 1) * (1 + SCALING.contactPerMinute * (t / 60));
+  return e.def.contactDamage * (e.veteran ? VETERAN.contact : 1) * (1 + SCALING.contactPerMinute * (t / 60));
 }
 
 function spawnEnemy(w: World, angle: number, pressure: boolean): void {
   const first = spawnOne(w, angle, pressure);
-  if (first && !first.elite && first.def.groupMin) {
+  if (first && !first.veteran && first.def.groupMin) {
     // Runners arrive in groups from the same edge (design.md 13.2).
     const extra = first.def.groupMin - 1 + Math.floor(w.rng() * (first.def.groupMax! - first.def.groupMin + 1));
     for (let i = 0; i < extra; i++) spawnOne(w, angle + (w.rng() - 0.5) * 0.3, pressure, first.def);
@@ -347,7 +425,7 @@ function farthest(w: World, ok: (e: Enemy, offscreen: boolean) => boolean): numb
   let fd = -1;
   for (let i = 0; i < w.enemies.length; i++) {
     const e = w.enemies[i];
-    if (e.elite) continue;
+    if (e.veteran || e.elite) continue;
     const dx = e.x - w.player.x;
     const dy = e.y - w.player.y;
     const off = Math.abs(dx) > NATIVE_WIDTH / 2 || Math.abs(dy) > HALF_H;
@@ -370,17 +448,18 @@ export function isRingWave(t: number): boolean {
 function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef): Enemy | undefined {
   const cap = CAPS.enemies + (pressure ? SPAWN.pressureOverCap : 0);
   let slot = -1;
-  if (w.enemies.length >= cap) {
-    // At the cap, replace the farthest off-screen non-Elite Grunt, else the farthest off-screen
-    // non-Elite of any type, else the farthest non-Elite, so spawning never stops (design.md 12.2).
+  if (w.enemies.length - elitesAlive(w) >= cap) {
+    // At the cap, replace the farthest off-screen non-Veteran Grunt, else the farthest off-screen
+    // non-Veteran of any type, else the farthest non-Veteran, so spawning never stops (design.md 12.2).
+    // Elites never count toward the cap and are never replaced (design.md 16.12).
     slot = farthest(w, (e, off) => off && e.def.id === 'grunt');
     if (slot === -1) slot = farthest(w, (_e, off) => off);
     if (slot === -1) slot = farthest(w, () => true);
     if (slot === -1) return undefined;
   }
-  const { def, elite } = force ? { def: force, elite: false } : pickType(w, pressure);
+  const { def, veteran } = force ? { def: force, veteran: false } : pickType(w, pressure);
   const p = edgePoint(w, angle);
-  const maxHp = def.hp * (elite ? ELITE.hp : 1) * (1 + SCALING.hpPerMinute * (w.contractTime / 60));
+  const maxHp = def.hp * (veteran ? VETERAN.hp : 1) * (1 + SCALING.hpPerMinute * (w.contractTime / 60));
   const e: Enemy = {
     id: w.nextEnemyId++,
     def,
@@ -391,7 +470,7 @@ function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef):
     fireTimer: rifleMoveSec(w.contractTime),
     aiming: false,
     facing: 1,
-    elite,
+    veteran,
     flash: 0,
   };
   if (slot >= 0) w.enemies[slot] = e;
@@ -405,6 +484,10 @@ function updateSpawns(w: World, input: Input): void {
   // Held while the camera eases back after a release, so nothing pops in on screen (Game Designer, 16.11).
   if (cameraEasing(w)) return;
   const t = w.contractTime;
+  if (t >= w.nextEliteAt) {
+    spawnElite(w);
+    w.nextEliteAt += ELITE.everySec;
+  }
   const pressure = inPressureWave(t);
   // Anti-flee: pressure arrives ahead of the player's movement, random when standing still.
   if (Math.hypot(input.mx, input.my) > 0.01) w.pressureAngle = Math.atan2(input.my, input.mx);
@@ -535,7 +618,7 @@ function areaDamage(w: World, x: number, y: number, r: number, dmg: number, crit
 }
 
 function showHit(w: World, e: Enemy, dmg: number, crit: boolean): void {
-  addDamageNumber(w, e.id, e.x, e.y - e.def.radius - DAMAGE_NUMBERS.abovePx, dmg, crit);
+  addDamageNumber(w, e.id, e.x, e.y - e.def.radius - DAMAGE_NUMBERS.abovePx, dmg, crit, !!e.elite);
 }
 
 /**
@@ -711,12 +794,17 @@ export function clumpPickups(w: World): void {
 export function killEnemy(w: World, i: number): void {
   const e = w.enemies[i];
   w.kills++;
-  const scrap = e.noScrap ? 0 : e.def.scrap * (e.elite ? ELITE.scrap : 1);
+  const scrap = e.noScrap ? 0 : e.def.scrap * (e.veteran ? VETERAN.scrap : 1);
+  if (e.elite) {
+    // Every elite kill drops a crate; Veterans never do (design.md 16.12).
+    w.elitesKilled++;
+    dropCrate(w, e.x, e.y, false);
+  }
   w.scrapDropped += scrap;
   if (scrap === 0) {
     // Phase 3 adds drop nothing.
   } else if (w.pickups.length < CAPS.pickups)
-    w.pickups.push({ x: e.x, y: e.y, value: scrap, age: 0, flying: false, cache: e.elite, pop: 0 });
+    w.pickups.push({ x: e.x, y: e.y, value: scrap, age: 0, flying: false, cache: e.veteran || !!e.elite, pop: 0 });
   else {
     // Past the cap, the value goes onto the piece on the ground nearest to where the enemy died,
     // with a cyan pop so the drop is seen landing (design.md 15.3).
@@ -783,7 +871,7 @@ export function step(w: World, input: Input): void {
     e.facing = dx >= 0 ? 1 : -1;
     if (e.fleeing) {
       // Clear-out: straight away from the player at 1.5x speed, no contact, no shots.
-      const sp = e.def.speed * (e.elite ? ELITE.speed : 1) * RUN.fleeSpeedMul;
+      const sp = e.def.speed * (e.veteran ? VETERAN.speed : 1) * RUN.fleeSpeedMul;
       e.x -= (dx / d) * sp * DT;
       e.y -= (dy / d) * sp * DT;
       e.facing = dx >= 0 ? -1 : 1;
@@ -791,7 +879,7 @@ export function step(w: World, input: Input): void {
     }
     const r = e.def.ranged;
     if (!r || (!e.aiming && d > r.stopDistance)) {
-      const sp = e.def.speed * (e.elite ? ELITE.speed : 1);
+      const sp = e.def.speed * (e.veteran ? VETERAN.speed : 1);
       e.x += (dx / d) * sp * DT;
       e.y += (dy / d) * sp * DT;
     }
@@ -822,9 +910,9 @@ export function step(w: World, input: Input): void {
       } else if (e.fireTimer <= 0) {
         e.aiming = false;
         e.fireTimer = rifleMoveSec(w.contractTime);
-        const shots = e.elite ? ELITE.rifleSpreadShots : 1;
+        const shots = e.veteran || e.elite ? VETERAN.rifleSpreadShots : 1;
         const base = Math.atan2(dy, dx);
-        const spread = (ELITE.rifleSpreadDeg * Math.PI) / 180;
+        const spread = (VETERAN.rifleSpreadDeg * Math.PI) / 180;
         const n = fullyOnScreen(w, e) ? shots : 0;
         if (n > 0) e.firedAt = w.time;
         for (let k = 0; k < n && d <= r.bulletRange && w.enemyBullets.length < CAPS.enemyBullets; k++) {
@@ -973,11 +1061,20 @@ export function step(w: World, input: Input): void {
     }
   }
 
+  // Supply crates: walked over, never pulled by the magnet, never expire (design.md 16.12).
+  let touched = -1;
+  for (let i = w.crates.length - 1; i >= 0; i--) {
+    const c = w.crates[i];
+    c.age += DT;
+    if (touched < 0 && (c.x - p.x) ** 2 + (c.y - p.y) ** 2 <= CRATE.touchRadius ** 2) touched = i;
+  }
+
   w.peakEnemies = Math.max(w.peakEnemies, w.enemies.length);
   w.peakBullets = Math.max(w.peakBullets, w.bullets.length + w.enemyBullets.length);
 
   if (ar) despawnFled(w, ar);
   if (w.won && (w.enemies.length || w.enemyBullets.length)) clearField(w);
+  if (touched >= 0 && w.phase === 'play' && !w.won) openCrate(w, touched);
   if (w.phase === 'play' && w.pendingLevels > 0 && !w.won) openLevelUp(w);
 }
 
@@ -1058,7 +1155,18 @@ function updateWarlord(w: World): void {
   const a = w.arena;
   if (!w.boss && a && w.time >= a.lockedAt + RUN.warningSec) {
     w.boss = createBoss(bossHost(w), w.target);
-    w.fights.push({ target: w.target, level: w.level, hp: w.boss.maxHp, arrivedAt: -1, killedAt: -1, damage: 0 });
+    const kit = Object.fromEntries(CRATE_PERKS.map((id) => [id, w.stacks[id]]));
+    w.fights.push({
+      target: w.target,
+      level: w.level,
+      hp: w.boss.maxHp,
+      arrivedAt: -1,
+      killedAt: -1,
+      damage: 0,
+      crates: w.cratesOpened,
+      elites: w.elitesKilled,
+      kit,
+    });
   }
   const b = w.boss;
   if (!b || b.hp <= 0) return;
@@ -1088,6 +1196,20 @@ function lieutenantDown(w: World, b: Boss): void {
     const r = LIEUTENANT_DOWN.scrapSpreadPx;
     w.pickups.push({ x: b.x + Math.cos(ang) * r, y: b.y + Math.sin(ang) * r, value: v, age: 0, flying: false, cache: false, pop: 0 });
   }
+  dropCrate(w, b.x, b.y, true); // every lieutenant drops one (design.md 16.12)
+}
+
+function dropCrate(w: World, x: number, y: number, lt: boolean): void {
+  w.crates.push({ x, y, age: 0, lt });
+  w.cratesDropped++;
+}
+
+/** Touching a crate pauses the run on the crate screen: 3 crate-perk cards, no tiers (design.md 16.12). */
+function openCrate(w: World, i: number): void {
+  w.crates.splice(i, 1);
+  w.cratesOpened++;
+  w.offer = drawCrateOffer(w.stacks, CRATE.cards, w.rng);
+  w.phase = 'crate';
 }
 
 /**
@@ -1124,14 +1246,17 @@ function openLevelUp(w: World): void {
 
 export function choosePerk(w: World, id: PerkId): void {
   const o = w.offer.find((x) => x.id === id);
-  if (w.phase !== 'levelup' || !o) return;
+  if ((w.phase !== 'levelup' && w.phase !== 'crate') || !o) return;
+  const crate = w.phase === 'crate';
   const prevMax = w.stats.maxHp;
   w.stacks[o.id] = addStack(o.id, w.stacks[o.id], o.value);
   if (perkDef(o.id).damageType) w.damagePicks++;
   w.stats = computeStats(w.stacks);
   if (o.id === 'maxhp') w.player.hp = Math.min(w.stats.maxHp, w.player.hp + (w.stats.maxHp - prevMax));
-  w.level++;
-  w.pendingLevels--;
+  if (!crate) {
+    w.level++;
+    w.pendingLevels--;
+  }
   w.offer = [];
   w.phase = 'play';
   if (w.pendingLevels > 0) openLevelUp(w);

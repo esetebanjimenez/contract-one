@@ -1,6 +1,6 @@
 /**
  * Screenshot scenes for CI (never deployed: built only by vite.shots.config.ts).
- * ?scene=levelup | boss | viper | warlord | results | grunts | numbers fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
+ * ?scene=levelup | crate | crates | boss | viper | warlord | results | grunts | numbers fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
  */
 import { boot } from '../../src/game';
 import { BOSSES, VIPER } from '../../src/data/boss';
@@ -8,10 +8,10 @@ import { ENEMIES, gruntWeapon, type GruntWeapon } from '../../src/data/enemies';
 import { DT } from '../../src/data/sim';
 import { PLAYER } from '../../src/data/player';
 import { computeStats } from '../../src/sim/perks';
-import { createWorld, step, type World } from '../../src/sim/world';
+import { createWorld, eliteDef, step, type World } from '../../src/sim/world';
 import { playUntil } from '../bots';
 
-export type Scene = 'levelup' | 'boss' | 'viper' | 'warlord' | 'results' | 'grunts' | 'numbers';
+export type Scene = 'levelup' | 'crate' | 'crates' | 'boss' | 'viper' | 'warlord' | 'results' | 'grunts' | 'numbers';
 const SEED = 7;
 
 function build(scene: Scene): World {
@@ -40,7 +40,7 @@ function build(scene: Scene): World {
         maxHp: 1e6,
         fireTimer: 0,
         facing: Math.cos(a) > 0 ? -1 : 1,
-        elite: false,
+        veteran: false,
         flash: 0,
         aiming: false,
       });
@@ -67,7 +67,7 @@ function build(scene: Scene): World {
         maxHp: 4000,
         fireTimer: 9,
         facing: Math.cos(a) > 0 ? -1 : 1,
-        elite: false,
+        veteran: false,
         flash: 0,
         aiming: false,
       });
@@ -82,6 +82,34 @@ function build(scene: Scene): World {
     playUntil(w, 'kite-smart', (x) => x.time >= 150);
     w.pendingLevels = 1;
     step(w, { mx: 0, my: 0 });
+    return w;
+  }
+  if (scene === 'crate' || scene === 'crates') {
+    // A mid-run kit, then an elite crate and a lieutenant crate on the ground, and an elite Grunt at 60% HP
+    // with his bar next to a Veteran Grunt (design.md 16.12);
+    // 'crate' walks onto one so the SUPPLY CRATE screen shows.
+    playUntil(w, 'kite-smart', (x) => x.time >= 150);
+    w.phase = 'play';
+    w.pendingLevels = 0;
+    w.player.invuln = 3; // the capture, not the run
+    w.player.hp = w.stats.maxHp;
+    const { x, y } = w.player;
+    w.crates.push({ x: x + 44, y: y - 18, age: 0, lt: false }, { x: x - 44, y: y + 22, age: 0.7, lt: true });
+    if (scene === 'crates') {
+      w.enemies = w.enemies.filter((e) => Math.hypot(e.x - x, e.y - y) > 110);
+      const near = { fireTimer: 9, facing: -1 as const, flash: 0, aiming: false };
+      const def = eliteDef(ENEMIES.grunt);
+      w.enemies.push(
+        { id: w.nextEnemyId++, def, x: x + 70, y: y + 50, hp: 6e6, maxHp: 1e7, veteran: false, elite: true, ...near },
+        { id: w.nextEnemyId++, def: ENEMIES.grunt, x: x + 30, y: y + 62, hp: 1500, maxHp: 1500, veteran: true, ...near },
+      );
+      for (const e of w.enemies) e.def = { ...e.def, speed: 0 }; // hold still for the capture
+    }
+    if (scene === 'crate') {
+      w.crates[0].x = x;
+      w.crates[0].y = y;
+      step(w, { mx: 0, my: 0 });
+    }
     return w;
   }
   w.player.invuln = 1e9; // survive to the fight whatever the seed does
