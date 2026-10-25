@@ -550,7 +550,7 @@ Esteban's full-contract run (18:28, level 66, 2/3 targets, the Warlord at 1%) ma
 - **Expected count:** about 6–7 crates by the Warlord (one elite crate around 3:30, LT. HAMMER, one or two elites, LT. VIPER, one or two elites). A full contract ends around +2 bullets, +2 drones and 30% HE, instead of +13 bullets.
 
 **The crate:**
-- It lands where the elite or lieutenant died and doesn't get pulled by the Scrap magnet; the player walks over it. Elite crates last 30 s and blink in the last 5 s. Lieutenant crates never expire.
+- It lands where the elite or lieutenant died and doesn't get pulled by the Scrap magnet; the player walks over it. Crates **never expire**, like Scrap (Esteban, 2026-10-25): no lifetime and no blink. Lieutenant crates use the larger starred crate sprite; elite crates use the standard one.
 - Touching it pauses the game and opens a **crate screen**: the same card layout as level-ups, with **3 cards** drawn from the four crate perks, no rarity colours, and a "SUPPLY CRATE" header. Pick one. If HE is already at 100% it isn't offered; with fewer than 3 options left, show what remains.
 - Crate perks show in YOUR KIT (§16.6) and on the results screen as usual.
 - **Look (Artist's call):** a military crate, distinct from Scrap at a glance. Not cyan (Scrap) and not red-orange (danger). A gold strap matching the crit gold is the suggestion.
@@ -565,7 +565,7 @@ Esteban's full-contract run (18:28, level 66, 2/3 targets, the Warlord at 1%) ma
 - If it's still trivial, the next lever is the Scrap needed per level after 5:00 (level 66 at 18:28 is still a lot of picks), then the elite crate gap (1:30).
 
 **Needs:**
-- **Art:** the crate sprite (ground, with a blink frame) and the crate-screen header.
-- **Data:** a `pool: 'level' | 'crate'` field on each perk in `src/data/perks.ts`, with crate steps and the crate rules (elite gap 90 s, elite lifetime 30 s, cards 3) in data.
+- **Art:** the crate sprite (olive, dull brass straps, glint and bob, no warn frame), a larger starred lieutenant crate, and the crate-screen header.
+- **Data:** a `pool: 'level' | 'crate'` field on each perk in `src/data/perks.ts`, with crate steps and the crate rules (elite gap 90 s, cards 3) in data.
 - **Sim:** bots open any crate they touch and pick by their usual rule.
 
