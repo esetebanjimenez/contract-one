@@ -133,6 +133,11 @@ export function gruntFrame(weapon: GruntWeapon, id: number, time: number, swingA
   return f.walk[Math.floor((time * 1000 + id * 37) / GRUNT_WEAPONS.walkFrameMs) % 2];
 }
 
+/** The elite Grunt's lunge frame: windup through the telegraph, strike through the dash (design.md 16.12). */
+export function lungeFrame(weapon: GruntWeapon, t: number): ArtId {
+  return t < ELITE.lunge.telegraphSec ? GRUNT_FRAMES[weapon].windup : GRUNT_FRAMES[weapon].strike;
+}
+
 /**
  * Each target's sprite set, drawn at native size and facing right (Artist, PR #23). LT. HAMMER keeps the M3
  * warlord_t1 frames. Walks go A-idle-B-idle at 180 ms. aim shows while the aim line is up, fire during a burst.
@@ -483,11 +488,16 @@ export class Renderer {
     }
     w.enemies.forEach((e, i) => {
       const anim = ENEMY_WALK[e.def.id];
+      // An elite Runner's walk cycle plays as much faster as it runs (design.md 16.12).
+      const frameMs = anim && (e.elite ? anim.frameMs / ELITE.byType[e.def.id].speed : anim.frameMs);
+      const lungeT = e.lunge ? w.time - e.lunge.at : -1;
       const art =
         e.def.id === 'grunt'
-          ? gruntFrame(gruntWeapon(e.id), e.id, w.time, e.swingAt)
+          ? lungeT >= 0
+            ? lungeFrame(gruntWeapon(e.id), lungeT) // the elite Grunt's lunge: windup, then strike
+            : gruntFrame(gruntWeapon(e.id), e.id, w.time, e.swingAt)
           : anim
-            ? anim.frames[Math.floor((w.time * 1000 + e.id * 37) / anim.frameMs) % anim.frames.length]
+            ? anim.frames[Math.floor((w.time * 1000 + e.id * 37) / frameMs!) % anim.frames.length]
             : ENEMY_ART[e.def.id];
       // Heavies flash white for one frame per hit; Veterans and elites carry a baked bone-white outline.
       const tex = e.flash > 0 ? this.flashTex[art] : e.veteran || e.elite ? this.outlineTex[art] : this.tex[art];
@@ -521,6 +531,11 @@ export class Renderer {
         this.fx
           .rect(Math.round(e.x + Math.cos(a) * 12) - 1, Math.round(e.y + Math.sin(a) * 12) - 1, 3, 3)
           .fill({ color: fired ? 0xffffff : 0xff4a1c });
+      }
+      // Lunge telegraph (design.md 16.12): the same blinking red-orange dot, out in front along the held aim.
+      if (e.lunge && lungeT < ELITE.lunge.telegraphSec && Math.floor(lungeT / 0.15) % 2 === 0) {
+        const off = e.def.radius + 4;
+        this.fx.rect(Math.round(e.x + e.lunge.ax * off) - 1, Math.round(e.y + e.lunge.ay * off) - 1, 3, 3).fill({ color: 0xff4a1c });
       }
       if (e.elite) this.eliteBar(e);
     });

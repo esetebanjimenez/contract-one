@@ -33,6 +33,8 @@ export interface Enemy {
   fleeing?: boolean; // boss clear-out: runs off, harmless, can't be hit
   noScrap?: boolean; // phase 3 adds
   swingAt?: number; // run time a Grunt's touch swing started (looks only; damage is unaffected)
+  lunge?: { at: number; n: number; ax: number; ay: number }; // elite Grunt lunge in progress: start time, ticks in, aim
+  lungeReadyAt?: number; // run time the next lunge may start
 }
 
 /** The locked boss arena: camera position and the inner wall edges, in world px. */
@@ -325,16 +327,18 @@ function regularType(w: World, noRifle: boolean): EnemyDef {
 }
 
 const eliteDefs = new Map<string, EnemyDef>();
-/** The elite's def (design.md 16.12): x1.5 size (hitbox too), x1.5 contact, x0.9 speed, flat Scrap. */
+/** The elite's def (design.md 16.12): x1.5 size (hitbox too), per-type contact and speed, flat Scrap, faster rifle bullets. */
 export function eliteDef(def: EnemyDef): EnemyDef {
   let d = eliteDefs.get(def.id);
   if (!d) {
+    const m = ELITE.byType[def.id];
     d = {
       ...def,
       radius: def.radius * ELITE.size,
-      contactDamage: def.contactDamage * ELITE.contact,
-      speed: def.speed * ELITE.speed,
+      contactDamage: def.contactDamage * m.contact,
+      speed: def.speed * m.speed,
       scrap: ELITE.scrap,
+      ranged: def.ranged && { ...def.ranged, bulletSpeed: def.ranged.bulletSpeed * ELITE.rifle.bulletSpeed },
     };
     eliteDefs.set(def.id, d);
   }
@@ -345,7 +349,7 @@ export function eliteDef(def: EnemyDef): EnemyDef {
 function spawnElite(w: World): Enemy {
   const def = eliteDef(regularType(w, riflemenAlive(w) >= SPAWN.maxRiflemen));
   const p = edgePoint(w, w.rng() * Math.PI * 2);
-  const maxHp = def.hp * ELITE.hp * (1 + SCALING.hpPerMinute * (w.contractTime / 60));
+  const maxHp = def.hp * ELITE.byType[def.id].hp * (1 + SCALING.hpPerMinute * (w.contractTime / 60));
   const e: Enemy = {
     id: w.nextEnemyId++,
     def,
@@ -353,7 +357,7 @@ function spawnElite(w: World): Enemy {
     y: p.y,
     hp: maxHp,
     maxHp,
-    fireTimer: rifleMoveSec(w.contractTime),
+    fireTimer: eliteRifleMoveSec(w.contractTime),
     aiming: false,
     facing: 1,
     veteran: false,
@@ -373,6 +377,40 @@ function edgePoint(w: World, angle: number): { x: number; y: number } {
   const ty = Math.abs(dy) > 1e-6 ? HALF_H / Math.abs(dy) : Infinity;
   const d = Math.min(tx, ty) + SPAWN.offscreenMin + w.rng() * (SPAWN.offscreenMax - SPAWN.offscreenMin);
   return { x: w.player.x + dx * d, y: w.player.y + dy * d };
+}
+
+/** An elite Rifleman moves x0.75 a regular one's current move time, floor 1.0 s (design.md 16.12). */
+export function eliteRifleMoveSec(t: number): number {
+  return Math.max(ELITE.rifle.moveMin, rifleMoveSec(t) * ELITE.rifle.moveMul);
+}
+
+/**
+ * Elite Grunt lunge (design.md 16.12): within range and off cooldown it stops for the telegraph, tracking the
+ * player, then dashes along the aim it held at the end. True while it lunges (normal chasing is skipped).
+ */
+export function lungeStep(w: World, e: Enemy, dx: number, dy: number, d: number): boolean {
+  const L = ELITE.lunge;
+  if (!e.lunge) {
+    if (w.time < (e.lungeReadyAt ?? 0) || d > L.rangePx) return false;
+    e.lunge = { at: w.time, n: 0, ax: dx / d, ay: dy / d };
+    e.lungeReadyAt = w.time + L.everySec;
+  }
+  // Counted in ticks so the dash always covers exactly dashPx.
+  const tele = Math.round(L.telegraphSec / DT);
+  const dash = Math.round(L.dashSec / DT);
+  const n = e.lunge.n++;
+  if (n < tele) {
+    e.lunge.ax = dx / d;
+    e.lunge.ay = dy / d;
+    return true;
+  }
+  if (n < tele + dash) {
+    e.x += (e.lunge.ax * L.dashPx) / dash;
+    e.y += (e.lunge.ay * L.dashPx) / dash;
+    return true;
+  }
+  e.lunge = undefined;
+  return false;
 }
 
 /** Minimum move time between a Rifleman's stops (design.md 16.4). */
@@ -878,7 +916,8 @@ export function step(w: World, input: Input): void {
       continue;
     }
     const r = e.def.ranged;
-    if (!r || (!e.aiming && d > r.stopDistance)) {
+    const lunging = !!e.elite && e.def.id === 'grunt' && lungeStep(w, e, dx, dy, d);
+    if (!lunging && (!r || (!e.aiming && d > r.stopDistance))) {
       const sp = e.def.speed * (e.veteran ? VETERAN.speed : 1);
       e.x += (dx / d) * sp * DT;
       e.y += (dy / d) * sp * DT;
@@ -909,8 +948,8 @@ export function step(w: World, input: Input): void {
         }
       } else if (e.fireTimer <= 0) {
         e.aiming = false;
-        e.fireTimer = rifleMoveSec(w.contractTime);
-        const shots = e.veteran || e.elite ? VETERAN.rifleSpreadShots : 1;
+        e.fireTimer = e.elite ? eliteRifleMoveSec(w.contractTime) : rifleMoveSec(w.contractTime);
+        const shots = e.elite ? ELITE.rifle.shots : e.veteran ? VETERAN.rifleSpreadShots : 1;
         const base = Math.atan2(dy, dx);
         const spread = (VETERAN.rifleSpreadDeg * Math.PI) / 180;
         const n = fullyOnScreen(w, e) ? shots : 0;
