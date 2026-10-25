@@ -7,15 +7,28 @@ export interface Target {
   hpDpsSec: number; // HP = this x the player's single-target sheet DPS at spawn (design.md 16.5)
   damageScale: number; // charge, bullet and mine damage (contact damage is set per attack style)
   final: boolean; // killing him ends the contract
-  style: 'charger' | 'gunner'; // which attack set he fights with (the Warlord's own schedule is part 3)
+  style: 'charger' | 'gunner' | 'warlord'; // which attack set he fights with
+  radius: number; // body and hit radius, px (scales with his sprite: 30 for 96x96)
 }
 
 export const BOSSES: Target[] = [
-  { name: 'LT. HAMMER', atSec: 300, hpDpsSec: 40, damageScale: 1, final: false, style: 'charger' },
-  { name: 'LT. VIPER', atSec: 540, hpDpsSec: 50, damageScale: 1.25, final: false, style: 'gunner' },
-  // Until part 3 of 16.11 the Warlord fights like LT. HAMMER, with his own HP and damage.
-  { name: 'THE WARLORD', atSec: 780, hpDpsSec: 60, damageScale: 1.5, final: true, style: 'charger' },
+  { name: 'LT. HAMMER', atSec: 300, hpDpsSec: 40, damageScale: 1, final: false, style: 'charger', radius: 30 },
+  { name: 'LT. VIPER', atSec: 540, hpDpsSec: 50, damageScale: 1.25, final: false, style: 'gunner', radius: 26 },
+  { name: 'THE WARLORD', atSec: 780, hpDpsSec: 60, damageScale: 1.5, final: true, style: 'warlord', radius: 42 }, // 128x128
 ];
+
+/**
+ * THE WARLORD, both styles (design.md 16.11): LT. HAMMER's charge and ring plus LT. VIPER's burst,
+ * fan and mines on a schedule. Contact damage 30 is the spec's number as written; the rest take x1.5.
+ */
+export const WARLORD = {
+  contactDamage: 30,
+  attackEverySec: 3, // phase 1+: charge and aimed burst take turns, one every 3 s
+  firstAttackSec: 1,
+  ringEverySec: 3, // phase 2+, every phase (enrage still goes to 1 s)
+  adds: { grunts: 8, runners: 4, everySec: 8 }, // phase 3
+  chargeMines: 1, // phase 3: dropped where each charge starts
+};
 
 /**
  * LT. VIPER, the gunner (design.md 16.11). Bullet and mine damage are base values, times his damage
@@ -46,11 +59,10 @@ export const LIEUTENANT_DOWN = {
   scrapSpreadPx: 10,
 };
 
-/** Body and attacks (design.md 14.3), shared by every target for now. */
+/** LT. HAMMER's body and attacks (design.md 14.3); the Warlord reuses them. Radius is per target. */
 export const BOSS = {
   hpExtraBulletWeight: 0.5,
   hpMin: 2000, // no upper clamp
-  radius: 30,
   speed: 35,
   contactDamage: 20, // not scaled by 12.1
   entryOffscreenPx: 120, // spawns this far above the top edge; undamageable until fully on-screen

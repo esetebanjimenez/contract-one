@@ -1,4 +1,4 @@
-import { BOSS, BOSSES, LIEUTENANT_DOWN } from '../data/boss';
+import { BOSSES, LIEUTENANT_DOWN } from '../data/boss';
 import { MAX_VIEW_HEIGHT, NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { ELITE, ENEMIES, ENEMY_BULLET_RADIUS, GRUNT_WEAPONS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 
@@ -11,7 +11,7 @@ import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { RUN } from '../data/run';
 import { SPAWN, SPAWN_BANDS } from '../data/spawns';
-import { checkPhase, createBoss, updateBoss, type Boss, type BossHost, type Mine } from './boss';
+import { bossRadius, checkPhase, createBoss, updateBoss, type Boss, type BossHost, type Mine } from './boss';
 import { SpatialGrid } from './grid';
 import { computeStats, drawOffer, emptyStacks, type Offer, type PerkStacks, type PlayerStats } from './perks';
 import { createRng } from './rng';
@@ -402,7 +402,7 @@ function nearestEnemy(w: World, range: number, from: { x: number; y: number } = 
   const b = w.boss;
   if (b && b.damageable && b.hp > 0) {
     // Measured to his edge, so the big body gets targeted when he is close.
-    const d = Math.max(0, Math.hypot(b.x - from.x, b.y - from.y) - BOSS.radius) ** 2;
+    const d = Math.max(0, Math.hypot(b.x - from.x, b.y - from.y) - bossRadius(b)) ** 2;
     if (d < bd) {
       bd = d;
       best = b;
@@ -470,7 +470,7 @@ function damageBoss(w: World, dmg: number, crit: boolean): void {
   const wb = w.boss;
   if (!wb || !wb.damageable || wb.hp <= 0 || w.won) return;
   const d = Math.min(wb.hp, dmg);
-  addDamageNumber(w, BOSS_KEY, wb.x, wb.y - BOSS.radius - DAMAGE_NUMBERS.abovePx, d, crit);
+  addDamageNumber(w, BOSS_KEY, wb.x, wb.y - bossRadius(wb) - DAMAGE_NUMBERS.abovePx, d, crit);
   wb.hp -= d;
   w.bossDamage += d;
   const fl = w.fights[w.fights.length - 1];
@@ -507,7 +507,7 @@ function areaDamage(w: World, x: number, y: number, r: number, dmg: number, crit
     }
   });
   const b = w.boss;
-  if (b && b.damageable && b.hp > 0 && Math.hypot(b.x - x, b.y - y) <= r + BOSS.radius) damageBoss(w, dmg, crit);
+  if (b && b.damageable && b.hp > 0 && Math.hypot(b.x - x, b.y - y) <= r + bossRadius(b)) damageBoss(w, dmg, crit);
   else if (shown) showHit(w, shown, dmg, crit);
 }
 
@@ -870,7 +870,7 @@ export function step(w: World, input: Input): void {
     }
     const wb = w.boss;
     if (!spent && !hitEnemy && wb && wb.damageable && wb.hp > 0 && !bl.hit.includes(-1)) {
-      const rr = BOSS.radius + PLAYER.bulletRadius;
+      const rr = bossRadius(wb) + PLAYER.bulletRadius;
       if ((wb.x - bl.x) ** 2 + (wb.y - bl.y) ** 2 <= rr * rr) {
         const crit = w.stats.crit > 0 && w.rng() < w.stats.crit;
         const dmg = bl.damage * (crit ? PERK_RULES.critMultiplier : 1);
@@ -968,15 +968,16 @@ function bossHost(w: World): BossHost {
     arena: w.arena,
     mines: w.mines,
     hitPlayer: (dmg) => damagePlayer(w, dmg),
-    spawnAddsRing: (count, kind = 'grunt') => {
+    spawnAddsRing: (count, kind = 'grunt', angleOffset = 0) => {
       const def = ENEMIES[kind];
       for (let i = 0; i < count; i++) {
-        const e = spawnOne(w, (i / count) * Math.PI * 2, true, def);
+        const ang = (i / count) * Math.PI * 2 + angleOffset;
+        const e = spawnOne(w, ang, true, def);
         if (!e) continue;
         e.noScrap = true;
         if (w.arena) {
           // Evenly spaced just outside the arena edges, walking in.
-          const pt = arenaEdgePoint(w.arena, (i / count) * Math.PI * 2, def.radius + RUN.arenaBandPx);
+          const pt = arenaEdgePoint(w.arena, ang, def.radius + RUN.arenaBandPx);
           e.x = pt.x;
           e.y = pt.y;
         }

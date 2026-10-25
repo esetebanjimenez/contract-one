@@ -1,6 +1,6 @@
 /**
  * Screenshot scenes for CI (never deployed: built only by vite.shots.config.ts).
- * ?scene=levelup | boss | viper | results | grunts | numbers fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
+ * ?scene=levelup | boss | viper | warlord | results | grunts | numbers fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
  */
 import { boot } from '../../src/game';
 import { BOSSES, VIPER } from '../../src/data/boss';
@@ -11,7 +11,7 @@ import { computeStats } from '../../src/sim/perks';
 import { createWorld, step, type World } from '../../src/sim/world';
 import { playUntil } from '../bots';
 
-export type Scene = 'levelup' | 'boss' | 'viper' | 'results' | 'grunts' | 'numbers';
+export type Scene = 'levelup' | 'boss' | 'viper' | 'warlord' | 'results' | 'grunts' | 'numbers';
 const SEED = 7;
 
 function build(scene: Scene): World {
@@ -85,6 +85,27 @@ function build(scene: Scene): World {
     return w;
   }
   w.player.invuln = 1e9; // survive to the fight whatever the seed does
+  if (scene === 'warlord') {
+    // THE WARLORD in phase 2 at his 128x128 size, with his ring out (design.md 16.11).
+    playUntil(w, 'kite-smart', (x) => x.time >= 150);
+    w.contractTicks = Math.round(BOSSES[2].atSec / DT) - 1;
+    w.target = 2;
+    w.targetsDown = 2;
+    playUntil(
+      w,
+      'kite-smart',
+      (x) =>
+        x.bossArrivedAt >= 0 && x.time >= x.bossArrivedAt + 3 && !!x.boss && Math.hypot(x.boss.x - x.player.x, x.boss.y - x.player.y) < 200,
+    );
+    const b = w.boss!;
+    b.phase = 2;
+    b.hp = b.maxHp * 0.6;
+    b.ringCd = DT;
+    playUntil(w, 'kite-smart', (x) => x.time >= b.arrivedAt + 3.6);
+    w.player.invuln = 0;
+    w.player.hp = w.stats.maxHp;
+    return w;
+  }
   if (scene === 'viper') {
     // LT. VIPER in phase 3: an aim line just starting, and a row of armed mines (design.md 16.11).
     playUntil(w, 'kite-smart', (x) => x.time >= 150);
