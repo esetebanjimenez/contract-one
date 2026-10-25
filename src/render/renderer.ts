@@ -325,7 +325,7 @@ export class Renderer {
       this.outlineTex[id] = outlined(this.tex[id], BONE_WHITE);
       this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
       const el = eliteArt(id);
-      this.flashTex[el] = silhouette(this.tex[el], '#ffffff');
+      if (this.tex[el]) this.flashTex[el] = silhouette(this.tex[el], '#ffffff'); // grunt_t1_walk_00 has no elite frame
     }
     this.ground = new TilingSprite({ texture: this.tex.ground_sand_00, width: NATIVE_WIDTH, height: this.viewH });
     const layers = [new Container(), new Container(), new Container(), new Container(), new Container(), new Container()];
