@@ -14,7 +14,7 @@ export interface Target {
 export const BOSSES: Target[] = [
   { name: 'LT. HAMMER', atSec: 300, hpDpsSec: 40, damageScale: 1, final: false, style: 'charger', radius: 30 },
   { name: 'LT. VIPER', atSec: 540, hpDpsSec: 50, damageScale: 1.25, final: false, style: 'gunner', radius: 26 },
-  { name: 'THE WARLORD', atSec: 780, hpDpsSec: 60, damageScale: 1.5, final: true, style: 'warlord', radius: 42 }, // 128x128
+  { name: 'THE WARLORD', atSec: 780, hpDpsSec: 60, damageScale: 1.5, final: true, style: 'warlord', radius: 40 }, // 128x128
 ];
 
 /**

@@ -787,7 +787,7 @@ describe('THE WARLORD (design.md 16.11)', () => {
   };
   it('has a bigger body than the lieutenants, for his 128x128 sprite', () => {
     const h = host();
-    expect(bossRadius(warlord(h))).toBe(42);
+    expect(bossRadius(warlord(h))).toBe(40);
     expect(bossRadius(createBoss(h, 0))).toBe(30);
     expect(bossRadius(createBoss(h, 1))).toBe(26);
   });
