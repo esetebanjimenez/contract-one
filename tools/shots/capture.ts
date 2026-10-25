@@ -41,10 +41,11 @@ const checks: Check[] = [
     waitMs: 150,
     ok: async (p) => {
       const s = await p.evaluate(() => {
-        const w = (window as unknown as { __world: { boss: { target: number } | null; mines: unknown[] } }).__world;
-        return { target: w.boss?.target ?? -1, mines: w.mines.length };
+        const w = (window as unknown as { __world: { boss: { target: number; aimT: number } | null; mines: unknown[] } }).__world;
+        return { target: w.boss?.target ?? -1, aimT: w.boss?.aimT ?? -1, mines: w.mines.length };
       });
       if (s.target !== 1) return 'LT. VIPER is not in the fight';
+      if (s.aimT < 0) return 'LT. VIPER is not mid-aim';
       return s.mines >= 3 ? null : `expected his mines, saw ${s.mines}`;
     },
   },
@@ -102,8 +103,9 @@ try {
     try {
       await page.waitForFunction(() => (window as unknown as { __ready?: boolean }).__ready === true, { timeout: 60000 });
       await new Promise((r) => setTimeout(r, c.waitMs));
-      await page.screenshot({ path: `${OUT}/${c.scene}.png` });
+      // Check first, then capture straight away, so the frame shows what was checked (the mid-aim line is short).
       const bad = await c.ok(page);
+      await page.screenshot({ path: `${OUT}/${c.scene}.png` });
       if (bad) failures.push(`${c.scene}: ${bad}`);
     } catch (e) {
       failures.push(`${c.scene}: ${(e as Error).message}`);

@@ -1,6 +1,6 @@
 import { DT } from '../data/sim';
 import { Application, Assets, Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
-import { BOSS, LIEUTENANT_DOWN, VIPER } from '../data/boss';
+import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, type Target } from '../data/boss';
 import { JOYSTICK } from '../data/controls';
 import { LEVELS } from '../data/levels';
 import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
@@ -47,6 +47,22 @@ const ART = [
   'warlord_t1_windup_00',
   'warlord_t1_phase2_00',
   'warlord_t1_phase3_00',
+  'viper_t1_idle_00',
+  'viper_t1_walkA_00',
+  'viper_t1_walkB_00',
+  'viper_t1_aim_00',
+  'viper_t1_fire_00',
+  'viper_t1_phase2_00',
+  'viper_t1_phase3_00',
+  'warlordfinal_t1_idle_00',
+  'warlordfinal_t1_walkA_00',
+  'warlordfinal_t1_walkB_00',
+  'warlordfinal_t1_windup_00',
+  'warlordfinal_t1_aim_00',
+  'warlordfinal_t1_phase2_00',
+  'warlordfinal_t1_phase3_00',
+  'fx/mine_00',
+  'fx/mine_01',
   'fx/drone_00',
   'fx/drone_01',
   'fx/grenade_00',
@@ -107,10 +123,58 @@ export function gruntFrame(weapon: GruntWeapon, id: number, time: number, swingA
   return f.walk[Math.floor((time * 1000 + id * 37) / GRUNT_WEAPONS.walkFrameMs) % 2];
 }
 
-/** Warlord: 96x96 facing right, body centre at (27,44); A-idle-B-idle walk at 180 ms (Artist, M3). */
-const WARLORD_PIVOT = { x: 27 / 96, y: 44 / 96 };
-const WARLORD_ART_RADIUS = 30; // body radius today's 96x96 sprite is drawn for
-const WARLORD_WALK: ArtId[] = ['warlord_t1_walkA_00', 'warlord_t1_idle_00', 'warlord_t1_walkB_00', 'warlord_t1_idle_00'];
+/**
+ * Each target's sprite set, drawn at native size and facing right (Artist, PR #23). LT. HAMMER keeps the M3
+ * warlord_t1 frames. Walks go A-idle-B-idle at 180 ms. aim shows while the aim line is up, fire during a burst.
+ */
+interface BossArt {
+  size: number;
+  pivot: { x: number; y: number };
+  idle: ArtId;
+  walk: ArtId[];
+  windup: ArtId | null;
+  aim: ArtId | null;
+  fire: ArtId | null;
+  phase2: ArtId;
+  phase3: ArtId;
+}
+const BOSS_ART: Record<Target['style'], BossArt> = {
+  charger: {
+    size: 96,
+    pivot: { x: 27, y: 44 },
+    idle: 'warlord_t1_idle_00',
+    walk: ['warlord_t1_walkA_00', 'warlord_t1_idle_00', 'warlord_t1_walkB_00', 'warlord_t1_idle_00'],
+    windup: 'warlord_t1_windup_00',
+    aim: null,
+    fire: null,
+    phase2: 'warlord_t1_phase2_00',
+    phase3: 'warlord_t1_phase3_00',
+  },
+  gunner: {
+    size: 96,
+    pivot: { x: 30, y: 48 },
+    idle: 'viper_t1_idle_00',
+    walk: ['viper_t1_walkA_00', 'viper_t1_idle_00', 'viper_t1_walkB_00', 'viper_t1_idle_00'],
+    windup: null,
+    aim: 'viper_t1_aim_00',
+    fire: 'viper_t1_fire_00',
+    phase2: 'viper_t1_phase2_00',
+    phase3: 'viper_t1_phase3_00',
+  },
+  warlord: {
+    size: 128,
+    pivot: { x: 52, y: 64 },
+    idle: 'warlordfinal_t1_idle_00',
+    walk: ['warlordfinal_t1_walkA_00', 'warlordfinal_t1_idle_00', 'warlordfinal_t1_walkB_00', 'warlordfinal_t1_idle_00'],
+    windup: 'warlordfinal_t1_windup_00',
+    aim: 'warlordfinal_t1_aim_00',
+    fire: 'warlordfinal_t1_aim_00',
+    phase2: 'warlordfinal_t1_phase2_00',
+    phase3: 'warlordfinal_t1_phase3_00',
+  },
+};
+const bossFrames = (a: BossArt): ArtId[] =>
+  [a.idle, ...a.walk, a.windup, a.aim, a.fire, a.phase2, a.phase3].filter((x): x is ArtId => x !== null);
 const WARLORD_FRAME_MS = 180;
 const TELEGRAPH_COLOR = 0xff4a1c;
 /** Enrage tell: red-orange outline pulsing every 0.5 s (Artist, M3). */
@@ -164,6 +228,7 @@ export class Renderer {
   private enemyBullets!: Pool;
   private bullets!: Pool;
   private blasts!: Pool;
+  private mines!: Pool;
   private drones!: Pool;
   private grenades!: Pool;
   private merc!: Sprite;
@@ -195,7 +260,7 @@ export class Renderer {
       ...Object.values(ENEMY_WALK).flatMap((a) => a.frames),
       ...Object.values(GRUNT_FRAMES).flatMap((g) => [...g.walk, g.windup, g.strike]),
     ]);
-    for (const id of [...WARLORD_WALK, 'warlord_t1_windup_00', 'warlord_t1_phase2_00', 'warlord_t1_phase3_00'] as ArtId[]) {
+    for (const id of new Set(Object.values(BOSS_ART).flatMap(bossFrames))) {
       this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
       this.enrageTex[id] = outlined(this.tex[id], ENRAGE_OUTLINE);
     }
@@ -210,12 +275,12 @@ export class Renderer {
     this.enemyBullets = new Pool(layers[3]);
     this.bullets = new Pool(layers[4]);
     this.blasts = new Pool(layers[5]);
+    this.mines = new Pool(layers[0]); // on the sand, under everyone
     this.merc = new Sprite(this.tex.merc_t1_idle_00);
     this.merc.anchor.set(MERC_ART.bodyCenter.x / MERC_ART.size.w, MERC_ART.bodyCenter.y / MERC_ART.size.h);
     // Soft shadow under the merc so the coyote helmet separates from the sand (Artist, M2).
     this.shadow.ellipse(0, 0, MERC_ART.shadow.rx, MERC_ART.shadow.ry).fill({ color: 0x000000, alpha: MERC_ART.shadow.alpha });
     this.warlord = new Sprite(this.tex.warlord_t1_idle_00);
-    this.warlord.anchor.set(WARLORD_PIVOT.x, WARLORD_PIVOT.y);
     this.warlord.visible = false;
     layers[1].addChild(this.warlord);
     layers[2].addChild(this.shadow, this.merc);
@@ -271,16 +336,14 @@ export class Renderer {
     if (k >= 1) this.bandLine.rect(t, top + t, W - 2 * t, H - top - 2 * t).stroke({ color: 0x14110f, width: 1, alignment: 1 });
   }
 
-  /** LT. VIPER's mines: placeholder red-orange dots until the mine sprite lands; they blink once armed. */
+  /** Mines (Artist, PR #23): mine_00 while arming, then blinking to mine_01 three times a second once armed. */
   private drawMines(w: World): void {
-    for (const m of w.mines) {
-      const armed = mineArmed(m);
-      const on = armed ? Math.floor(m.age * 6) % 2 === 0 : true;
-      this.fx
-        .circle(Math.round(m.x), Math.round(m.y), 4)
-        .fill({ color: TELEGRAPH_COLOR, alpha: armed ? (on ? 1 : 0.45) : 0.5 })
-        .stroke({ color: 0x14110f, width: 1 });
-    }
+    w.mines.forEach((m, i) => {
+      const blink = mineArmed(m) && Math.floor(m.age * 6) % 2 === 0;
+      const s = this.mines.get(i, blink ? this.tex['fx/mine_01'] : this.tex['fx/mine_00']);
+      s.position.set(Math.round(m.x), Math.round(m.y));
+    });
+    this.mines.hideFrom(w.mines.length);
   }
 
   private drawWarlord(w: World): void {
@@ -289,11 +352,14 @@ export class Renderer {
     const s = this.warlord;
     s.visible = !!b && b.hp > 0;
     if (!b || b.hp <= 0) return;
+    const set = BOSS_ART[BOSSES[b.target].style];
     let art: ArtId;
-    if (b.state === 'telegraph') art = 'warlord_t1_windup_00';
-    else if (b.phase === 3) art = 'warlord_t1_phase3_00';
-    else if (b.phase === 2) art = 'warlord_t1_phase2_00';
-    else art = b.moving ? WARLORD_WALK[Math.floor((w.time * 1000) / WARLORD_FRAME_MS) % WARLORD_WALK.length] : 'warlord_t1_idle_00';
+    if (b.state === 'telegraph' && set.windup) art = set.windup;
+    else if (b.burstLeft > 0 && set.fire) art = set.fire;
+    else if (b.aimT >= 0 && set.aim) art = set.aim;
+    else if (b.phase === 3) art = set.phase3;
+    else if (b.phase === 2) art = set.phase2;
+    else art = b.moving ? set.walk[Math.floor((w.time * 1000) / WARLORD_FRAME_MS) % set.walk.length] : set.idle;
     const stagger = b.state === 'stagger' && Math.floor(b.stateT * 10) % 2 === 0;
     const ef = enragedFor(b, w.time);
     const pulse = ef >= 0 && Math.floor(ef / (ENRAGE_PULSE_SEC / 2)) % 2 === 0;
@@ -301,18 +367,17 @@ export class Renderer {
     if (s.texture !== tex) s.texture = tex;
     s.position.set(Math.round(b.x), Math.round(b.y));
     s.rotation = b.facing;
-    // Today's 96x96 sprite stands in for every target, scaled to his body (the Warlord to 128x128).
+    s.anchor.set(set.pivot.x / set.size, set.pivot.y / set.size);
     const r = bossRadius(b);
-    s.scale.set(r / WARLORD_ART_RADIUS);
     if (b.aimT >= 0) {
-      // LT. VIPER's aim line: thin while it tracks, brighter and blinking once locked.
+      // The aim line (Artist, PR #23): 1 px #FF4A1C, half alpha while it tracks, full alpha once locked.
       const locked = b.aimT >= VIPER.burst.trackSec;
       const len = 320;
-      const blink = Math.floor(b.aimT * 20) % 2 === 0;
       this.fx
-        .moveTo(Math.round(b.x + b.aimX * r), Math.round(b.y + b.aimY * r))
-        .lineTo(Math.round(b.x + b.aimX * len), Math.round(b.y + b.aimY * len))
-        .stroke({ color: TELEGRAPH_COLOR, width: locked ? 2 : 1, alpha: locked ? (blink ? 0.95 : 0.6) : 0.45 });
+        // Pixel centres (+0.5): a 1 px line on whole-pixel edges falls between pixels and vanishes without antialiasing.
+        .moveTo(Math.round(b.x + b.aimX * r) + 0.5, Math.round(b.y + b.aimY * r) + 0.5)
+        .lineTo(Math.round(b.x + b.aimX * len) + 0.5, Math.round(b.y + b.aimY * len) + 0.5)
+        .stroke({ color: TELEGRAPH_COLOR, width: 1, alpha: locked ? 1 : 0.5 });
     }
     if (b.state === 'telegraph') {
       // Locked charge lane, red-orange, from his edge to the end of the charge.
