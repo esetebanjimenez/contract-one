@@ -546,14 +546,21 @@ Esteban's full-contract run (18:28, level 66, 2/3 targets, the Warlord at 1%) ma
 
 **Where crates come from:**
 - **Lieutenants:** each lieutenant kill always drops one crate, next to the Scrap pile (§16.11). The Warlord drops none, because the contract ends.
-- **Elites** (the existing elite variant, §5, from 3:30): the first elite killed in a run always drops one. After that, an elite kill drops one only if at least **1:30 of contract time** has passed since the last crate from any source.
-- **Expected count:** about 6–7 crates by the Warlord (one elite crate around 3:30, LT. HAMMER, one or two elites, LT. VIPER, one or two elites). A full contract ends around +2 bullets, +2 drones and 30% HE, instead of +13 bullets.
+- **Elites** (the new scheduled elite, below): **every elite kill drops one crate.** Veterans never drop crates.
+- **Expected count:** 8 crates by the Warlord (elites at 1:30, 3:30, LT. HAMMER, elites at 5:30, 7:30, LT. VIPER, elites at 9:30, 11:30). A full contract ends around +2 bullets, +2 drones and 30% HE, instead of +13 bullets.
+
+**Veterans and elites (Esteban, 2026-10-25):** in the late game the old elites spawn in mass, so a crate per elite made no sense. They split into two kinds.
+- **Veterans** are the old elites, renamed: the same `elite_*` variants, stats and look as §5 and §13.4 (×3 HP, ×1.1 speed, ×1.5 contact, ×4 Scrap, ×1.25 scale with a bone-white outline), the same band shares, spawning in mass. Wherever §5, §12, §13 and the band tables say "Elite", read "Veteran". **No crates.**
+- **Elites** are new: one strong enemy on a schedule, **one every 2:00 of contract time starting at 1:30** (1:30, 3:30, 5:30, 7:30, 9:30, 11:30). The clock pauses during fights, so an elite never spawns inside one. It spawns off-screen like any enemy and never counts toward the enemy cap or gets replaced at it.
+- An elite is a regular enemy type picked from the current band's weights (Veterans excluded), with **×20 HP** of that type at that time, **×1.5 size**, **×1.5 contact damage**, **×0.9 speed** and **15 Scrap**. An elite Rifleman fires the 3-shot spread.
+- Look: the base sprite at ×1.5 with the bone-white outline, plus a **small HP bar** 20×3 px, 4 px above its head: white fill on a 1 px `#14110F` outline, shrinking from the right. Not red-orange (reserved for danger). The bar shows from spawn.
+- An elite takes damage numbers with the 0.25 s merge window, like bosses (§16.10).
 
 **The crate:**
 - It lands where the elite or lieutenant died and doesn't get pulled by the Scrap magnet; the player walks over it. Crates **never expire**, like Scrap (Esteban, 2026-10-25): no lifetime and no blink. Lieutenant crates use the larger starred crate sprite; elite crates use the standard one.
 - Touching it pauses the game and opens a **crate screen**: the same card layout as level-ups, with **3 cards** drawn from the four crate perks, no rarity colours, and a "SUPPLY CRATE" header. Pick one. If HE is already at 100% it isn't offered; with fewer than 3 options left, show what remains.
 - Crate perks show in YOUR KIT (§16.6) and on the results screen as usual.
-- **Look (Artist's call):** a military crate, distinct from Scrap at a glance. Not cyan (Scrap) and not red-orange (danger). A gold strap matching the crit gold is the suggestion.
+- **Look (Artist's call):** a military crate, distinct from Scrap at a glance. Not cyan (Scrap) and not red-orange (danger). Dull brass straps, kept clear of crit gold.
 
 **Level-up pool without the four:** damage, fire rate, pierce, move speed, max HP, magnet, crit, bullet speed and range (HOT LOADS), regen, armour, ricochet, and FAST HANDS. FAST HANDS is offered only once the player owns FRAG OUT (§16.9). Four cards per level-up (§16.2), uncapped (§16.1), same tiers and weights.
 
@@ -562,10 +569,11 @@ Esteban's full-contract run (18:28, level 66, 2/3 targets, the Warlord at 1%) ma
 **Targets (Esteban's next full run comes first):**
 - The late game is no longer trivial: Lieutenant 2 and the Warlord fights are inside 60–120 s and the player has to move with intent, not just circle.
 - Sim: report crates opened per run and the crate perks owned at each target. Kite-smart reaching the Warlord should have opened 5–8 crates.
-- If it's still trivial, the next lever is the Scrap needed per level after 5:00 (level 66 at 18:28 is still a lot of picks), then the elite crate gap (1:30).
+- If it's still trivial, the next lever is the Scrap needed per level after 5:00 (level 66 at 18:28 is still a lot of picks), then the gap between elites (2:00).
 
 **Needs:**
 - **Art:** the crate sprite (olive, dull brass straps, glint and bob, no warn frame), a larger starred lieutenant crate, and the crate-screen header.
-- **Data:** a `pool: 'level' | 'crate'` field on each perk in `src/data/perks.ts`, with crate steps and the crate rules (elite gap 90 s, cards 3) in data.
-- **Sim:** bots open any crate they touch and pick by their usual rule.
+- **Data:** a `pool: 'level' | 'crate'` field on each perk in `src/data/perks.ts`, with crate steps and the crate rules (elite first spawn 90 s, elite interval 120 s, elite HP ×20, size ×1.5, contact ×1.5, speed ×0.9, Scrap 15, cards 3); rename the `elite_*` variants to `veteran_*` in data.
+- **Sim:** bots open any crate they touch and pick by their usual rule. Report elites killed and crates opened per target.
+- **Code:** the elite HP bar (drawn in code, no new art).
 
