@@ -435,7 +435,10 @@ export class Renderer {
     if (!b || b.hp <= 0) return;
     const set = BOSS_ART[BOSSES[b.target].style];
     let art: ArtId;
-    if (b.state === 'telegraph' && set.windup) art = set.windup;
+    // The wind-up frame is drawn in his phase 1 look, so from phase 2 on the telegraph keeps his phase pose and the
+    // charge lane carries the warning (Esteban's run: he snapped back to full HP looks before each charge).
+    if (b.state === 'telegraph' && set.windup && b.phase === 1) art = set.windup;
+    else if (b.state === 'telegraph' && set.windup) art = b.phase === 3 ? set.phase3 : b.phase === 2 ? set.phase2 : set.idle;
     else if (b.burstLeft > 0 && set.fire) art = set.fire;
     else if (b.aimT >= 0 && set.aim) art = set.aim;
     else if (b.moving && b.state !== 'stagger') {
