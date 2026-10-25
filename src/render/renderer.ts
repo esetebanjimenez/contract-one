@@ -137,6 +137,8 @@ interface BossArt {
   fire: ArtId | null;
   phase2: ArtId;
   phase3: ArtId;
+  /** Walk cycles for the phase 2 and 3 looks; a phase without one walks with the phase 1 cycle. */
+  phaseWalk: Partial<Record<2 | 3, ArtId[]>>;
 }
 const BOSS_ART: Record<Target['style'], BossArt> = {
   charger: {
@@ -149,6 +151,7 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     fire: null,
     phase2: 'warlord_t1_phase2_00',
     phase3: 'warlord_t1_phase3_00',
+    phaseWalk: {},
   },
   gunner: {
     size: 96,
@@ -160,6 +163,7 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     fire: 'viper_t1_fire_00',
     phase2: 'viper_t1_phase2_00',
     phase3: 'viper_t1_phase3_00',
+    phaseWalk: {},
   },
   warlord: {
     size: 128,
@@ -171,10 +175,13 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     fire: 'warlordfinal_t1_aim_00',
     phase2: 'warlordfinal_t1_phase2_00',
     phase3: 'warlordfinal_t1_phase3_00',
+    phaseWalk: {},
   },
 };
 const bossFrames = (a: BossArt): ArtId[] =>
-  [a.idle, ...a.walk, a.windup, a.aim, a.fire, a.phase2, a.phase3].filter((x): x is ArtId => x !== null);
+  [a.idle, ...a.walk, a.windup, a.aim, a.fire, a.phase2, a.phase3, ...(a.phaseWalk[2] ?? []), ...(a.phaseWalk[3] ?? [])].filter(
+    (x): x is ArtId => x !== null,
+  );
 const WARLORD_FRAME_MS = 180;
 const TELEGRAPH_COLOR = 0xff4a1c;
 /** Enrage tell: red-orange outline pulsing every 0.5 s (Artist, M3). */
@@ -357,9 +364,12 @@ export class Renderer {
     if (b.state === 'telegraph' && set.windup) art = set.windup;
     else if (b.burstLeft > 0 && set.fire) art = set.fire;
     else if (b.aimT >= 0 && set.aim) art = set.aim;
-    else if (b.phase === 3) art = set.phase3;
-    else if (b.phase === 2) art = set.phase2;
-    else art = b.moving ? set.walk[Math.floor((w.time * 1000) / WARLORD_FRAME_MS) % set.walk.length] : set.idle;
+    else if (b.moving && b.state !== 'stagger') {
+      // He walks in every phase (Esteban's run: the held phase pose read as a wobble). The phase pose shows while he
+      // stands, including the stagger at each phase change, and attacks keep their own frames above.
+      const walk = (b.phase > 1 && set.phaseWalk[b.phase as 2 | 3]) || set.walk;
+      art = walk[Math.floor((w.time * 1000) / WARLORD_FRAME_MS) % walk.length];
+    } else art = b.phase === 3 ? set.phase3 : b.phase === 2 ? set.phase2 : set.idle;
     const stagger = b.state === 'stagger' && Math.floor(b.stateT * 10) % 2 === 0;
     const ef = enragedFor(b, w.time);
     const pulse = ef >= 0 && Math.floor(ef / (ENRAGE_PULSE_SEC / 2)) % 2 === 0;
