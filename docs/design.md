@@ -529,3 +529,43 @@ Esteban's win at 5:52 (level 22, 23,594 boss damage, about a 52 s fight) showed 
 - **Data:** a `BOSSES` list in `src/data/boss.ts` (time, HP multiplier, damage scale, attack schedule per phase, name) and the post-5:00 rate and bands in `src/data/spawns.ts`.
 - **Build order (can ship in parts):** (1) the contract clock, the bosses list and a two-lieutenant loop that reuses LT. HAMMER as a stand-in; (2) LT. VIPER's attacks; (3) the Warlord schedule and new art.
 
+### 16.12 Supply crates (Esteban, 2026-10-25)
+Esteban's full-contract run (18:28, level 66, 2/3 targets, the Warlord at 1%) made the mid and late game trivial: "run circles around the bosses and they melt". The cause is four perks that multiply each other and come up at every level-up: +13 bullets, 13 grenades, 4 drones and 40% HE in that run. They move out of level-ups into a separate pool that only special kills give, like BoO's sheriff chests. This supersedes the tier rows for these four in §16.7 and §8.
+
+**Crate pool (no longer offered at level-ups):**
+
+| Id | Name | One crate pick gives |
+|---|---|---|
+| `multishot` | EXTRA BARREL | +1 bullet |
+| `grenade` | FRAG OUT | +1 grenade (4 s cooldown, §16.9) |
+| `explosive` | HE ROUNDS | +15% explode (stops at 100%) |
+| `drone` | DRONE BUDDY | +1 drone |
+
+- No rarity tiers: every pick is the fixed step above. The past-8 overflow rules for drones and grenades stay but won't be reached in normal runs.
+- §16.9 still applies: drones take every gun stat; grenades take damage and crit only.
+
+**Where crates come from:**
+- **Lieutenants:** each lieutenant kill always drops one crate, next to the Scrap pile (§16.11). The Warlord drops none, because the contract ends.
+- **Elites** (the existing elite variant, §5, from 3:30): the first elite killed in a run always drops one. After that, an elite kill drops one only if at least **1:30 of contract time** has passed since the last crate from any source.
+- **Expected count:** about 6–7 crates by the Warlord (one elite crate around 3:30, LT. HAMMER, one or two elites, LT. VIPER, one or two elites). A full contract ends around +2 bullets, +2 drones and 30% HE, instead of +13 bullets.
+
+**The crate:**
+- It lands where the elite or lieutenant died and doesn't get pulled by the Scrap magnet; the player walks over it. Elite crates last 30 s and blink in the last 5 s. Lieutenant crates never expire.
+- Touching it pauses the game and opens a **crate screen**: the same card layout as level-ups, with **3 cards** drawn from the four crate perks, no rarity colours, and a "SUPPLY CRATE" header. Pick one. If HE is already at 100% it isn't offered; with fewer than 3 options left, show what remains.
+- Crate perks show in YOUR KIT (§16.6) and on the results screen as usual.
+- **Look (Artist's call):** a military crate, distinct from Scrap at a glance. Not cyan (Scrap) and not red-orange (danger). A gold strap matching the crit gold is the suggestion.
+
+**Level-up pool without the four:** damage, fire rate, pierce, move speed, max HP, magnet, crit, bullet speed and range (HOT LOADS), regen, armour, ricochet, and FAST HANDS. FAST HANDS is offered only once the player owns FRAG OUT (§16.9). Four cards per level-up (§16.2), uncapped (§16.1), same tiers and weights.
+
+**Boss HP** still follows sheet DPS at spawn (§16.5), so the bosses scale down with the smaller builds on their own.
+
+**Targets (Esteban's next full run comes first):**
+- The late game is no longer trivial: Lieutenant 2 and the Warlord fights are inside 60–120 s and the player has to move with intent, not just circle.
+- Sim: report crates opened per run and the crate perks owned at each target. Kite-smart reaching the Warlord should have opened 5–8 crates.
+- If it's still trivial, the next lever is the Scrap needed per level after 5:00 (level 66 at 18:28 is still a lot of picks), then the elite crate gap (1:30).
+
+**Needs:**
+- **Art:** the crate sprite (ground, with a blink frame) and the crate-screen header.
+- **Data:** a `pool: 'level' | 'crate'` field on each perk in `src/data/perks.ts`, with crate steps and the crate rules (elite gap 90 s, elite lifetime 30 s, cards 3) in data.
+- **Sim:** bots open any crate they touch and pick by their usual rule.
+
