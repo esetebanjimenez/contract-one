@@ -107,7 +107,7 @@ function build(scene: Scene): World {
     return w;
   }
   if (scene === 'viper') {
-    // LT. VIPER in phase 3: an aim line just starting, and a row of armed mines (design.md 16.11).
+    // LT. VIPER in phase 3, mid-aim (his aim frame and the tracking line), beside a row of armed mines (design.md 16.11).
     playUntil(w, 'kite-smart', (x) => x.time >= 150);
     // The run clock stays; only the contract clock jumps to just before his fight.
     w.contractTicks = Math.round(BOSSES[1].atSec / DT) - 1;
@@ -125,7 +125,7 @@ function build(scene: Scene): World {
     b.mineCd = 0; // drops a fresh row on the next tick
     step(w, { mx: 0, my: 0 });
     for (const m of w.mines) m.age = VIPER.mines.armSec + 0.1;
-    b.aimT = 0.05;
+    b.aimT = 0.15; // tracks to 0.6 s, locked to 0.8 s: the capture lands about 0.5 s later, on the locked line
     b.burstLeft = 0;
     w.player.invuln = 0;
     w.player.hp = w.stats.maxHp;
