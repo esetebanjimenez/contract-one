@@ -160,6 +160,7 @@ export interface World {
   target: number; // index into BOSSES of the current or next fight
   targetsDown: number;
   fights: Fight[];
+  camEase: { fromX: number; fromY: number; at: number } | null; // arena release: camera easing back to the merc
   downAt: number; // run time of the last lieutenant kill (-1 before); the arena releases tapeFadeSec later
   won: boolean; // the Warlord is dead; the UI plays the outro and shows results
   wonAt: number; // run time of the kill
@@ -216,6 +217,7 @@ export function createWorld(seed: number): World {
     target: 0,
     targetsDown: 0,
     fights: [],
+    camEase: null,
     downAt: -1,
     won: false,
     wonAt: 0,
@@ -300,10 +302,29 @@ export function rifleMoveSec(t: number): number {
   return Math.max(SCALING.rifleMoveMin, 2 - SCALING.rifleMovePerMinute * (Math.max(0, t) / 60));
 }
 
+/**
+ * Top-left of the camera view: the locked arena view, else centred on the merc. When the arena releases it
+ * eases from the arena view back onto the merc over LIEUTENANT_DOWN.cameraEaseSec (Esteban: it looked like a teleport).
+ */
+export function cameraAt(w: World, viewH: number): { x: number; y: number } {
+  if (w.arena) return { x: w.arena.camX, y: w.arena.camY };
+  const fx = w.player.x - HALF_W;
+  const fy = w.player.y - viewH / 2;
+  const ce = w.camEase;
+  const t = ce ? (w.time - ce.at) / LIEUTENANT_DOWN.cameraEaseSec : 1;
+  if (!ce || t >= 1) return { x: fx, y: fy };
+  const k = 1 - (1 - t) * (1 - t); // ease-out
+  return { x: ce.fromX + (fx - ce.fromX) * k, y: ce.fromY + (fy - ce.fromY) * k };
+}
+
+/** True while the camera is still easing back after an arena release. */
+export function cameraEasing(w: World): boolean {
+  return !!w.camEase && w.time < w.camEase.at + LIEUTENANT_DOWN.cameraEaseSec;
+}
+
 /** Whole body inside the current view (the locked arena view once it exists). */
 export function fullyOnScreen(w: World, e: Enemy): boolean {
-  const x0 = w.arena ? w.arena.camX : w.player.x - HALF_W;
-  const y0 = w.arena ? w.arena.camY : w.player.y - w.viewH / 2;
+  const { x: x0, y: y0 } = cameraAt(w, w.viewH);
   const r = e.def.radius;
   return e.x - r >= x0 && e.x + r <= x0 + NATIVE_WIDTH && e.y - r >= y0 && e.y + r <= y0 + w.viewH;
 }
@@ -381,6 +402,8 @@ function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef):
 function updateSpawns(w: World, input: Input): void {
   // No normal spawns once the arena locks; only the phase 3 adds (design.md 14.9).
   if (w.won || w.arena) return;
+  // Held while the camera eases back after a release, so nothing pops in on screen (Game Designer, 16.11).
+  if (cameraEasing(w)) return;
   const t = w.contractTime;
   const pressure = inPressureWave(t);
   // Anti-flee: pressure arrives ahead of the player's movement, random when standing still.
@@ -1072,6 +1095,7 @@ function lieutenantDown(w: World, b: Boss): void {
  * 204 px out (the edge of the tallest view plus 24 px), so none land within 200 px in the first 3 s.
  */
 function releaseArena(w: World): void {
+  if (w.arena) w.camEase = { fromX: w.arena.camX, fromY: w.arena.camY, at: w.time };
   w.arena = null;
   w.boss = null;
   w.bossArrivedAt = -1;
