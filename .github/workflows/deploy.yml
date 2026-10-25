@@ -31,7 +31,7 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm smoke
-      - name: Screenshots (level-up with kit strip, boss, results)
+      - name: Screenshots (level-up with kit strip, boss, LT. VIPER, results)
         run: pnpm shots:build && pnpm shots
       - if: always()
         uses: actions/upload-artifact@v4

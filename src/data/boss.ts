@@ -5,16 +5,36 @@ export interface Target {
   name: string; // working name, shown on the boss bar
   atSec: number; // contract time of the fight (the clock pauses during it)
   hpDpsSec: number; // HP = this x the player's single-target sheet DPS at spawn (design.md 16.5)
-  damageScale: number; // contact, charge and bullet damage
+  damageScale: number; // charge, bullet and mine damage (contact damage is set per attack style)
   final: boolean; // killing him ends the contract
+  style: 'charger' | 'gunner'; // which attack set he fights with (the Warlord's own schedule is part 3)
 }
 
 export const BOSSES: Target[] = [
-  { name: 'LT. HAMMER', atSec: 300, hpDpsSec: 40, damageScale: 1, final: false },
-  // Part 1 of 16.11: LT. VIPER and the Warlord fight like LT. HAMMER, with their own HP and damage, until their attacks land.
-  { name: 'LT. VIPER', atSec: 540, hpDpsSec: 50, damageScale: 1.25, final: false },
-  { name: 'THE WARLORD', atSec: 780, hpDpsSec: 60, damageScale: 1.5, final: true },
+  { name: 'LT. HAMMER', atSec: 300, hpDpsSec: 40, damageScale: 1, final: false, style: 'charger' },
+  { name: 'LT. VIPER', atSec: 540, hpDpsSec: 50, damageScale: 1.25, final: false, style: 'gunner' },
+  // Until part 3 of 16.11 the Warlord fights like LT. HAMMER, with his own HP and damage.
+  { name: 'THE WARLORD', atSec: 780, hpDpsSec: 60, damageScale: 1.5, final: true, style: 'charger' },
 ];
+
+/**
+ * LT. VIPER, the gunner (design.md 16.11). Bullet and mine damage are base values, times his damage
+ * scale; contact damage 25 is the spec's number as written. Phase rules, stagger and walls as 14.3/14.9.
+ */
+export const VIPER = {
+  holdPx: 160, // keeps about this far from the player
+  holdSlackPx: 15, // stands still within holdPx +/- this
+  speed: 45,
+  contactDamage: 25,
+  // Phase 1+: the aim line tracks, locks, then the burst fires down it.
+  burst: { firstAfterSec: 1, everySec: 2.5, trackSec: 0.6, lockSec: 0.2, bullets: 3, shotGapSec: 0.08, speed: 160, damage: 12, range: 700 },
+  // Phase 2+: a fan toward the player, alternating with the burst (never fired while a burst is aiming or firing).
+  fan: { everySec: 4, firstAfterSec: 2, bullets: 7, spreadDeg: 60, speed: 100, damage: 12, range: 700 },
+  // Phase 3: mines dropped behind him, and Runners from the arena edges with no Scrap.
+  // Mines sit wider apart than the trigger, so stepping on one sets off only that one.
+  mines: { everySec: 6, count: 3, behindPx: 24, spacingPx: 36, armSec: 1, triggerPx: 30, radiusPx: 30, damage: 25, fuseSec: 10 },
+  adds: { count: 8, everySec: 8 },
+};
 
 /** On a lieutenant kill (design.md 16.11). The slow-mo is real seconds (UI); the rest is run time. */
 export const LIEUTENANT_DOWN = {
