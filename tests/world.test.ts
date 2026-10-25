@@ -6,9 +6,9 @@ import { SPAWN } from '../src/data/spawns';
 import { DRONE, GRENADE, PERKS, addStack } from '../src/data/perks';
 import { computeStats, drawOffer, softMove, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
-import { BOSSES, LIEUTENANT_DOWN, bossHp } from '../src/data/boss';
+import { BOSSES, LIEUTENANT_DOWN, VIPER, bossHp } from '../src/data/boss';
 import { PLAYER } from '../src/data/player';
-import { checkPhase } from '../src/sim/boss';
+import { checkPhase, createBoss, updateBoss, type Boss, type BossHost, type Mine } from '../src/sim/boss';
 import {
   choosePerk,
   createWorld,
@@ -337,6 +337,7 @@ describe('M3 contract', () => {
       player: w.player,
       enemyBullets: w.enemyBullets,
       arena: null,
+      mines: w.mines,
       hitPlayer: () => {},
       spawnAddsRing: () => {},
     });
@@ -604,5 +605,141 @@ describe('three targets (design.md 16.11)', () => {
     expect(w.boss!.target).toBe(1);
     expect(w.boss!.maxHp).toBe(bossHp(w.stats, w.stats.crit, BOSSES[1].hpDpsSec));
     expect(w.fights.at(-1)!.target).toBe(1);
+  });
+});
+
+describe('LT. VIPER (design.md 16.11)', () => {
+  const host = () => {
+    const h = {
+      time: 0,
+      level: 10,
+      stats: { damage: 10, fireRate: 5, projectiles: 1, crit: 0 },
+      player: { x: 0, y: 0 },
+      enemyBullets: [] as BossHost['enemyBullets'],
+      arena: null,
+      mines: [] as Mine[],
+      hits: [] as number[],
+      adds: [] as [number, string | undefined][],
+      hitPlayer(dmg: number) {
+        h.hits.push(dmg);
+      },
+      spawnAddsRing(count: number, kind?: 'grunt' | 'runner') {
+        h.adds.push([count, kind]);
+      },
+    };
+    return h;
+  };
+  const viper = (h: ReturnType<typeof host>, y = -VIPER.holdPx) => {
+    const b = createBoss(h, 1);
+    b.x = 0;
+    b.y = y;
+    b.state = 'walk';
+    b.damageable = true;
+    b.arrivedAt = 0;
+    return b;
+  };
+  const tick = (b: Boss, h: ReturnType<typeof host>, sec: number) => {
+    for (let i = 0; i < Math.round(sec / DT); i++) {
+      h.time += DT;
+      updateBoss(b, h);
+    }
+  };
+  it('holds about 160 px off, walking in when far and backing off when the player closes in', () => {
+    const h = host();
+    const far = viper(h, -300);
+    tick(far, h, 5);
+    expect(Math.abs(Math.hypot(far.x, far.y) - VIPER.holdPx)).toBeLessThanOrEqual(VIPER.holdSlackPx + 1);
+    const near = viper(h, -60);
+    tick(near, h, 5);
+    expect(Math.abs(Math.hypot(near.x, near.y) - VIPER.holdPx)).toBeLessThanOrEqual(VIPER.holdSlackPx + 1);
+  });
+  it('tracks for 0.6 s, locks for 0.2 s, then fires 3 bullets down the locked line', () => {
+    const h = host();
+    const b = viper(h);
+    b.burstCd = DT;
+    tick(b, h, 0.3);
+    expect(b.aimT).toBeGreaterThan(0);
+    expect(h.enemyBullets.length).toBe(0);
+    tick(b, h, 0.4); // 0.7 s in: locked
+    h.player.x = 120; // too late to move the line
+    tick(b, h, 0.4);
+    expect(h.enemyBullets.length).toBe(VIPER.burst.bullets);
+    for (const s of h.enemyBullets) {
+      expect(Math.hypot(s.vx, s.vy)).toBeCloseTo(VIPER.burst.speed, 5);
+      expect(s.vx).toBeCloseTo(0, 5);
+      expect(s.damage).toBe(VIPER.burst.damage * BOSSES[1].damageScale);
+    }
+  });
+  it('fires the burst every 2.5 s in phase 1 and no fan', () => {
+    const h = host();
+    const b = viper(h);
+    tick(b, h, VIPER.burst.firstAfterSec + 3 * VIPER.burst.everySec - 0.1);
+    expect(h.enemyBullets.length).toBe(3 * VIPER.burst.bullets);
+  });
+  it('adds a 7-bullet 60 degree fan in phase 2, never while a burst is aiming', () => {
+    const h = host();
+    const b = viper(h);
+    b.phase = 2;
+    b.burstCd = 99;
+    b.fanCd = DT;
+    tick(b, h, 0.05);
+    expect(h.enemyBullets.length).toBe(VIPER.fan.bullets);
+    const angles = h.enemyBullets.map((s) => Math.atan2(s.vy, s.vx));
+    expect(Math.max(...angles) - Math.min(...angles)).toBeCloseTo((VIPER.fan.spreadDeg * Math.PI) / 180, 5);
+    for (const s of h.enemyBullets) expect(Math.hypot(s.vx, s.vy)).toBeCloseTo(VIPER.fan.speed, 5);
+    h.enemyBullets.length = 0;
+    b.aimT = 0;
+    b.fanCd = DT;
+    tick(b, h, 0.3);
+    expect(h.enemyBullets.length).toBe(0);
+  });
+  it('drops 3 mines behind him in phase 3 that arm after 1 s and blow up on the player', () => {
+    const h = host();
+    const b = viper(h);
+    b.phase = 3;
+    b.burstCd = 99;
+    b.fanCd = 99;
+    tick(b, h, DT);
+    expect(h.mines.length).toBe(VIPER.mines.count);
+    expect(h.adds).toEqual([[VIPER.adds.count, 'runner']]);
+    for (const m of h.mines) expect(Math.hypot(m.x, m.y)).toBeGreaterThan(Math.hypot(b.x, b.y)); // behind him
+    const m = h.mines[1];
+    h.player.x = m.x;
+    h.player.y = m.y;
+    b.x = 500; // keep his body out of the way
+    tick(b, h, 0.5);
+    expect(h.hits.length).toBe(0); // not armed yet
+    tick(b, h, 0.6);
+    expect(h.hits).toContain(VIPER.mines.damage * BOSSES[1].damageScale);
+    expect(h.mines.length).toBe(VIPER.mines.count - 1);
+  });
+  it('mines left alone go off after 10 s', () => {
+    const h = host();
+    h.mines.push({ x: 300, y: 300, age: 0, damage: 1 });
+    const b = viper(h);
+    tick(b, h, VIPER.mines.fuseSec - 0.1);
+    expect(h.mines.length).toBe(1);
+    tick(b, h, 0.2);
+    expect(h.mines.length).toBe(0);
+    expect(h.hits.length).toBe(0); // too far to hurt
+  });
+  it('fights LT. VIPER in the real loop: bullets fly and mines clear when he goes down', () => {
+    const w = createWorld(11);
+    w.player.hp = w.stats.maxHp = 1e9;
+    toFight(w, 1);
+    for (let i = 0; i < 15 * 60; i++) {
+      if (w.phase === 'levelup') {
+        w.phase = 'play';
+        w.pendingLevels = 0;
+      }
+      step(w, { mx: 0, my: 0 });
+    }
+    expect(w.boss!.target).toBe(1);
+    expect(w.boss!.damageable).toBe(true);
+    w.mines.push({ x: w.player.x + 999, y: w.player.y, age: 0, damage: 1 });
+    w.boss!.hp = 1;
+    for (let i = 0; i < 600 && w.targetsDown < 2; i++) step(w, { mx: 0, my: 0 });
+    expect(w.targetsDown).toBe(2);
+    expect(w.mines.length).toBe(0);
   });
 });

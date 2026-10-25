@@ -11,7 +11,7 @@ import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { RUN } from '../data/run';
 import { SPAWN, SPAWN_BANDS } from '../data/spawns';
-import { checkPhase, createBoss, updateBoss, type Boss, type BossHost } from './boss';
+import { checkPhase, createBoss, updateBoss, type Boss, type BossHost, type Mine } from './boss';
 import { SpatialGrid } from './grid';
 import { computeStats, drawOffer, emptyStacks, type Offer, type PerkStacks, type PlayerStats } from './perks';
 import { createRng } from './rng';
@@ -141,6 +141,7 @@ export interface World {
   enemies: Enemy[];
   bullets: Bullet[];
   enemyBullets: Bullet[];
+  mines: Mine[]; // LT. VIPER's (design.md 16.11); cleared when a fight ends
   pickups: Pickup[];
   spawnAcc: number;
   regenAcc: number;
@@ -196,6 +197,7 @@ export function createWorld(seed: number): World {
     enemies: [],
     bullets: [],
     enemyBullets: [],
+    mines: [],
     pickups: [],
     spawnAcc: 0,
     regenAcc: 0,
@@ -964,15 +966,17 @@ function bossHost(w: World): BossHost {
     player: w.player,
     enemyBullets: w.enemyBullets,
     arena: w.arena,
+    mines: w.mines,
     hitPlayer: (dmg) => damagePlayer(w, dmg),
-    spawnAddsRing: (count) => {
+    spawnAddsRing: (count, kind = 'grunt') => {
+      const def = ENEMIES[kind];
       for (let i = 0; i < count; i++) {
-        const e = spawnOne(w, (i / count) * Math.PI * 2, true, ENEMIES.grunt);
+        const e = spawnOne(w, (i / count) * Math.PI * 2, true, def);
         if (!e) continue;
         e.noScrap = true;
         if (w.arena) {
           // Evenly spaced just outside the arena edges, walking in.
-          const pt = arenaEdgePoint(w.arena, (i / count) * Math.PI * 2, ENEMIES.grunt.radius + RUN.arenaBandPx);
+          const pt = arenaEdgePoint(w.arena, (i / count) * Math.PI * 2, def.radius + RUN.arenaBandPx);
           e.x = pt.x;
           e.y = pt.y;
         }
@@ -1049,6 +1053,7 @@ function lieutenantDown(w: World, b: Boss): void {
   w.downAt = w.time;
   w.kills += 1;
   w.enemyBullets.length = 0;
+  w.mines.length = 0;
   const value = scrapForLevel(w.level + w.pendingLevels);
   const n = LIEUTENANT_DOWN.scrapPieces;
   w.scrapDropped += value;
@@ -1084,6 +1089,7 @@ function clearField(w: World): void {
   w.kills += w.enemies.length;
   w.enemies.length = 0;
   w.enemyBullets.length = 0;
+  w.mines.length = 0;
 }
 
 function openLevelUp(w: World): void {

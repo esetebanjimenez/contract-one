@@ -1,15 +1,17 @@
 /**
  * Screenshot scenes for CI (never deployed: built only by vite.shots.config.ts).
- * ?scene=levelup | boss | results | grunts | numbers fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
+ * ?scene=levelup | boss | viper | results | grunts | numbers fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
  */
 import { boot } from '../../src/game';
+import { BOSSES, VIPER } from '../../src/data/boss';
 import { ENEMIES, gruntWeapon, type GruntWeapon } from '../../src/data/enemies';
+import { DT } from '../../src/data/sim';
 import { PLAYER } from '../../src/data/player';
 import { computeStats } from '../../src/sim/perks';
 import { createWorld, step, type World } from '../../src/sim/world';
 import { playUntil } from '../bots';
 
-export type Scene = 'levelup' | 'boss' | 'results' | 'grunts' | 'numbers';
+export type Scene = 'levelup' | 'boss' | 'viper' | 'results' | 'grunts' | 'numbers';
 const SEED = 7;
 
 function build(scene: Scene): World {
@@ -83,6 +85,31 @@ function build(scene: Scene): World {
     return w;
   }
   w.player.invuln = 1e9; // survive to the fight whatever the seed does
+  if (scene === 'viper') {
+    // LT. VIPER in phase 3: an aim line just starting, and a row of armed mines (design.md 16.11).
+    playUntil(w, 'kite-smart', (x) => x.time >= 150);
+    // The run clock stays; only the contract clock jumps to just before his fight.
+    w.contractTicks = Math.round(BOSSES[1].atSec / DT) - 1;
+    w.target = 1;
+    w.targetsDown = 1;
+    playUntil(
+      w,
+      'kite-smart',
+      (x) =>
+        x.bossArrivedAt >= 0 && x.time >= x.bossArrivedAt + 3 && !!x.boss && Math.hypot(x.boss.x - x.player.x, x.boss.y - x.player.y) < 200,
+    );
+    const b = w.boss!;
+    b.phase = 3;
+    b.hp = b.maxHp * 0.3;
+    b.mineCd = 0; // drops a fresh row on the next tick
+    step(w, { mx: 0, my: 0 });
+    for (const m of w.mines) m.age = VIPER.mines.armSec + 0.1;
+    b.aimT = 0.05;
+    b.burstLeft = 0;
+    w.player.invuln = 0;
+    w.player.hp = w.stats.maxHp;
+    return w;
+  }
   // Into the fight, with the Warlord close enough to share the screen.
   playUntil(
     w,

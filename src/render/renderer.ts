@@ -1,13 +1,13 @@
 import { DT } from '../data/sim';
 import { Application, Assets, Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
-import { BOSS, LIEUTENANT_DOWN } from '../data/boss';
+import { BOSS, LIEUTENANT_DOWN, VIPER } from '../data/boss';
 import { JOYSTICK } from '../data/controls';
 import { LEVELS } from '../data/levels';
 import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { RUN } from '../data/run';
 import { GRUNT_WEAPONS, gruntWeapon, type GruntWeapon } from '../data/enemies';
 import { MERC_ART, RIFLEMAN_ART } from '../data/player';
-import { enragedFor } from '../sim/boss';
+import { enragedFor, mineArmed } from '../sim/boss';
 import type { World } from '../sim/world';
 import type { Controls } from '../ui/input';
 import { BONE_WHITE, outlined, silhouette } from './bake';
@@ -270,7 +270,20 @@ export class Renderer {
     if (k >= 1) this.bandLine.rect(t, top + t, W - 2 * t, H - top - 2 * t).stroke({ color: 0x14110f, width: 1, alignment: 1 });
   }
 
+  /** LT. VIPER's mines: placeholder red-orange dots until the mine sprite lands; they blink once armed. */
+  private drawMines(w: World): void {
+    for (const m of w.mines) {
+      const armed = mineArmed(m);
+      const on = armed ? Math.floor(m.age * 6) % 2 === 0 : true;
+      this.fx
+        .circle(Math.round(m.x), Math.round(m.y), 4)
+        .fill({ color: TELEGRAPH_COLOR, alpha: armed ? (on ? 1 : 0.45) : 0.5 })
+        .stroke({ color: 0x14110f, width: 1 });
+    }
+  }
+
   private drawWarlord(w: World): void {
+    this.drawMines(w);
     const b = w.boss;
     const s = this.warlord;
     s.visible = !!b && b.hp > 0;
@@ -287,6 +300,16 @@ export class Renderer {
     if (s.texture !== tex) s.texture = tex;
     s.position.set(Math.round(b.x), Math.round(b.y));
     s.rotation = b.facing;
+    if (b.aimT >= 0) {
+      // LT. VIPER's aim line: thin while it tracks, brighter and blinking once locked.
+      const locked = b.aimT >= VIPER.burst.trackSec;
+      const len = 320;
+      const blink = Math.floor(b.aimT * 20) % 2 === 0;
+      this.fx
+        .moveTo(Math.round(b.x + b.aimX * BOSS.radius), Math.round(b.y + b.aimY * BOSS.radius))
+        .lineTo(Math.round(b.x + b.aimX * len), Math.round(b.y + b.aimY * len))
+        .stroke({ color: TELEGRAPH_COLOR, width: locked ? 2 : 1, alpha: locked ? (blink ? 0.95 : 0.6) : 0.45 });
+    }
     if (b.state === 'telegraph') {
       // Locked charge lane, red-orange, from his edge to the end of the charge.
       const x0 = b.x + b.dirX * BOSS.radius;

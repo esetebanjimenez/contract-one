@@ -37,6 +37,18 @@ const checks: Check[] = [
         : 'the Warlord is not in the fight',
   },
   {
+    scene: 'viper',
+    waitMs: 150,
+    ok: async (p) => {
+      const s = await p.evaluate(() => {
+        const w = (window as unknown as { __world: { boss: { target: number } | null; mines: unknown[] } }).__world;
+        return { target: w.boss?.target ?? -1, mines: w.mines.length };
+      });
+      if (s.target !== 1) return 'LT. VIPER is not in the fight';
+      return s.mines >= 3 ? null : `expected his mines, saw ${s.mines}`;
+    },
+  },
+  {
     scene: 'grunts',
     waitMs: 300,
     ok: async (p) => {
