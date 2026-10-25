@@ -39,6 +39,25 @@ function bossAvoid(w: World, range: number): { x: number; y: number; threat: num
   return { x, y, threat };
 }
 
+/** Unit vector toward the nearest supply crate within range, or null. */
+function nearestCrate(w: World, range: number): { x: number; y: number } | null {
+  const p = w.player;
+  let best = range * range;
+  let out: { x: number; y: number } | null = null;
+  for (const c of w.crates) {
+    const dx = c.x - p.x;
+    const dy = c.y - p.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= best) continue;
+    best = d2;
+    const d = Math.sqrt(d2) || 1;
+    out = { x: dx / d, y: dy / d };
+  }
+  return out;
+}
+
+const KITE_CRATE_PULL = 0.04;
+
 export type Bot = 'idle' | 'kite' | 'kite-smart' | 'collector';
 
 /** Move away from the weighted crowd and enemy bullets, with a sideways orbit so it does not run in a straight line. */
@@ -69,6 +88,12 @@ function kiteInput(w: World): Input {
   const ba = bossAvoid(w, 130);
   fx += ba.x * 0.05;
   fy += ba.y * 0.05;
+  // Supply crates aren't pulled by the magnet, so a player walks to them (design.md 16.12).
+  const c = nearestCrate(w, 240);
+  if (c) {
+    fx += c.x * KITE_CRATE_PULL;
+    fy += c.y * KITE_CRATE_PULL;
+  }
   // Orbit around the origin so the bot does not drift off forever.
   fx += (-p.y * 0.00002 - p.x * 0.00001) * 1;
   fy += (p.x * 0.00002 - p.y * 0.00001) * 1;
@@ -132,6 +157,11 @@ function collectorInput(w: World): Input {
     sx = dx / d;
     sy = dy / d;
   }
+  const c = nearestCrate(w, 240);
+  if (c) {
+    sx = c.x;
+    sy = c.y;
+  }
   // Small loop: a tangent around the point the bot is drifting through.
   const a = w.time * 1.4;
   const lx = -Math.sin(a);
@@ -178,6 +208,8 @@ export interface FightResult {
   sec: number; // arrival to kill, or to death/timeout (0 if he never became damageable)
   killed: boolean;
   enraged: boolean;
+  crates: number; // crates opened before his spawn
+  kit: Partial<Record<PerkId, number>>; // crate perks at his spawn
 }
 
 export interface RunResult {
@@ -195,6 +227,8 @@ export interface RunResult {
   peakEnemies: number;
   peakBullets: number;
   perks: string;
+  cratesOpened: number;
+  cratesDropped: number;
   stepMsAvg: number;
 }
 
@@ -202,7 +236,7 @@ export interface RunResult {
 export function playUntil(w: World, bot: Bot, done: (w: World) => boolean, maxSec = 900): void {
   const maxTicks = Math.round(maxSec / DT);
   while (w.tick < maxTicks && w.phase !== 'dead' && !w.won && !done(w)) {
-    if (w.phase === 'levelup') {
+    if (w.phase === 'levelup' || w.phase === 'crate') {
       pick(w, bot);
       continue;
     }
@@ -220,7 +254,7 @@ export function runBot(seed: number, bot: Bot, maxSec = MAX_RUN_SEC): RunResult 
   let levelAtBoss = 0;
   while (w.tick < maxTicks && w.phase !== 'dead' && !w.won) {
     if (w.contractTime < BOSSES[0].atSec) levelAtBoss = w.level;
-    if (w.phase === 'levelup') {
+    if (w.phase === 'levelup' || w.phase === 'crate') {
       pick(w, bot);
       continue;
     }
@@ -245,6 +279,8 @@ export function runBot(seed: number, bot: Bot, maxSec = MAX_RUN_SEC): RunResult 
         sec: f.arrivedAt < 0 ? 0 : end - f.arrivedAt,
         killed: f.killedAt >= 0,
         enraged: f.arrivedAt >= 0 && end - f.arrivedAt >= RUN.enrageFightSec,
+        crates: f.crates,
+        kit: f.kit,
       };
     }),
     level: w.level,
@@ -252,6 +288,8 @@ export function runBot(seed: number, bot: Bot, maxSec = MAX_RUN_SEC): RunResult 
     scrapPct: (100 * w.scrapCollected) / Math.max(1, w.scrapDropped),
     peakEnemies: w.peakEnemies,
     peakBullets: w.peakBullets,
+    cratesOpened: w.cratesOpened,
+    cratesDropped: w.cratesDropped,
     perks: PERKS.map((d) => `${d.id}${w.stacks[d.id]}`).join(' '),
     stepMsAvg: ms / Math.max(1, w.tick),
   };

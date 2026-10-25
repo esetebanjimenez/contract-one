@@ -6,14 +6,14 @@ const GRUNT_SWING_SEC = (GRUNT_WEAPONS.windupMs + GRUNT_WEAPONS.strikeMs) / 1000
 import { LEVELS, scrapForLevel } from '../data/levels';
 import { DAMAGE_NUMBERS } from '../data/damage-numbers';
 import { BOSS_KEY, addDamageNumber, pruneDamageNumbers, type DamageNumber } from './damage-numbers';
-import { DRONE, EXPLOSIVE, GRENADE, PERK_RULES, addStack, overflow, perkDef, type PerkId } from '../data/perks';
+import { CRATE, CRATE_PERKS, DRONE, EXPLOSIVE, GRENADE, PERK_RULES, addStack, overflow, perkDef, type PerkId } from '../data/perks';
 import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { RUN } from '../data/run';
 import { SPAWN, SPAWN_BANDS } from '../data/spawns';
 import { bossRadius, checkPhase, createBoss, updateBoss, type Boss, type BossHost, type Mine } from './boss';
 import { SpatialGrid } from './grid';
-import { computeStats, drawOffer, emptyStacks, type Offer, type PerkStacks, type PlayerStats } from './perks';
+import { computeStats, drawCrateOffer, drawOffer, emptyStacks, type Offer, type PerkStacks, type PlayerStats } from './perks';
 import { createRng } from './rng';
 
 export interface Enemy {
@@ -96,7 +96,15 @@ export interface Pickup {
   pop: number; // seconds left of the cyan merge pop
 }
 
-export type Phase = 'play' | 'levelup' | 'dead';
+/** A supply crate on the ground (design.md 16.12). */
+export interface Crate {
+  x: number;
+  y: number;
+  age: number;
+  lt: boolean; // a lieutenant's crate (the bigger starred sprite); crates never expire, like Scrap
+}
+
+export type Phase = 'play' | 'levelup' | 'crate' | 'dead';
 
 export interface Input {
   mx: number; // movement vector, magnitude <= 1
@@ -111,6 +119,8 @@ export interface Fight {
   arrivedAt: number; // run time he became damageable (-1 before)
   killedAt: number; // run time of the kill (-1 if alive)
   damage: number; // damage dealt to him
+  crates: number; // supply crates opened before he spawned (design.md 16.12)
+  kit: Partial<Record<PerkId, number>>; // crate perks owned at his spawn
 }
 
 export interface World {
@@ -143,6 +153,11 @@ export interface World {
   enemyBullets: Bullet[];
   mines: Mine[]; // LT. VIPER's (design.md 16.11); cleared when a fight ends
   pickups: Pickup[];
+  crates: Crate[];
+  lastCrateAt: number; // contract time of the last crate drop from any source (-1 before the first)
+  eliteCrateDropped: boolean; // the first elite kill always drops one
+  cratesDropped: number;
+  cratesOpened: number;
   spawnAcc: number;
   regenAcc: number;
   pressureAngle: number;
@@ -200,6 +215,11 @@ export function createWorld(seed: number): World {
     enemyBullets: [],
     mines: [],
     pickups: [],
+    crates: [],
+    lastCrateAt: -1,
+    eliteCrateDropped: false,
+    cratesDropped: 0,
+    cratesOpened: 0,
     spawnAcc: 0,
     regenAcc: 0,
     pressureAngle: 0,
@@ -712,6 +732,10 @@ export function killEnemy(w: World, i: number): void {
   const e = w.enemies[i];
   w.kills++;
   const scrap = e.noScrap ? 0 : e.def.scrap * (e.elite ? ELITE.scrap : 1);
+  if (e.elite && (!w.eliteCrateDropped || w.contractTime - w.lastCrateAt >= CRATE.eliteGapSec)) {
+    w.eliteCrateDropped = true;
+    dropCrate(w, e.x, e.y, false);
+  }
   w.scrapDropped += scrap;
   if (scrap === 0) {
     // Phase 3 adds drop nothing.
@@ -973,11 +997,20 @@ export function step(w: World, input: Input): void {
     }
   }
 
+  // Supply crates: walked over, never pulled by the magnet, never expire (design.md 16.12).
+  let touched = -1;
+  for (let i = w.crates.length - 1; i >= 0; i--) {
+    const c = w.crates[i];
+    c.age += DT;
+    if (touched < 0 && (c.x - p.x) ** 2 + (c.y - p.y) ** 2 <= CRATE.touchRadius ** 2) touched = i;
+  }
+
   w.peakEnemies = Math.max(w.peakEnemies, w.enemies.length);
   w.peakBullets = Math.max(w.peakBullets, w.bullets.length + w.enemyBullets.length);
 
   if (ar) despawnFled(w, ar);
   if (w.won && (w.enemies.length || w.enemyBullets.length)) clearField(w);
+  if (touched >= 0 && w.phase === 'play' && !w.won) openCrate(w, touched);
   if (w.phase === 'play' && w.pendingLevels > 0 && !w.won) openLevelUp(w);
 }
 
@@ -1058,7 +1091,17 @@ function updateWarlord(w: World): void {
   const a = w.arena;
   if (!w.boss && a && w.time >= a.lockedAt + RUN.warningSec) {
     w.boss = createBoss(bossHost(w), w.target);
-    w.fights.push({ target: w.target, level: w.level, hp: w.boss.maxHp, arrivedAt: -1, killedAt: -1, damage: 0 });
+    const kit = Object.fromEntries(CRATE_PERKS.map((id) => [id, w.stacks[id]]));
+    w.fights.push({
+      target: w.target,
+      level: w.level,
+      hp: w.boss.maxHp,
+      arrivedAt: -1,
+      killedAt: -1,
+      damage: 0,
+      crates: w.cratesOpened,
+      kit,
+    });
   }
   const b = w.boss;
   if (!b || b.hp <= 0) return;
@@ -1088,6 +1131,21 @@ function lieutenantDown(w: World, b: Boss): void {
     const r = LIEUTENANT_DOWN.scrapSpreadPx;
     w.pickups.push({ x: b.x + Math.cos(ang) * r, y: b.y + Math.sin(ang) * r, value: v, age: 0, flying: false, cache: false, pop: 0 });
   }
+  dropCrate(w, b.x, b.y, true); // every lieutenant drops one (design.md 16.12)
+}
+
+function dropCrate(w: World, x: number, y: number, lt: boolean): void {
+  w.crates.push({ x, y, age: 0, lt });
+  w.cratesDropped++;
+  w.lastCrateAt = w.contractTime;
+}
+
+/** Touching a crate pauses the run on the crate screen: 3 crate-perk cards, no tiers (design.md 16.12). */
+function openCrate(w: World, i: number): void {
+  w.crates.splice(i, 1);
+  w.cratesOpened++;
+  w.offer = drawCrateOffer(w.stacks, CRATE.cards, w.rng);
+  w.phase = 'crate';
 }
 
 /**
@@ -1124,14 +1182,17 @@ function openLevelUp(w: World): void {
 
 export function choosePerk(w: World, id: PerkId): void {
   const o = w.offer.find((x) => x.id === id);
-  if (w.phase !== 'levelup' || !o) return;
+  if ((w.phase !== 'levelup' && w.phase !== 'crate') || !o) return;
+  const crate = w.phase === 'crate';
   const prevMax = w.stats.maxHp;
   w.stacks[o.id] = addStack(o.id, w.stacks[o.id], o.value);
   if (perkDef(o.id).damageType) w.damagePicks++;
   w.stats = computeStats(w.stacks);
   if (o.id === 'maxhp') w.player.hp = Math.min(w.stats.maxHp, w.player.hp + (w.stats.maxHp - prevMax));
-  w.level++;
-  w.pendingLevels--;
+  if (!crate) {
+    w.level++;
+    w.pendingLevels--;
+  }
   w.offer = [];
   w.phase = 'play';
   if (w.pendingLevels > 0) openLevelUp(w);

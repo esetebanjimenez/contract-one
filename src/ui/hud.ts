@@ -8,8 +8,12 @@ import type { World } from '../sim/world';
 const mmss = (sec: number): string => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
 const ICON_BASE = `${import.meta.env.BASE_URL}art/perks/`;
+const CRATE_HEADER = `${import.meta.env.BASE_URL}art/crates/crate_t1_header_00.png`;
 
 /** DOM overlay: top bar, perk cards and the death screen. Sized in native px via the --s CSS scale. */
+
+/** The crate screen's card frame (design.md 16.12): no rarity colour, khaki like the crate. */
+const CRATE_CARD = { id: 'crate', name: 'SUPPLY', color: '#B8A370' };
 export class Hud {
   private bar: HTMLDivElement;
   private hp: HTMLDivElement;
@@ -113,20 +117,23 @@ export class Hud {
     const key = (results ? 'results' : w.phase === 'dead' ? 'play' : w.phase) + w.offer.map((o) => o.id + o.tier).join();
     if (key === this.shownPhase) return;
     this.shownPhase = key;
-    if (!results && w.phase !== 'levelup') {
+    const picking = w.phase === 'levelup' || w.phase === 'crate';
+    if (!results && !picking) {
       this.modal.hidden = true;
       return;
     }
     this.modal.hidden = false;
-    this.modal.classList.toggle('levelup', w.phase === 'levelup' && !results);
-    if (w.phase === 'levelup') {
+    this.modal.classList.toggle('levelup', picking && !results);
+    if (picking) {
+      const crate = w.phase === 'crate';
       this.modal.innerHTML =
-        `<div class="title">LEVEL UP</div>` +
+        (crate ? `<div class="title crate"><img src="${CRATE_HEADER}" alt="SUPPLY CRATE"></div>` : `<div class="title">LEVEL UP</div>`) +
         `<div class="cards">` +
         w.offer
           .map((o) => {
             const d = perkDef(o.id);
-            const t = TIERS.find((x) => x.id === o.tier)!;
+            // Crate cards have no tiers (design.md 16.12): one neutral frame and a SUPPLY bar.
+            const t = crate ? CRATE_CARD : TIERS.find((x) => x.id === o.tier)!;
             // The icon is never shown without its name (design.md 15.2).
             return (
               `<button class="card tier-${t.id}" data-id="${o.id}" style="--tc:${t.color}">` +
@@ -158,7 +165,8 @@ export class Hud {
     const cells = owned
       .map((d) => {
         const o = w.offer.find((x) => x.id === d.id);
-        const hl = o ? `<span class="ko" style="border-color:${TIERS.find((t) => t.id === o.tier)!.color}"></span>` : '';
+        const c = w.phase === 'crate' ? CRATE_CARD.color : o && TIERS.find((t) => t.id === o.tier)!.color;
+        const hl = o ? `<span class="ko" style="border-color:${c}"></span>` : '';
         const v = effectText(d, Math.round(w.stacks[d.id] * 10) / 10).split(' ')[0];
         return `<div class="kc">${hl}<img src="${ICON_BASE}perk_${d.id}_00.png" alt=""><span class="kv">${v}</span></div>`;
       })

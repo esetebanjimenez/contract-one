@@ -1,6 +1,6 @@
 /**
  * Screenshot scenes for CI (never deployed: built only by vite.shots.config.ts).
- * ?scene=levelup | boss | viper | warlord | results | grunts | numbers fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
+ * ?scene=levelup | crate | crates | boss | viper | warlord | results | grunts | numbers fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
  */
 import { boot } from '../../src/game';
 import { BOSSES, VIPER } from '../../src/data/boss';
@@ -11,7 +11,7 @@ import { computeStats } from '../../src/sim/perks';
 import { createWorld, step, type World } from '../../src/sim/world';
 import { playUntil } from '../bots';
 
-export type Scene = 'levelup' | 'boss' | 'viper' | 'warlord' | 'results' | 'grunts' | 'numbers';
+export type Scene = 'levelup' | 'crate' | 'crates' | 'boss' | 'viper' | 'warlord' | 'results' | 'grunts' | 'numbers';
 const SEED = 7;
 
 function build(scene: Scene): World {
@@ -82,6 +82,23 @@ function build(scene: Scene): World {
     playUntil(w, 'kite-smart', (x) => x.time >= 150);
     w.pendingLevels = 1;
     step(w, { mx: 0, my: 0 });
+    return w;
+  }
+  if (scene === 'crate' || scene === 'crates') {
+    // A mid-run kit, then an elite crate and a lieutenant crate on the ground (design.md 16.12);
+    // 'crate' walks onto one so the SUPPLY CRATE screen shows.
+    playUntil(w, 'kite-smart', (x) => x.time >= 150);
+    w.phase = 'play';
+    w.pendingLevels = 0;
+    w.player.invuln = 3; // the capture, not the run
+    w.player.hp = w.stats.maxHp;
+    const { x, y } = w.player;
+    w.crates.push({ x: x + 44, y: y - 18, age: 0, lt: false }, { x: x - 44, y: y + 22, age: 0.7, lt: true });
+    if (scene === 'crate') {
+      w.crates[0].x = x;
+      w.crates[0].y = y;
+      step(w, { mx: 0, my: 0 });
+    }
     return w;
   }
   w.player.invuln = 1e9; // survive to the fight whatever the seed does

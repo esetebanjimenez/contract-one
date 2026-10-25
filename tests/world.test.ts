@@ -3,8 +3,8 @@ import { ENEMIES } from '../src/data/enemies';
 import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
 import { SPAWN } from '../src/data/spawns';
-import { DRONE, GRENADE, PERKS, addStack } from '../src/data/perks';
-import { computeStats, drawOffer, softMove, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
+import { CRATE, CRATE_PERKS, DRONE, GRENADE, PERKS, addStack } from '../src/data/perks';
+import { computeStats, drawCrateOffer, drawOffer, softMove, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
 import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, WARLORD, bossHp } from '../src/data/boss';
 import { PLAYER } from '../src/data/player';
@@ -890,5 +890,82 @@ describe('THE WARLORD (design.md 16.11)', () => {
     h.time += DT;
     updateBoss(b, h);
     expect(h.hits).toEqual([WARLORD.contactDamage]);
+  });
+});
+
+describe('supply crates (design.md 16.12)', () => {
+  const crateIds = ['multishot', 'grenade', 'explosive', 'drone'];
+  const elite = (w: World, x: number, y: number) => {
+    w.enemies.push({
+      id: w.nextEnemyId++,
+      def: ENEMIES.grunt,
+      x,
+      y,
+      hp: 0,
+      maxHp: 1,
+      fireTimer: 9,
+      facing: 1,
+      elite: true,
+      flash: 0,
+      aiming: false,
+    });
+    killEnemy(w, w.enemies.length - 1);
+  };
+  it('keeps the four crate perks out of level-ups, leaving 12', () => {
+    expect(PERKS.filter((d) => d.pool === 'level').length).toBe(12);
+    expect(CRATE_PERKS).toEqual(expect.arrayContaining(crateIds));
+    const s = emptyStacks();
+    s.grenade = 1;
+    for (let i = 0; i < 200; i++) expect(drawOffer(s, 5, 20, 4, createRng(i)).some((o) => crateIds.includes(o.id))).toBe(false);
+  });
+  it('offers 3 untiered crate cards at fixed steps, and drops HE at 100%', () => {
+    const s = emptyStacks();
+    for (let i = 0; i < 50; i++) {
+      const o = drawCrateOffer(s, CRATE.cards, createRng(i));
+      expect(o.length).toBe(3);
+      expect(new Set(o.map((x) => x.id)).size).toBe(3);
+      for (const x of o) {
+        expect(x.tier).toBe('common');
+        expect(x.value).toBe(x.id === 'explosive' ? 15 : 1);
+      }
+    }
+    s.explosive = 100;
+    for (let i = 0; i < 50; i++) expect(drawCrateOffer(s, CRATE.cards, createRng(i)).some((x) => x.id === 'explosive')).toBe(false);
+  });
+  it('the first elite always drops a crate, later elites only 1:30 of contract time after the last crate', () => {
+    const w = createWorld(3);
+    elite(w, 50, 0);
+    expect(w.crates.length).toBe(1);
+    w.contractTime += CRATE.eliteGapSec - 1;
+    elite(w, 60, 0);
+    expect(w.crates.length).toBe(1);
+    w.contractTime += 1;
+    elite(w, 70, 0);
+    expect(w.crates.length).toBe(2);
+  });
+  it('crates never expire, ignore the magnet, and open a crate screen that does not use up a level', () => {
+    const w = createWorld(4);
+    w.player.hp = w.stats.maxHp = 1e9;
+    elite(w, 30, 0);
+    const c = w.crates[0];
+    for (let i = 0; i < Math.round(120 / DT) && w.phase === 'play'; i++) {
+      w.enemies.length = 0;
+      w.pendingLevels = 0;
+      step(w, { mx: 0, my: 0 });
+    }
+    expect(w.crates.length).toBe(1);
+    expect(c.x).toBe(30); // never pulled
+    const level = w.level;
+    w.player.x = c.x;
+    w.player.y = c.y;
+    step(w, { mx: 0, my: 0 });
+    expect(w.phase).toBe('crate');
+    expect(w.crates.length).toBe(0);
+    const pick = w.offer[0];
+    const before = w.stacks[pick.id];
+    choosePerk(w, pick.id);
+    expect(w.stacks[pick.id]).toBe(before + pick.value);
+    expect(w.level).toBe(level);
+    expect(w.cratesOpened).toBe(1);
   });
 });

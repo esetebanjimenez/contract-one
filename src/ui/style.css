@@ -461,3 +461,16 @@
   letter-spacing: 0.08em;
   color: #ffe27a;
 }
+
+/* Supply crate screen (design.md 16.12): the Artist's SUPPLY CRATE plate instead of the text strip. */
+.modal.levelup .title.crate {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+.modal.levelup .title.crate img {
+  display: block;
+  margin: 0 auto;
+  width: calc(176px * var(--s));
+  image-rendering: pixelated;
+}

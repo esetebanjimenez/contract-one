@@ -66,6 +66,12 @@ const ART = [
   'warlordfinal_t1_phase3_walkA_00',
   'warlordfinal_t1_phase3_walkB_00',
   'fx/mine_00',
+  'crates/crate_t1_elite_00',
+  'crates/crate_t1_elite_01',
+  'crates/crate_t1_lt_00',
+  'crates/crate_t1_lt_01',
+  'crates/crate_t1_shadow_00',
+  'crates/crate_t1_shadow_lt_00',
   'fx/mine_01',
   'fx/drone_00',
   'fx/drone_01',
@@ -210,6 +216,9 @@ const GRENADE_BLINK_MS = 100;
 const CACHE_SCALE = 1.5; // 12 px Scrap cache from the 8 px Scrap sprite (design.md 13.4)
 
 /** Grows a list of sprites on demand and hides the unused tail each frame. */
+/** Supply crate animation (Artist, design.md 16.12). */
+const CRATE_ART = { glintEverySec: 2.4, glintSec: 0.12, bobSec: 1.2 };
+
 class Pool {
   private items: Sprite[] = [];
   constructor(private readonly layer: Container) {}
@@ -243,6 +252,8 @@ export class Renderer {
   private bullets!: Pool;
   private blasts!: Pool;
   private mines!: Pool;
+  private crates!: Pool;
+  private crateShadows!: Pool;
   private drones!: Pool;
   private grenades!: Pool;
   private merc!: Sprite;
@@ -290,6 +301,8 @@ export class Renderer {
     this.bullets = new Pool(layers[4]);
     this.blasts = new Pool(layers[5]);
     this.mines = new Pool(layers[0]); // on the sand, under everyone
+    this.crateShadows = new Pool(layers[0]);
+    this.crates = new Pool(layers[0]);
     this.merc = new Sprite(this.tex.merc_t1_idle_00);
     this.merc.anchor.set(MERC_ART.bodyCenter.x / MERC_ART.size.w, MERC_ART.bodyCenter.y / MERC_ART.size.h);
     // Soft shadow under the merc so the coyote helmet separates from the sand (Artist, M2).
@@ -434,6 +447,21 @@ export class Renderer {
       s.alpha = k.age > LEVELS.pickupLifetimeSec - 3 ? (Math.floor(k.age * 8) % 2 ? 0.3 : 1) : 1;
     });
     this.pickups.hideFrom(w.pickups.length);
+    // Supply crates (Artist): a still shadow, a 0/-1 px bob and a short glint; the starred crate for lieutenants.
+    w.crates.forEach((c, i) => {
+      const kind = c.lt ? 'lt' : 'elite';
+      const x = Math.round(c.x);
+      const y = Math.round(c.y);
+      const h = this.tex[`crates/crate_t1_${kind}_00`].height;
+      const sh = this.crateShadows.get(i, this.tex[c.lt ? 'crates/crate_t1_shadow_lt_00' : 'crates/crate_t1_shadow_00']);
+      sh.position.set(x, y + Math.floor(h / 2) - 1);
+      const glint = c.age % CRATE_ART.glintEverySec < CRATE_ART.glintSec;
+      const s = this.crates.get(i, this.tex[`crates/crate_t1_${kind}_0${glint ? 1 : 0}`]);
+      const bob = Math.floor(c.age / (CRATE_ART.bobSec / 2)) % 2 ? -1 : 0;
+      s.position.set(x, y + bob);
+    });
+    this.crateShadows.hideFrom(w.crates.length);
+    this.crates.hideFrom(w.crates.length);
 
     this.fx.clear();
     // Cyan pop where a merged drop lands.

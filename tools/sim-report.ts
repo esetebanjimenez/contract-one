@@ -22,6 +22,8 @@ const FIGHT_TARGETS: { kills: [number, number]; sec: [number, number] }[] = [
 const REACH_FIRST: [number, number] = [80, 95];
 const LEVEL_AT_FIRST: [number, number] = [20, 30];
 const ENRAGE_MAX = 10;
+/** kite-smart crates opened by the Warlord's spawn (design.md 16.12). */
+const CRATES_AT_FINAL: [number, number] = [5, 8];
 
 const results = new Map<Bot, RunResult[]>(bots.map((bot) => [bot, Array.from({ length: runs }, (_, i) => runBot(1000 + i, bot))]));
 
@@ -89,6 +91,27 @@ for (const bot of bots) {
   });
 }
 
+// Supply crates (design.md 16.12): crates opened and crate perks owned at each target's spawn.
+const crateRows: string[] = [];
+for (const bot of bots) {
+  const rs = results.get(bot)!;
+  BOSSES.forEach((b, i) => {
+    const fs = rs.flatMap((r) => r.fights.filter((f) => f.target === i));
+    if (!fs.length) return;
+    const opened = med(fs.map((f) => f.crates));
+    const k = (id: 'multishot' | 'grenade' | 'drone' | 'explosive'): number => med(fs.map((f) => f.kit[id] ?? 0));
+    const cell =
+      bot === 'kite-smart' && i === BOSSES.length - 1
+        ? check(
+            within(opened, CRATES_AT_FINAL),
+            `${opened}`,
+            `kite-smart opened ${opened} crates by ${b.name}; target ${range(CRATES_AT_FINAL)} (§16.12)`,
+          )
+        : `${opened}`;
+    crateRows.push(`| ${bot} | ${b.name} | ${cell} | +${k('multishot')} | ${k('grenade')} | ${k('drone')} | ${k('explosive')}% |`);
+  });
+}
+
 const lines = [
   `### Sim table (${runs} runs per bot)`,
   '',
@@ -99,6 +122,10 @@ const lines = [
   '| Bot | Target | Reached | Level at spawn | HP at spawn | Kills | Median fight | Enraged |',
   '|---|---|---|---|---|---|---|---|',
   ...fightRows,
+  '',
+  '| Bot | Target | Crates opened by spawn | EXTRA BARREL | FRAG OUT | DRONE BUDDY | HE ROUNDS |',
+  '|---|---|---|---|---|---|---|',
+  ...crateRows,
   '',
   warnings.length
     ? `**${warnings.length} outside target** (warnings only, the check still passes):\n` + warnings.map((w) => `- ${w}`).join('\n')
