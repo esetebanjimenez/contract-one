@@ -44,7 +44,7 @@ describe('grunt weapons (looks only)', () => {
       maxHp: 1e9,
       fireTimer: 0,
       facing: 1,
-      elite: false,
+      veteran: false,
       flash: 0,
       aiming: false,
     });

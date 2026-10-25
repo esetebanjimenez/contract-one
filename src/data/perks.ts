@@ -248,9 +248,8 @@ export const PERKS: PerkDef[] = [
   },
 ];
 
-/** Supply crates (design.md 16.12): elite gap in seconds of contract time, cards per crate. Crates never expire. */
+/** Supply crates (design.md 16.12): cards per crate. Every elite and lieutenant drops one; crates never expire. */
 export const CRATE = {
-  eliteGapSec: 90, // after the first elite crate, an elite drops one only this long after the last crate from any source
   cards: 3,
   touchRadius: 14, // the player walks over it; the Scrap magnet never pulls it
 };

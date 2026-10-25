@@ -210,6 +210,7 @@ export interface FightResult {
   enraged: boolean;
   crates: number; // crates opened before his spawn
   kit: Partial<Record<PerkId, number>>; // crate perks at his spawn
+  elites: number; // scheduled elites killed before his spawn
 }
 
 export interface RunResult {
@@ -281,6 +282,7 @@ export function runBot(seed: number, bot: Bot, maxSec = MAX_RUN_SEC): RunResult 
         enraged: f.arrivedAt >= 0 && end - f.arrivedAt >= RUN.enrageFightSec,
         crates: f.crates,
         kit: f.kit,
+        elites: f.elites,
       };
     }),
     level: w.level,

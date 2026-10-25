@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ENEMIES } from '../src/data/enemies';
+import { ELITE, ENEMIES } from '../src/data/enemies';
 import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
 import { SPAWN } from '../src/data/spawns';
@@ -177,7 +177,7 @@ describe('sim', () => {
       maxHp: 1e9,
       fireTimer: 2,
       facing: 1,
-      elite: false,
+      veteran: false,
       flash: 0,
       aiming: false,
     });
@@ -225,7 +225,7 @@ describe('sim', () => {
       maxHp: 1e9,
       fireTimer: 0,
       facing: 1,
-      elite: false,
+      veteran: false,
       flash: 0,
       aiming: false,
     });
@@ -250,7 +250,7 @@ describe('sim', () => {
       maxHp: 1e9,
       fireTimer: 0,
       facing: 1,
-      elite: false,
+      veteran: false,
       flash: 0,
       aiming: false,
     });
@@ -262,9 +262,13 @@ describe('sim', () => {
     const w = createWorld(9);
     w.player.hp = w.stats.maxHp = 1e9;
     setClock(w, 240 * 60);
-    for (let i = 0; i < 1800; i++) step(w, { mx: 0, my: 0 });
+    for (let i = 0; i < 1800; i++) {
+      w.phase = 'play';
+      w.pendingLevels = 0;
+      step(w, { mx: 0, my: 0 });
+    }
     expect(riflemenAlive(w)).toBeLessThanOrEqual(SPAWN.maxRiflemen);
-    expect(w.enemies.some((e) => e.elite)).toBe(true);
+    expect(w.enemies.some((e) => e.veteran)).toBe(true);
     expect(w.enemies.some((e) => e.def.id === 'heavy')).toBe(true);
   });
   it('makes the waves at 2:00, 4:00, 7:00, 8:00, 11:00 and 12:00 full rings', () => {
@@ -420,7 +424,7 @@ describe('16.7 attack perks', () => {
       fireTimer: 9,
       aiming: false,
       facing: 1 as const,
-      elite: false,
+      veteran: false,
       flash: 0,
     };
     w.enemies.push(e);
@@ -905,6 +909,7 @@ describe('supply crates (design.md 16.12)', () => {
       maxHp: 1,
       fireTimer: 9,
       facing: 1,
+      veteran: false,
       elite: true,
       flash: 0,
       aiming: false,
@@ -932,16 +937,78 @@ describe('supply crates (design.md 16.12)', () => {
     s.explosive = 100;
     for (let i = 0; i < 50; i++) expect(drawCrateOffer(s, CRATE.cards, createRng(i)).some((x) => x.id === 'explosive')).toBe(false);
   });
-  it('the first elite always drops a crate, later elites only 1:30 of contract time after the last crate', () => {
+  it('every elite kill drops a crate; veteran kills never do', () => {
     const w = createWorld(3);
     elite(w, 50, 0);
-    expect(w.crates.length).toBe(1);
-    w.contractTime += CRATE.eliteGapSec - 1;
     elite(w, 60, 0);
-    expect(w.crates.length).toBe(1);
-    w.contractTime += 1;
-    elite(w, 70, 0);
     expect(w.crates.length).toBe(2);
+    expect(w.elitesKilled).toBe(2);
+    w.enemies.push({ ...w.enemies[0], id: w.nextEnemyId++, def: ENEMIES.grunt, hp: 0, veteran: true, elite: false });
+    w.enemies.push({
+      id: w.nextEnemyId++,
+      def: ENEMIES.grunt,
+      x: 0,
+      y: 0,
+      hp: 0,
+      maxHp: 1,
+      fireTimer: 9,
+      facing: 1,
+      veteran: true,
+      flash: 0,
+      aiming: false,
+    });
+    killEnemy(w, w.enemies.length - 1);
+    expect(w.crates.length).toBe(2);
+  });
+  it('spawns one elite every 2:00 of contract time from 1:30, x20 HP, x1.5 size, off the enemy cap', () => {
+    const w = createWorld(5);
+    w.player.hp = w.stats.maxHp = 1e9;
+    const at: number[] = [];
+    for (let i = 0; i < Math.round(300 / DT) && w.contractTime < 250; i++) {
+      if (w.phase !== 'play') {
+        w.phase = 'play';
+        w.pendingLevels = 0;
+      }
+      const before = w.elitesSpawned;
+      step(w, { mx: 0, my: 0 });
+      if (w.elitesSpawned > before) {
+        at.push(Math.round(w.contractTime));
+        const e = w.enemies.find((x) => x.elite)!;
+        const base = ENEMIES[e.def.id as keyof typeof ENEMIES];
+        expect(e.veteran).toBe(false);
+        expect(e.def.radius).toBeCloseTo(base.radius * ELITE.size);
+        expect(e.def.speed).toBeCloseTo(base.speed * ELITE.speed);
+        expect(e.def.scrap).toBe(ELITE.scrap);
+        expect(e.maxHp).toBeCloseTo(base.hp * ELITE.hp * (1 + 0.14 * (w.contractTime / 60)), 0);
+        w.enemies = w.enemies.filter((x) => !x.elite);
+      }
+    }
+    expect(at).toEqual([90, 210]);
+    // Off the cap: a full field still takes the elite, and never replaces it.
+    const f = createWorld(6);
+    f.player.hp = f.stats.maxHp = 1e9;
+    setClock(f, Math.round(ELITE.firstSec / DT) - 2);
+    while (f.enemies.length < CAPS.enemies)
+      f.enemies.push({
+        id: f.nextEnemyId++,
+        def: ENEMIES.grunt,
+        x: 2000,
+        y: 2000,
+        hp: 1e9,
+        maxHp: 1e9,
+        fireTimer: 9,
+        facing: 1,
+        veteran: false,
+        flash: 0,
+        aiming: false,
+      });
+    for (let i = 0; i < 120; i++) {
+      f.phase = 'play';
+      f.pendingLevels = 0;
+      step(f, { mx: 0, my: 0 });
+    }
+    expect(f.enemies.length).toBeGreaterThan(CAPS.enemies);
+    expect(f.enemies.filter((x) => x.elite).length).toBe(1);
   });
   it('crates never expire, ignore the magnet, and open a crate screen that does not use up a level', () => {
     const w = createWorld(4);

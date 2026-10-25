@@ -91,7 +91,7 @@ for (const bot of bots) {
   });
 }
 
-// Supply crates (design.md 16.12): crates opened and crate perks owned at each target's spawn.
+// Supply crates (design.md 16.12): elites killed, crates opened and crate perks owned at each target's spawn.
 const crateRows: string[] = [];
 for (const bot of bots) {
   const rs = results.get(bot)!;
@@ -99,6 +99,7 @@ for (const bot of bots) {
     const fs = rs.flatMap((r) => r.fights.filter((f) => f.target === i));
     if (!fs.length) return;
     const opened = med(fs.map((f) => f.crates));
+    const elites = med(fs.map((f) => f.elites));
     const k = (id: 'multishot' | 'grenade' | 'drone' | 'explosive'): number => med(fs.map((f) => f.kit[id] ?? 0));
     const cell =
       bot === 'kite-smart' && i === BOSSES.length - 1
@@ -108,7 +109,9 @@ for (const bot of bots) {
             `kite-smart opened ${opened} crates by ${b.name}; target ${range(CRATES_AT_FINAL)} (§16.12)`,
           )
         : `${opened}`;
-    crateRows.push(`| ${bot} | ${b.name} | ${cell} | +${k('multishot')} | ${k('grenade')} | ${k('drone')} | ${k('explosive')}% |`);
+    crateRows.push(
+      `| ${bot} | ${b.name} | ${elites} | ${cell} | +${k('multishot')} | ${k('grenade')} | ${k('drone')} | ${k('explosive')}% |`,
+    );
   });
 }
 
@@ -123,8 +126,8 @@ const lines = [
   '|---|---|---|---|---|---|---|---|',
   ...fightRows,
   '',
-  '| Bot | Target | Crates opened by spawn | EXTRA BARREL | FRAG OUT | DRONE BUDDY | HE ROUNDS |',
-  '|---|---|---|---|---|---|---|',
+  '| Bot | Target | Elites killed by spawn | Crates opened by spawn | EXTRA BARREL | FRAG OUT | DRONE BUDDY | HE ROUNDS |',
+  '|---|---|---|---|---|---|---|---|',
   ...crateRows,
   '',
   warnings.length

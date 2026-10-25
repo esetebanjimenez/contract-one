@@ -44,8 +44,26 @@ export const SCALING = {
   rifleMoveMin: 1.4,
 };
 
-/** Elite variant of any base type (design.md section 5). */
-export const ELITE = { hp: 3, speed: 1.1, contact: 1.5, scrap: 4, rifleSpreadShots: 3, rifleSpreadDeg: 12 };
+/** Veteran variant of any base type (design.md section 5, the old Elite; renamed in 16.12). Spawns in mass, no crates. */
+export const VETERAN = { hp: 3, speed: 1.1, contact: 1.5, scrap: 4, rifleSpreadShots: 3, rifleSpreadDeg: 12 };
+
+/**
+ * Elites (design.md 16.12): one scheduled strong enemy every 2:00 of contract time from 1:30, picked from the
+ * band's regular weights. HP is that type's at that time x20; size, contact and speed scale its def; flat Scrap.
+ * Every elite kill drops a supply crate. Off the enemy cap and never replaced at it.
+ */
+export const ELITE = {
+  firstSec: 90,
+  everySec: 120,
+  hp: 20,
+  size: 1.5,
+  contact: 1.5,
+  speed: 0.9,
+  scrap: 15,
+  bar: { w: 20, h: 3, abovePx: 4 }, // white fill on a 1 px #14110F outline, shrinking from the right
+  // Head tops above the anchor at elite size (Artist), so the bar's bottom edge sits abovePx over the head.
+  headTopPx: { grunt: 14, runner: 11, heavy: 21, rifleman: 12 } as Record<string, number>,
+};
 
 /** design.md 13.5: px pushed back per player bullet hit. */
 export const KNOCKBACK_PX = 4;

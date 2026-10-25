@@ -42,8 +42,12 @@ const checks: Check[] = [
     scene: 'crates',
     waitMs: 500,
     ok: async (p) => {
-      const n = await p.evaluate(() => (window as unknown as { __world: { crates: unknown[] } }).__world.crates.length);
-      return n === 2 ? null : `expected 2 crates on the ground, saw ${n}`;
+      const [n, elites] = await p.evaluate(() => {
+        const w = (window as unknown as { __world: { crates: unknown[]; enemies: { elite?: boolean }[] } }).__world;
+        return [w.crates.length, w.enemies.filter((e) => e.elite).length];
+      });
+      if (n !== 2) return `expected 2 crates on the ground, saw ${n}`;
+      return elites >= 1 ? null : 'no elite on screen';
     },
   },
   {
