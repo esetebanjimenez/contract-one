@@ -66,6 +66,25 @@ const ART = [
   'warlordfinal_t1_phase3_walkA_00',
   'warlordfinal_t1_phase3_walkB_00',
   'fx/mine_00',
+  'grunt_elite_shovel_walkA_00',
+  'grunt_elite_shovel_walkB_00',
+  'grunt_elite_shovel_windup_00',
+  'grunt_elite_shovel_strike_00',
+  'grunt_elite_baton_walkA_00',
+  'grunt_elite_baton_walkB_00',
+  'grunt_elite_baton_windup_00',
+  'grunt_elite_baton_strike_00',
+  'grunt_elite_sledge_walkA_00',
+  'grunt_elite_sledge_walkB_00',
+  'grunt_elite_sledge_windup_00',
+  'grunt_elite_sledge_strike_00',
+  'runner_elite_t1_walk_00',
+  'runner_elite_t1_walkA_00',
+  'runner_elite_t1_walkB_00',
+  'heavy_elite_t1_walk_00',
+  'heavy_elite_t1_walkA_00',
+  'heavy_elite_t1_walkB_00',
+  'rifleman_elite_t1_idle_00',
   'crates/crate_t1_elite_00',
   'crates/crate_t1_elite_01',
   'crates/crate_t1_lt_00',
@@ -131,6 +150,14 @@ export function gruntFrame(weapon: GruntWeapon, id: number, time: number, swingA
     if (ms >= 0 && ms < GRUNT_WEAPONS.windupMs + GRUNT_WEAPONS.strikeMs) return f.strike;
   }
   return f.walk[Math.floor((time * 1000 + id * 37) / GRUNT_WEAPONS.walkFrameMs) % 2];
+}
+
+/**
+ * An elite's frame: the Artist's hand-drawn elite variant of the same frame, already 1.5x (PR #36, design.md 16.12).
+ * The names insert `elite_` after the type, e.g. grunt_shovel_walkA_00 becomes grunt_elite_shovel_walkA_00.
+ */
+export function eliteArt(id: ArtId): ArtId {
+  return id.replace(/^(grunt|runner|heavy|rifleman)_/, '$1_elite_') as ArtId;
 }
 
 /** The elite Grunt's lunge frame: windup through the telegraph, strike through the dash (design.md 16.12). */
@@ -297,6 +324,8 @@ export class Renderer {
     for (const id of enemyArt) {
       this.outlineTex[id] = outlined(this.tex[id], BONE_WHITE);
       this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
+      const el = eliteArt(id);
+      this.flashTex[el] = silhouette(this.tex[el], '#ffffff');
     }
     this.ground = new TilingSprite({ texture: this.tex.ground_sand_00, width: NATIVE_WIDTH, height: this.viewH });
     const layers = [new Container(), new Container(), new Container(), new Container(), new Container(), new Container()];
@@ -491,7 +520,7 @@ export class Renderer {
       // An elite Runner's walk cycle plays as much faster as it runs (design.md 16.12).
       const frameMs = anim && (e.elite ? anim.frameMs / ELITE.byType[e.def.id].speed : anim.frameMs);
       const lungeT = e.lunge ? w.time - e.lunge.at : -1;
-      const art =
+      const base =
         e.def.id === 'grunt'
           ? lungeT >= 0
             ? lungeFrame(gruntWeapon(e.id), lungeT) // the elite Grunt's lunge: windup, then strike
@@ -499,14 +528,15 @@ export class Renderer {
           : anim
             ? anim.frames[Math.floor((w.time * 1000 + e.id * 37) / frameMs!) % anim.frames.length]
             : ENEMY_ART[e.def.id];
-      // Heavies flash white for one frame per hit; Veterans and elites carry a baked bone-white outline.
-      const tex = e.flash > 0 ? this.flashTex[art] : e.veteran || e.elite ? this.outlineTex[art] : this.tex[art];
+      // Elites draw their own hand-drawn frames with the dark outline; Veterans carry a baked bone-white outline.
+      const art = e.elite ? eliteArt(base) : base;
+      const tex = e.flash > 0 ? this.flashTex[art] : e.veteran && !e.elite ? this.outlineTex[art] : this.tex[art];
       const s = this.enemies.get(i, tex);
       s.position.set(Math.round(e.x), Math.round(e.y));
       const r = e.def.ranged;
       const look = PLACEHOLDER[e.def.id];
-      // Elites: the base sprite at x1.5 until the Artist's elite variants land (design.md 16.12).
-      const sc = look.scale * (e.elite ? ELITE.size : e.veteran ? VETERAN_SCALE : 1);
+      // Elite frames are drawn at 1.5x already, so they render at scale 1 (design.md 16.12).
+      const sc = look.scale * (e.veteran && !e.elite ? VETERAN_SCALE : 1);
       s.tint = e.flash > 0 ? 0xffffff : look.tint;
       if (e.def.id === 'runner' || e.def.id === 'heavy') {
         // Top-down Runners and Heavies face right in the art and rotate toward the player, shield first.
