@@ -61,6 +61,10 @@ const ART = [
   'warlordfinal_t1_aim_00',
   'warlordfinal_t1_phase2_00',
   'warlordfinal_t1_phase3_00',
+  'warlordfinal_t1_phase2_walkA_00',
+  'warlordfinal_t1_phase2_walkB_00',
+  'warlordfinal_t1_phase3_walkA_00',
+  'warlordfinal_t1_phase3_walkB_00',
   'fx/mine_00',
   'fx/mine_01',
   'fx/drone_00',
@@ -175,7 +179,10 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     fire: 'warlordfinal_t1_aim_00',
     phase2: 'warlordfinal_t1_phase2_00',
     phase3: 'warlordfinal_t1_phase3_00',
-    phaseWalk: {},
+    phaseWalk: {
+      2: ['warlordfinal_t1_phase2_walkA_00', 'warlordfinal_t1_phase2_00', 'warlordfinal_t1_phase2_walkB_00', 'warlordfinal_t1_phase2_00'],
+      3: ['warlordfinal_t1_phase3_walkA_00', 'warlordfinal_t1_phase3_00', 'warlordfinal_t1_phase3_walkB_00', 'warlordfinal_t1_phase3_00'],
+    },
   },
 };
 const bossFrames = (a: BossArt): ArtId[] =>
