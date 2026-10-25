@@ -55,11 +55,19 @@ export const VETERAN = { hp: 3, speed: 1.1, contact: 1.5, scrap: 4, rifleSpreadS
 export const ELITE = {
   firstSec: 90,
   everySec: 120,
-  hp: 20,
   size: 1.5,
-  contact: 1.5,
-  speed: 0.9,
   scrap: 15,
+  // Per-type HP, speed and contact multipliers (design.md 16.12, elite abilities, Esteban 2026-10-25).
+  byType: {
+    grunt: { hp: 20, speed: 0.9, contact: 1.5 },
+    runner: { hp: 12, speed: 1.3, contact: 1.5 },
+    heavy: { hp: 25, speed: 0.8, contact: 2 },
+    rifleman: { hp: 20, speed: 0.9, contact: 1.5 },
+  } as Record<string, { hp: number; speed: number; contact: number }>,
+  // Grunt lunge: every 4 s within 120 px, a 0.4 s telegraph, then 60 px over 0.25 s on the aim locked at its end.
+  lunge: { everySec: 4, rangePx: 120, telegraphSec: 0.4, dashPx: 60, dashSec: 0.25 },
+  // Rifleman: a 5-shot burst in the same spread, x1.3 bullet speed, x0.75 the regular move time (floor 1.0 s).
+  rifle: { shots: 5, bulletSpeed: 1.3, moveMul: 0.75, moveMin: 1 },
   bar: { w: 20, h: 3, abovePx: 4 }, // white fill on a 1 px #14110F outline, shrinking from the right
   // Head tops above the anchor at elite size (Artist), so the bar's bottom edge sits abovePx over the head.
   headTopPx: { grunt: 14, runner: 11, heavy: 21, rifleman: 12 } as Record<string, number>,

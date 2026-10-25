@@ -25,6 +25,10 @@ import {
   spawnRate,
   step,
   volleyTargets,
+  eliteDef,
+  eliteRifleMoveSec,
+  lungeStep,
+  type Enemy,
   type World,
 } from '../src/sim/world';
 import { runBot } from '../tools/bots';
@@ -977,9 +981,9 @@ describe('supply crates (design.md 16.12)', () => {
         const base = ENEMIES[e.def.id as keyof typeof ENEMIES];
         expect(e.veteran).toBe(false);
         expect(e.def.radius).toBeCloseTo(base.radius * ELITE.size);
-        expect(e.def.speed).toBeCloseTo(base.speed * ELITE.speed);
+        expect(e.def.speed).toBeCloseTo(base.speed * ELITE.byType[e.def.id].speed);
         expect(e.def.scrap).toBe(ELITE.scrap);
-        expect(e.maxHp).toBeCloseTo(base.hp * ELITE.hp * (1 + 0.14 * (w.contractTime / 60)), 0);
+        expect(e.maxHp).toBeCloseTo(base.hp * ELITE.byType[e.def.id].hp * (1 + 0.14 * (w.contractTime / 60)), 0);
         w.enemies = w.enemies.filter((x) => !x.elite);
       }
     }
@@ -1034,5 +1038,77 @@ describe('supply crates (design.md 16.12)', () => {
     expect(w.stacks[pick.id]).toBe(before + pick.value);
     expect(w.level).toBe(level);
     expect(w.cratesOpened).toBe(1);
+  });
+});
+
+describe('elite abilities (design.md 16.12)', () => {
+  const mk = (w: World, id: string, x: number, y: number): Enemy => {
+    const def = eliteDef(ENEMIES[id]);
+    const e: Enemy = {
+      id: w.nextEnemyId++,
+      def,
+      x,
+      y,
+      hp: 1e9,
+      maxHp: 1e9,
+      fireTimer: 9,
+      facing: 1,
+      veteran: false,
+      elite: true,
+      flash: 0,
+      aiming: false,
+    };
+    w.enemies.push(e);
+    return e;
+  };
+  it('gives each type its own HP, speed and contact, and the Rifleman faster bullets', () => {
+    for (const id of ['grunt', 'runner', 'heavy', 'rifleman']) {
+      const m = ELITE.byType[id];
+      const d = eliteDef(ENEMIES[id]);
+      expect(d.speed).toBeCloseTo(ENEMIES[id].speed * m.speed);
+      expect(d.contactDamage).toBeCloseTo(ENEMIES[id].contactDamage * m.contact);
+    }
+    expect(ELITE.byType.runner).toEqual({ hp: 12, speed: 1.3, contact: 1.5 });
+    expect(ELITE.byType.heavy).toEqual({ hp: 25, speed: 0.8, contact: 2 });
+    expect(eliteDef(ENEMIES.runner).speed).toBeGreaterThan(Math.max(...Object.values(ENEMIES).map((d) => d.speed)));
+    expect(eliteDef(ENEMIES.heavy).knockbackImmune).toBe(true);
+    expect(eliteDef(ENEMIES.rifleman).ranged!.bulletSpeed).toBeCloseTo(ENEMIES.rifleman.ranged!.bulletSpeed * 1.3);
+    expect(ENEMIES.rifleman.ranged!.bulletSpeed).toBe(95); // regulars untouched
+  });
+  it('moves an elite Rifleman x0.75 the regular move time between stops, never under 1.0 s', () => {
+    expect(eliteRifleMoveSec(0)).toBeCloseTo(1.5);
+    expect(eliteRifleMoveSec(600)).toBeCloseTo(Math.max(1, rifleMoveSec(600) * 0.75));
+    expect(eliteRifleMoveSec(60 * 60)).toBeCloseTo(1.05); // the regular floor of 1.4 keeps it over 1.0 s
+  });
+  it('fires a 5-shot burst', () => {
+    const w = createWorld(11);
+    const e = mk(w, 'rifleman', w.player.x + 100, w.player.y);
+    e.aiming = true;
+    e.fireTimer = DT / 2;
+    step(w, { mx: 0, my: 0 });
+    expect(w.enemyBullets.length).toBe(5);
+    expect(Math.hypot(w.enemyBullets[0].vx, w.enemyBullets[0].vy)).toBeCloseTo(95 * 1.3);
+  });
+  it('lunges an elite Grunt: in range only, holds still for 0.4 s, dashes 60 px on the aim held at the end, every 4 s', () => {
+    const w = createWorld(12);
+    const far = mk(w, 'grunt', 500, 0);
+    expect(lungeStep(w, far, -500, 0, 500)).toBe(false);
+    expect(far.lunge).toBeUndefined();
+    const e = mk(w, 'grunt', 100, 0);
+    const tick = (dx: number, dy: number) => {
+      const r = lungeStep(w, e, dx, dy, Math.hypot(dx, dy));
+      w.time += DT;
+      return r;
+    };
+    expect(tick(-100, 0)).toBe(true);
+    while (e.lunge!.n < Math.round(ELITE.lunge.telegraphSec / DT)) expect(tick(0, -100)).toBe(true); // tracks the player
+    expect(e.x).toBe(100); // still during the telegraph
+    expect(e.y).toBe(0);
+    while (tick(0, 9999)); // the player moved after the lock: the dash keeps the held aim
+    expect(e.x).toBeCloseTo(100);
+    expect(e.y).toBeCloseTo(-60);
+    expect(tick(0, -50)).toBe(false); // on cooldown
+    w.time = e.lungeReadyAt!;
+    expect(tick(0, -50)).toBe(true);
   });
 });
