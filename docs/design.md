@@ -552,9 +552,19 @@ Esteban's full-contract run (18:28, level 66, 2/3 targets, the Warlord at 1%) ma
 **Veterans and elites (Esteban, 2026-10-25):** in the late game the old elites spawn in mass, so a crate per elite made no sense. They split into two kinds.
 - **Veterans** are the old elites, renamed: the same `elite_*` variants, stats and look as §5 and §13.4 (×3 HP, ×1.1 speed, ×1.5 contact, ×4 Scrap, ×1.25 scale with a bone-white outline), the same band shares, spawning in mass. Wherever §5, §12, §13 and the band tables say "Elite", read "Veteran". **No crates.**
 - **Elites** are new: one strong enemy on a schedule, **one every 2:00 of contract time starting at 1:30** (1:30, 3:30, 5:30, 7:30, 9:30, 11:30). The clock pauses during fights, so an elite never spawns inside one. It spawns off-screen like any enemy and never counts toward the enemy cap or gets replaced at it.
-- An elite is a regular enemy type picked from the current band's weights (Veterans excluded), with **×20 HP** of that type at that time, **×1.5 size**, **×1.5 contact damage**, **×0.9 speed** and **15 Scrap**. An elite Rifleman fires the 3-shot spread.
+- An elite is a regular enemy type picked from the current band's weights (Veterans excluded), with **×20 HP** of that type at that time, **×1.5 size**, **×1.5 contact damage**, **×0.9 speed** and **15 Scrap**. An elite Rifleman fires a 5-shot burst (abilities, below).
 - Look: the base sprite at ×1.5 with the bone-white outline, plus a **small HP bar** 20×3 px, 4 px above its head: white fill on a 1 px `#14110F` outline, shrinking from the right. Not red-orange (reserved for danger). The bar shows from spawn.
 - An elite takes damage numbers with the 0.25 s merge window, like bosses (§16.10).
+- **Elite abilities (Esteban, 2026-10-25):** each elite sharpens its base type's job and trades some HP for it. These override the shared values above for that type; everything lives in data.
+
+| Elite | HP | Speed | Contact | Ability |
+|---|---|---|---|---|
+| Grunt | ×20 | ×0.9 | ×1.5 | **Lunge** every 4 s when within 120 px: 0.4 s telegraph (`windup` pose plus the red-orange dot used by the Rifleman's muzzle glint), then a 60 px dash over 0.25 s (`strike` pose) along the aim locked at the end of the telegraph. Contact damage applies during the dash. |
+| Runner | ×12 | ×1.3 | ×1.5 | Faster than any regular enemy; walk cycle plays faster to match, no new frames. |
+| Heavy | ×25 | ×0.8 | ×2 | Ignores knockback (Heavies already do). |
+| Rifleman | ×20 | ×0.9 | ×1.5 | **5-shot burst** in the same 12° spread instead of 3, enemy bullets ×1.3 speed (still red-orange), and moves for ×0.75 a regular Rifleman's current move time between stops, floor 1.0 s. The 0.6 s red-orange telegraph is unchanged. |
+
+- Sim check for the abilities PR: Lieutenant 1 kill rate must not drop more than 10 points against main for any bot. If it does, lower elite HP first.
 
 **The crate:**
 - It lands where the elite or lieutenant died and doesn't get pulled by the Scrap magnet; the player walks over it. Crates **never expire**, like Scrap (Esteban, 2026-10-25): no lifetime and no blink. Lieutenant crates use the larger starred crate sprite; elite crates use the standard one.
