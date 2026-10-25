@@ -356,6 +356,27 @@ describe('M3 contract', () => {
     expect(b.state).toBe('stagger');
     expect(w.enemyBullets.length).toBe(0);
   });
+  it('stamps the time of every damaging boss hit for the fading flash, and not during the stagger', () => {
+    const w = godMode(5);
+    toFight(w, 2);
+    run(w, 10);
+    const b = w.boss!;
+    expect(b.damageable).toBe(true);
+    b.x = w.player.x + 60;
+    b.y = w.player.y;
+    for (const e of w.enemies) e.x += 1000;
+    let stamped = false;
+    for (let i = 0; i < 300 && !stamped; i++) {
+      run(w, DT);
+      stamped = b.hitAt === w.time;
+    }
+    expect(stamped).toBe(true);
+    b.state = 'stagger';
+    b.stateT = 1;
+    const at = b.hitAt;
+    run(w, 0.5);
+    expect(b.hitAt).toBe(at);
+  });
   it('wins on the Warlord kill: other enemies die with no Scrap and the boss bar stops', () => {
     const w = godMode(5);
     toFight(w, 2);

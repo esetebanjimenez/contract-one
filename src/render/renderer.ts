@@ -10,7 +10,8 @@ import { MERC_ART, RIFLEMAN_ART } from '../data/player';
 import { bossRadius, enragedFor, mineArmed } from '../sim/boss';
 import { cameraAt, type Enemy, type World } from '../sim/world';
 import type { Controls } from '../ui/input';
-import { BONE_WHITE, outlined, silhouette } from './bake';
+import { BONE_WHITE, innerWhite, outlined, silhouette } from './bake';
+import { bossFlashAlpha } from './boss-flash';
 import { DamageNumbers } from './damage-numbers';
 
 const ART = [
@@ -232,6 +233,7 @@ const TELEGRAPH_COLOR = 0xff4a1c;
 /** Enrage tell: red-orange outline pulsing every 0.5 s (Artist, M3). */
 const ENRAGE_OUTLINE = '#FF4A1C';
 const ENRAGE_PULSE_SEC = 0.5;
+
 /**
  * design.md 16.7 effects (Artist): frame times, centred on the hit or landing point, last smoke frame fades.
  * Slowed on Esteban's playtest (2026-10-24) so the blasts read: HE 0.45 s (was 0.25), frag 0.66 s (was 0.36).
@@ -276,6 +278,8 @@ export class Renderer {
   private outlineTex = {} as Record<string, Texture>;
   private flashTex = {} as Record<string, Texture>;
   private enrageTex = {} as Record<string, Texture>;
+  private flashInnerTex = {} as Record<string, Texture>;
+  private warlordFlash!: Sprite;
   private ground!: TilingSprite;
   private world = new Container();
   private pickups!: Pool;
@@ -320,6 +324,7 @@ export class Renderer {
     for (const id of new Set(Object.values(BOSS_ART).flatMap(bossFrames))) {
       this.flashTex[id] = silhouette(this.tex[id], '#ffffff');
       this.enrageTex[id] = outlined(this.tex[id], ENRAGE_OUTLINE);
+      this.flashInnerTex[id] = innerWhite(this.tex[id]);
     }
     for (const id of enemyArt) {
       this.outlineTex[id] = outlined(this.tex[id], BONE_WHITE);
@@ -343,7 +348,9 @@ export class Renderer {
     this.shadow.ellipse(0, 0, MERC_ART.shadow.rx, MERC_ART.shadow.ry).fill({ color: 0x000000, alpha: MERC_ART.shadow.alpha });
     this.warlord = new Sprite(this.tex.warlord_t1_idle_00);
     this.warlord.visible = false;
-    layers[1].addChild(this.warlord);
+    this.warlordFlash = new Sprite(this.tex.warlord_t1_idle_00);
+    this.warlordFlash.visible = false;
+    layers[1].addChild(this.warlord, this.warlordFlash);
     layers[2].addChild(this.shadow, this.merc);
     const drones = new Container();
     const grenades = new Container();
@@ -422,7 +429,9 @@ export class Renderer {
     this.drawMines(w);
     const b = w.boss;
     const s = this.warlord;
+    const fl = this.warlordFlash;
     s.visible = !!b && b.hp > 0;
+    fl.visible = false;
     if (!b || b.hp <= 0) return;
     const set = BOSS_ART[BOSSES[b.target].style];
     let art: ArtId;
@@ -438,11 +447,22 @@ export class Renderer {
     const stagger = b.state === 'stagger' && Math.floor(b.stateT * 10) % 2 === 0;
     const ef = enragedFor(b, w.time);
     const pulse = ef >= 0 && Math.floor(ef / (ENRAGE_PULSE_SEC / 2)) % 2 === 0;
-    const tex = b.flash > 0 || stagger ? this.flashTex[art] : pulse ? this.enrageTex[art] : this.tex[art];
+    // The stagger keeps its solid white blink; hits fade a white overlay over the sprite instead (never replacing it).
+    const tex = stagger ? this.flashTex[art] : pulse ? this.enrageTex[art] : this.tex[art];
     if (s.texture !== tex) s.texture = tex;
     s.position.set(Math.round(b.x), Math.round(b.y));
     s.rotation = b.facing;
     s.anchor.set(set.pivot.x / set.size, set.pivot.y / set.size);
+    const a = stagger || b.hitAt < 0 ? 0 : bossFlashAlpha(w.time - b.hitAt);
+    if (a > 0) {
+      const ft = this.flashInnerTex[art];
+      if (fl.texture !== ft) fl.texture = ft;
+      fl.visible = true;
+      fl.alpha = a;
+      fl.position.copyFrom(s.position);
+      fl.rotation = s.rotation;
+      fl.anchor.set(set.pivot.x / set.size, set.pivot.y / set.size);
+    }
     const r = bossRadius(b);
     if (b.aimT >= 0) {
       // The aim line (Artist, PR #23): 1 px #FF4A1C, half alpha while it tracks, full alpha once locked.

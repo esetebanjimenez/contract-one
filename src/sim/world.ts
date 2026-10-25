@@ -619,7 +619,7 @@ function damageBoss(w: World, dmg: number, crit: boolean): void {
   w.bossDamage += d;
   const fl = w.fights[w.fights.length - 1];
   if (fl) fl.damage += d;
-  if (wb.state !== 'stagger') wb.flash = DT;
+  if (wb.state !== 'stagger') wb.hitAt = w.time; // re-arms the fading flash, never stacks
   if (wb.hp > 0) checkPhase(wb, bossHost(w));
   else {
     if (fl) fl.killedAt = w.time;

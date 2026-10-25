@@ -25,6 +25,7 @@ export interface Boss {
   gap: number; // index of the rotating gap in the bullet ring
   facing: number; // radians
   flash: number;
+  hitAt: number; // run time of the last damaging hit, for the fading hit flash (-1 before)
   damageable: boolean;
   arrivedAt: number; // run time he became damageable (-1 before)
   moving: boolean;
@@ -114,6 +115,7 @@ export function createBoss(h: BossHost, target = 0): Boss {
     gap: 0,
     facing: Math.PI / 2,
     flash: 0,
+    hitAt: -1,
     damageable: false,
     arrivedAt: -1,
     moving: true,
