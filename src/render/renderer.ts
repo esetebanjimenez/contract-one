@@ -8,7 +8,7 @@ import { RUN } from '../data/run';
 import { GRUNT_WEAPONS, gruntWeapon, type GruntWeapon } from '../data/enemies';
 import { MERC_ART, RIFLEMAN_ART } from '../data/player';
 import { bossRadius, enragedFor, mineArmed } from '../sim/boss';
-import type { World } from '../sim/world';
+import { cameraAt, type World } from '../sim/world';
 import type { Controls } from '../ui/input';
 import { BONE_WHITE, outlined, silhouette } from './bake';
 import { DamageNumbers } from './damage-numbers';
@@ -419,8 +419,9 @@ export class Renderer {
   draw(w: World, controls: Controls, dtSec: number): void {
     const p = w.player;
     // The camera freezes when the boss arena locks.
-    const camX = w.arena ? w.arena.camX : Math.round(p.x - NATIVE_WIDTH / 2);
-    const camY = w.arena ? w.arena.camY : Math.round(p.y - this.viewH / 2);
+    const cam = cameraAt(w, this.viewH);
+    const camX = Math.round(cam.x);
+    const camY = Math.round(cam.y);
     this.drawBand(w);
     this.world.position.set(-camX, -camY);
     this.ground.tilePosition.set(-camX, -camY);

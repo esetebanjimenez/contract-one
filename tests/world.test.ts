@@ -8,6 +8,7 @@ import { computeStats, drawOffer, softMove, emptyStacks, makeOffer, rollTier } f
 import { createRng } from '../src/sim/rng';
 import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, WARLORD, bossHp } from '../src/data/boss';
 import { PLAYER } from '../src/data/player';
+import { NATIVE_WIDTH } from '../src/data/display';
 import { bossRadius, checkPhase, createBoss, updateBoss, type Boss, type BossHost, type Mine } from '../src/sim/boss';
 import {
   choosePerk,
@@ -17,6 +18,8 @@ import {
   killEnemy,
   clumpPickups,
   fullyOnScreen,
+  cameraAt,
+  cameraEasing,
   rifleMoveSec,
   riflemenAlive,
   spawnRate,
@@ -596,6 +599,29 @@ describe('three targets (design.md 16.11)', () => {
     const resumed = w.contractTime;
     run(w, 1);
     expect(w.contractTime).toBeCloseTo(resumed + 1, 5);
+  });
+  it('eases the camera from the arena view back onto the merc on release, holding spawns until it lands', () => {
+    const w = godMode(8);
+    toFight(w, 0);
+    run(w, 10);
+    killTarget(w);
+    const a = w.arena!;
+    // Put the merc in a corner so the follow view is far from the arena view.
+    w.player.x = a.x0 + 10;
+    w.player.y = a.y0 + 10;
+    for (let i = 0; i < 600 && w.arena; i++) run(w, DT);
+    expect(w.arena).toBeNull();
+    const start = cameraAt(w, w.viewH);
+    expect(start.x).toBeCloseTo(a.camX, 0);
+    expect(start.y).toBeCloseTo(a.camY, 0);
+    expect(cameraEasing(w)).toBe(true);
+    const n = w.enemies.length;
+    run(w, LIEUTENANT_DOWN.cameraEaseSec - 2 * DT);
+    expect(w.enemies.length).toBeLessThanOrEqual(n); // no new spawns mid-ease
+    run(w, 3 * DT);
+    expect(cameraEasing(w)).toBe(false);
+    const end = cameraAt(w, w.viewH);
+    expect(end.x).toBeCloseTo(w.player.x - NATIVE_WIDTH / 2, 5);
   });
   it('sends LT. VIPER at contract 9:00 with 50x sheet DPS', () => {
     const w = godMode(9);

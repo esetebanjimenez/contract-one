@@ -55,6 +55,7 @@ export const LIEUTENANT_DOWN = {
   slowMoScale: 0.3,
   bannerSec: 2,
   tapeFadeSec: 0.5, // then the camera unlocks and waves resume
+  cameraEaseSec: 0.4, // the camera eases from the arena view back onto the merc; spawns hold until it lands
   scrapPieces: 8, // the one-level Scrap pile, split so it lands as a clump (16.3)
   scrapSpreadPx: 10,
 };
