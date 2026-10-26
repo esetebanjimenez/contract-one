@@ -218,11 +218,20 @@ export class Hud {
       .join('');
   }
 
-  /** Pause overlay: a dim backdrop over the frozen game, the current perks, and a RESUME button. */
+  /** Run stats (time, level, kills, scrap, boss damage). Shared by results and pause; `timeSec` is the run time to show. */
+  private statsBlock(w: World, timeSec: number): string {
+    const stat = (k: string, v: string | number): string => `<div class="row"><span>${k}</span><span>${v}</span></div>`;
+    return (
+      `<div class="stats">${stat('TIME', mmss(timeSec))}${stat('LEVEL', w.level)}${stat('KILLS', w.kills)}` +
+      `${stat('SCRAP', w.scrapCollected)}${stat('BOSS DAMAGE', Math.round(w.bossDamage))}</div>`
+    );
+  }
+
+  /** Pause overlay: a dim backdrop over the frozen game, the run stats so far, the current perks, and RESUME. */
   private showPause(w: World): void {
     const perks = this.perkList(w);
     this.modal.innerHTML =
-      `<div class="paused"><div class="ptitle">PAUSED</div>` +
+      `<div class="paused"><div class="ptitle">PAUSED</div>${this.statsBlock(w, w.time)}` +
       `<div class="plabel">PERKS</div><div class="perks">${perks || '<div class="none">NO PERKS</div>'}</div>` +
       `<button class="card restart resume">RESUME</button></div>`;
     this.modal.querySelector<HTMLButtonElement>('.resume')!.addEventListener('click', () => this.setPaused(false));
@@ -233,13 +242,11 @@ export class Hud {
     const targets = `<div class="targets">TARGETS ${w.targetsDown}/${BOSSES.length}</div>`;
     const hpLeft =
       !w.won && boss && boss.hp > 0 ? `<div class="hpleft">TARGET HP LEFT: ${Math.ceil((100 * boss.hp) / boss.maxHp)}%</div>` : '';
-    const stat = (k: string, v: string | number): string => `<div class="row"><span>${k}</span><span>${v}</span></div>`;
     const perks = this.perkList(w);
     this.modal.innerHTML =
       `<div class="results ${w.won ? 'won' : 'failed'}">` +
       `<div class="title">${w.won ? 'CONTRACT COMPLETE' : 'CONTRACT FAILED'}</div>${targets}${hpLeft}` +
-      `<div class="stats">${stat('TIME', mmss(w.won ? w.wonAt : w.time))}${stat('LEVEL', w.level)}${stat('KILLS', w.kills)}` +
-      `${stat('SCRAP', w.scrapCollected)}${stat('BOSS DAMAGE', Math.round(w.bossDamage))}</div>` +
+      `${this.statsBlock(w, w.won ? w.wonAt : w.time)}` +
       `<div class="plabel">PERKS</div><div class="perks">${perks || '<div class="none">NO PERKS</div>'}</div>` +
       `<button class="card restart newc" disabled>NEW CONTRACT</button></div>`;
     const btn = this.modal.querySelector<HTMLButtonElement>('.newc')!;

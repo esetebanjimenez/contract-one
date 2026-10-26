@@ -525,6 +525,22 @@
   color: #ffe27a;
   margin-bottom: calc(10px * var(--s));
 }
+.paused .stats {
+  align-self: stretch;
+  padding-bottom: calc(8px * var(--s));
+  margin-bottom: calc(10px * var(--s));
+  border-bottom: calc(1px * var(--s)) solid #4a4e52;
+  font-size: calc(8px * var(--s));
+  line-height: 1.9;
+}
+.paused .row {
+  display: flex;
+  justify-content: space-between;
+  color: #ffffff;
+}
+.paused .row span:first-child {
+  color: #9aa0a6;
+}
 .paused .plabel {
   align-self: stretch;
   font-size: calc(7px * var(--s));
