@@ -40,6 +40,9 @@ export interface Boss {
   mineCd: number;
   // THE WARLORD only: his next scheduled attack is a charge (else an aimed burst).
   nextCharge: boolean;
+  // THE WARLORD only: ARTILLERY CALL (design.md 16.11). throwT counts the throw pose (-1 when not throwing).
+  throwT: number;
+  artilleryCd: number;
 }
 
 /** LT. VIPER's mine (design.md 16.11): arms after a second, then waits for the player or its fuse. */
@@ -48,6 +51,14 @@ export interface Mine {
   y: number;
   age: number;
   damage: number;
+}
+
+/** THE WARLORD's ARTILLERY CALL circle (design.md 16.11): fills inward over fillSec, then explodes once. */
+export interface ArtilleryCircle {
+  x: number;
+  y: number;
+  t: number; // seconds since it appeared (0 .. WARLORD.artillery.fillSec)
+  damage: number; // already scaled by his damageScale
 }
 
 export function mineArmed(m: Mine): boolean {
@@ -73,6 +84,7 @@ export interface BossHost {
   level: number;
   stats: DpsStats;
   player: { x: number; y: number };
+  rng: () => number; // the run's seeded RNG (ARTILLERY CALL circle placement)
   enemyBullets: {
     x: number;
     y: number;
@@ -87,8 +99,11 @@ export interface BossHost {
   /** Locked boss arena (inner wall edges), or null before the lock. */
   arena: { x0: number; y0: number; x1: number; y1: number } | null;
   mines: Mine[];
+  artillery: ArtilleryCircle[];
   hitPlayer(dmg: number): void;
   spawnAddsRing(count: number, kind?: 'grunt' | 'runner', angleOffset?: number): void;
+  /** Spawn an explosion effect (damage is applied by the caller). Mines and artillery share the mine blast. */
+  addBlast(kind: 'he' | 'frag' | 'mine', x: number, y: number): void;
 }
 
 const HALF_W = NATIVE_WIDTH / 2;
@@ -128,6 +143,8 @@ export function createBoss(h: BossHost, target = 0): Boss {
     fanCd: VIPER.fan.firstAfterSec,
     mineCd: 0,
     nextCharge: true,
+    throwT: -1,
+    artilleryCd: WARLORD.artillery.everySec[2],
   };
 }
 
@@ -192,8 +209,64 @@ function updateMines(h: BossHost): void {
     const d = Math.hypot(p.x - m.x, p.y - m.y);
     if ((mineArmed(m) && d <= M.triggerPx) || m.age >= M.fuseSec) {
       if (d <= M.radiusPx + PLAYER.hitRadius) h.hitPlayer(m.damage);
+      h.addBlast('mine', m.x, m.y);
       h.mines[i] = h.mines[h.mines.length - 1];
       h.mines.pop();
+    }
+  }
+}
+
+/** ARTILLERY CALL circles fill inward and explode once (design.md 16.11). They tick whatever he is doing. */
+function updateArtillery(h: BossHost): void {
+  const A = WARLORD.artillery;
+  const p = h.player;
+  for (let i = h.artillery.length - 1; i >= 0; i--) {
+    const c = h.artillery[i];
+    c.t += DT;
+    if (c.t < A.fillSec) continue;
+    if (Math.hypot(p.x - c.x, p.y - c.y) <= A.radiusPx + PLAYER.hitRadius) h.hitPlayer(c.damage);
+    h.addBlast('mine', c.x, c.y);
+    h.artillery[i] = h.artillery[h.artillery.length - 1];
+    h.artillery.pop();
+  }
+}
+
+/**
+ * Drop the volley: one circle on the player's spot, the rest 80-140 px out, inside the arena walls and
+ * never overlapping another circle or a mine (design.md 16.11). A spot that can't be placed is skipped.
+ */
+function spawnArtillery(b: Boss, h: BossHost): void {
+  const A = WARLORD.artillery;
+  const p = h.player;
+  const damage = A.damage * BOSSES[b.target].damageScale;
+  const circles = A.circles[b.phase as 2 | 3];
+  const place = (x: number, y: number): void => {
+    h.artillery.push({ x, y, t: 0, damage });
+  };
+  const inArena = (x: number, y: number): boolean => {
+    const a = h.arena;
+    return !a || (x >= a.x0 + A.radiusPx && x <= a.x1 - A.radiusPx && y >= a.y0 + A.radiusPx && y <= a.y1 - A.radiusPx);
+  };
+  const clear = (x: number, y: number): boolean => {
+    for (const c of h.artillery) if ((c.x - x) ** 2 + (c.y - y) ** 2 < (2 * A.radiusPx) ** 2) return false;
+    for (const m of h.mines) if ((m.x - x) ** 2 + (m.y - y) ** 2 < (A.radiusPx + VIPER.mines.radiusPx) ** 2) return false;
+    return true;
+  };
+  // The first circle lands on the player, clamped inside the walls.
+  const a = h.arena;
+  const px = a ? Math.min(a.x1 - A.radiusPx, Math.max(a.x0 + A.radiusPx, p.x)) : p.x;
+  const py = a ? Math.min(a.y1 - A.radiusPx, Math.max(a.y0 + A.radiusPx, p.y)) : p.y;
+  place(px, py);
+  for (let n = 1; n < circles; n++) {
+    for (let k = 0; k < A.placeTries; k++) {
+      const ang = h.rng() * Math.PI * 2;
+      const dist = A.minPx + h.rng() * (A.maxPx - A.minPx);
+      const x = p.x + Math.cos(ang) * dist;
+      const y = p.y + Math.sin(ang) * dist;
+      if (inArena(x, y) && clear(x, y)) {
+        place(x, y);
+        break;
+      }
     }
   }
 }
@@ -304,7 +377,17 @@ export function checkPhase(b: Boss, h: BossHost): void {
     b.mineCd = 0;
     b.chargeCd = Math.min(b.chargeCd, BOSS.phase3.chargeEverySec);
   }
-  if (isWarlord(b)) b.chargeCd = WARLORD.firstAttackSec;
+  if (isWarlord(b)) {
+    b.chargeCd = WARLORD.firstAttackSec;
+    // ARTILLERY CALL starts in phase 2 and quickens in phase 3; a throw never survives a phase change.
+    b.throwT = -1;
+    b.artilleryCd = artilleryEvery(b);
+  }
+}
+
+/** ARTILLERY CALL interval for his current phase (design.md 16.11): 7 s in phase 2, 6 s in phase 3. */
+function artilleryEvery(b: Boss): number {
+  return WARLORD.artillery.everySec[(b.phase === 3 ? 3 : 2) as 2 | 3];
 }
 
 /** Seconds from the end of a charge to his next attack. */
@@ -325,6 +408,7 @@ export function updateBoss(b: Boss, h: BossHost): void {
   const speed = (gunner ? VIPER.speed : BOSS.speed) * (enraged(b, h) ? BOSS.enrage.speedMul : 1);
   b.moving = false;
   updateMines(h);
+  updateArtillery(h);
 
   switch (b.state) {
     case 'enter': {
@@ -353,6 +437,27 @@ export function updateBoss(b: Boss, h: BossHost): void {
       if (gunner) {
         gunnerWalk(b, dx, dy, d, speed);
         break;
+      }
+      // ARTILLERY CALL (design.md 16.11): the throw pose, then the circles. He stops and never charges
+      // while throwing; its timer counts only in walk, so it pauses through a charge (telegraph + dash).
+      if (warlord && b.throwT >= 0) {
+        b.throwT += DT;
+        b.facing = Math.atan2(dy, dx);
+        if (b.throwT >= WARLORD.artillery.throwSec) {
+          spawnArtillery(b, h);
+          b.throwT = -1;
+          b.artilleryCd = artilleryEvery(b);
+          b.chargeCd += WARLORD.artillery.chargePushbackSec; // a throw pushes his next charge back
+        }
+        break;
+      }
+      if (warlord && b.phase >= 2) {
+        b.artilleryCd -= DT;
+        if (b.artilleryCd <= 0 && b.aimT < 0 && b.burstLeft === 0) {
+          b.throwT = 0;
+          b.facing = Math.atan2(dy, dx);
+          break;
+        }
       }
       b.x += (dx / d) * speed * DT;
       b.y += (dy / d) * speed * DT;
