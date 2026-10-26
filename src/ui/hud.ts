@@ -30,7 +30,8 @@ export class Hud {
     root.insertAdjacentHTML(
       'beforeend',
       `<div class="hud"><div class="bars"><div class="hpbar"><div class="fill hp"></div></div><div class="xpbar"><div class="fill xp"></div></div></div><div class="label"></div>` +
-        `<div class="timer"></div><div class="bossbar" hidden><div class="fill boss"></div><div class="bname"></div></div><div class="enraged" hidden>ENRAGED</div></div>` +
+        `<div class="timer"></div><div class="bossbar" hidden><div class="fill boss"></div><div class="bname"></div></div><div class="enraged" hidden>ENRAGED</div>` +
+        `<button class="pausebtn" hidden aria-label="Pause"><span></span><span></span></button></div>` +
         `<div class="banner" hidden></div><div class="modal" hidden></div>`,
     );
     this.bar = root.querySelector('.hud')!;
@@ -44,6 +45,29 @@ export class Hud {
     this.bossName = this.bar.querySelector('.bname')!;
     this.banner = root.querySelector('.banner')!;
     this.enraged = this.bar.querySelector('.enraged')!;
+    this.pauseBtn = this.bar.querySelector('.pausebtn')!;
+    this.pauseBtn.addEventListener('click', () => this.setPaused(!this._paused));
+    // Desktop convenience: P or Escape toggles pause.
+    window.addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      if (k === 'p' || k === 'escape') this.setPaused(!this._paused);
+    });
+  }
+
+  private pauseBtn!: HTMLButtonElement;
+  private _paused = false;
+  private playing = false; // true only while a live run is in play (so pausing is allowed)
+
+  /** The game loop reads this to freeze the sim while paused. */
+  get paused(): boolean {
+    return this._paused;
+  }
+
+  setPaused(v: boolean): void {
+    if (v && !this.playing) return; // can only pause during live play
+    if (this._paused === v) return;
+    this._paused = v;
+    this.shownPhase = ''; // force the modal to re-render on the next update
   }
 
   private enraged: HTMLDivElement;
@@ -114,17 +138,26 @@ export class Hud {
     const t = Math.floor(w.time);
     this.label.textContent = `LV ${w.level}   ${mmss(t)}   KILLS ${w.kills}`;
     const results = Hud.resultsDue(w, outroSec);
-    const key = (results ? 'results' : w.phase === 'dead' ? 'play' : w.phase) + w.offer.map((o) => o.id + o.tier).join();
+    // Pausing is offered only during a live run; leaving play (level-up, death, results) clears it.
+    this.playing = w.phase === 'play' && !w.won && !results;
+    this.pauseBtn.hidden = !this.playing;
+    if (!this.playing) this._paused = false;
+    const pausedView = this._paused;
+    const key =
+      (results ? 'results' : pausedView ? 'paused' : w.phase === 'dead' ? 'play' : w.phase) + w.offer.map((o) => o.id + o.tier).join();
     if (key === this.shownPhase) return;
     this.shownPhase = key;
     const picking = w.phase === 'levelup' || w.phase === 'crate';
-    if (!results && !picking) {
+    if (!results && !picking && !pausedView) {
       this.modal.hidden = true;
       return;
     }
     this.modal.hidden = false;
     this.modal.classList.toggle('levelup', picking && !results);
-    if (picking) {
+    this.modal.classList.toggle('paused', pausedView);
+    if (pausedView) {
+      this.showPause(w);
+    } else if (picking) {
       const crate = w.phase === 'crate';
       this.modal.innerHTML =
         (crate ? `<div class="title crate"><img src="${CRATE_HEADER}" alt="SUPPLY CRATE"></div>` : `<div class="title">LEVEL UP</div>`) +
@@ -174,20 +207,34 @@ export class Hud {
     return `<div class="tap">TAP A CARD</div><div class="kit"><div class="kt">YOUR KIT</div><div class="krows">${cells}</div></div>`;
   }
 
+  /** Owned perks as icon + name + total (design.md 15.2: the icon always with its name). Shared by results and pause. */
+  private perkList(w: World): string {
+    return (Object.keys(w.stacks) as PerkId[])
+      .filter((id) => w.stacks[id] > 0)
+      .map((id) => {
+        const d = perkDef(id);
+        return `<div class="perk"><img src="${ICON_BASE}perk_${id}_00.png" alt=""><span class="pn">${d.name}</span><span class="pv">${effectText(d, Math.round(w.stacks[id] * 10) / 10)}</span></div>`;
+      })
+      .join('');
+  }
+
+  /** Pause overlay: a dim backdrop over the frozen game, the current perks, and a RESUME button. */
+  private showPause(w: World): void {
+    const perks = this.perkList(w);
+    this.modal.innerHTML =
+      `<div class="paused"><div class="ptitle">PAUSED</div>` +
+      `<div class="plabel">PERKS</div><div class="perks">${perks || '<div class="none">NO PERKS</div>'}</div>` +
+      `<button class="card restart resume">RESUME</button></div>`;
+    this.modal.querySelector<HTMLButtonElement>('.resume')!.addEventListener('click', () => this.setPaused(false));
+  }
+
   private showResults(w: World): void {
     const boss = w.boss;
     const targets = `<div class="targets">TARGETS ${w.targetsDown}/${BOSSES.length}</div>`;
     const hpLeft =
       !w.won && boss && boss.hp > 0 ? `<div class="hpleft">TARGET HP LEFT: ${Math.ceil((100 * boss.hp) / boss.maxHp)}%</div>` : '';
     const stat = (k: string, v: string | number): string => `<div class="row"><span>${k}</span><span>${v}</span></div>`;
-    const perks = (Object.keys(w.stacks) as PerkId[])
-      .filter((id) => w.stacks[id] > 0)
-      .map((id) => {
-        const d = perkDef(id);
-        // Icon always next to its name (design.md 15.2).
-        return `<div class="perk"><img src="${ICON_BASE}perk_${id}_00.png" alt=""><span class="pn">${d.name}</span><span class="pv">${effectText(d, Math.round(w.stacks[id] * 10) / 10)}</span></div>`;
-      })
-      .join('');
+    const perks = this.perkList(w);
     this.modal.innerHTML =
       `<div class="results ${w.won ? 'won' : 'failed'}">` +
       `<div class="title">${w.won ? 'CONTRACT COMPLETE' : 'CONTRACT FAILED'}</div>${targets}${hpLeft}` +
