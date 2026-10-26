@@ -791,17 +791,24 @@ function addScrap(w: World, v: number): void {
 }
 
 const MERGE_POP_SEC = 0.25;
-/** design.md 16.3: once a second, 8+ grounded pieces within 24 px merge into one at their centre. */
-const CLUMP = { everySec: 1, min: 8, radius: 24 };
+/**
+ * design.md 16.3: every 0.5 s, 3+ grounded pieces within 40 px merge into one at their centre, holding the
+ * total value. Pieces more than 400 px from the player (off screen) merge across 80 px instead, so a trail
+ * left behind becomes a few large caches. Flying pieces (inside the magnet) never merge.
+ */
+const CLUMP = { everySec: 0.5, min: 3, nearRadius: 40, farRadius: 80, farFromPlayerPx: 400 };
 
 export function clumpPickups(w: World): void {
   const ks = w.pickups;
   const used = new Uint8Array(ks.length);
-  const r2 = CLUMP.radius * CLUMP.radius;
+  const far2 = CLUMP.farFromPlayerPx ** 2;
   const group: number[] = [];
   let removed = false;
   for (let i = 0; i < ks.length; i++) {
     if (used[i] || ks[i].flying) continue;
+    // The anchor's distance from the player picks the radius: off-screen trails clump across the wider 80 px.
+    const off = (ks[i].x - w.player.x) ** 2 + (ks[i].y - w.player.y) ** 2 > far2;
+    const r2 = (off ? CLUMP.farRadius : CLUMP.nearRadius) ** 2;
     group.length = 0;
     for (let j = i; j < ks.length; j++) {
       if (used[j] || ks[j].flying) continue;
