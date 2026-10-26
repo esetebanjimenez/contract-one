@@ -11,7 +11,7 @@ import { computeStats } from '../../src/sim/perks';
 import { createWorld, eliteDef, step, type World } from '../../src/sim/world';
 import { playUntil } from '../bots';
 
-export type Scene = 'levelup' | 'crate' | 'crates' | 'boss' | 'viper' | 'warlord' | 'results' | 'grunts' | 'numbers';
+export type Scene = 'levelup' | 'crate' | 'crates' | 'boss' | 'viper' | 'warlord' | 'results' | 'grunts' | 'numbers' | 'pause';
 const SEED = 7;
 
 function build(scene: Scene): World {
@@ -82,6 +82,15 @@ function build(scene: Scene): World {
     playUntil(w, 'kite-smart', (x) => x.time >= 150);
     w.pendingLevels = 1;
     step(w, { mx: 0, my: 0 });
+    return w;
+  }
+  if (scene === 'pause') {
+    // A mid-run kit, left in play so the capture can click the pause button and show the overlay.
+    playUntil(w, 'kite-smart', (x) => x.time >= 150);
+    w.phase = 'play';
+    w.pendingLevels = 0;
+    w.player.invuln = 1e9;
+    w.player.hp = w.stats.maxHp;
     return w;
   }
   if (scene === 'crate' || scene === 'crates') {

@@ -68,6 +68,15 @@ export async function boot(first?: () => World): Promise<void> {
   let downSlow = 0; // real seconds of lieutenant-kill slow-mo left
   app.ticker.add((t) => {
     const dt = t.deltaMS / 1000;
+    // Paused: freeze the sim and the outro clock, hide the stick, and draw the held frame (dt 0).
+    if (hud.paused) {
+      acc = 0;
+      controls.reset();
+      world.viewH = viewH;
+      renderer.draw(world, controls, 0);
+      hud.update(world, outro);
+      return;
+    }
     const ended = world.won || world.phase === 'dead';
     if (ended) outro += dt;
     if (world.downAt !== seenDownAt) {

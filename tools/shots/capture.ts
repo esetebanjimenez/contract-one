@@ -105,6 +105,17 @@ const checks: Check[] = [
     waitMs: 4000, // slow-mo, then the results delay
     ok: async (p) => ((await p.$('.modal:not([hidden]) .results.won')) ? null : 'no CONTRACT COMPLETE results screen'),
   },
+  {
+    scene: 'pause',
+    waitMs: 300,
+    ok: async (p) => {
+      await p.click('.pausebtn'); // click the top-right pause button
+      await new Promise((r) => setTimeout(r, 120));
+      if (!(await p.$('.modal:not([hidden]) .paused'))) return 'no PAUSED overlay after clicking pause';
+      const perks = await p.$$eval('.modal:not([hidden]) .paused .perk', (e) => e.length);
+      return perks >= 1 ? null : 'no perks on the pause screen';
+    },
+  },
 ];
 
 mkdirSync(OUT, { recursive: true });
