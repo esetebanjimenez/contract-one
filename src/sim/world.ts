@@ -160,7 +160,7 @@ export interface World {
   artillery: ArtilleryCircle[]; // THE WARLORD's ARTILLERY CALL circles (design.md 16.11)
   pickups: Pickup[];
   crates: Crate[];
-  powerBaseDps: number; // the player's sheet DPS at the first target (design.md 16.13); 0 before it spawns
+  powerBaseLevel: number; // the player's level at the first target (design.md 16.13); 0 before it spawns
   waveDamageLate: number; // HP the player has lost to waves (not fights) from 5:00 on (sim metric, 16.13)
   waveSecLate: number; // seconds spent in post-5:00 waves (not in a fight), for the damage-per-minute metric
   nextEliteAt: number; // contract time of the next scheduled elite (design.md 16.12)
@@ -227,7 +227,7 @@ export function createWorld(seed: number): World {
     artillery: [],
     pickups: [],
     crates: [],
-    powerBaseDps: 0,
+    powerBaseLevel: 0,
     waveDamageLate: 0,
     waveSecLate: 0,
     nextEliteAt: ELITE.firstSec,
@@ -293,13 +293,12 @@ export function bandAt(t: number) {
 
 /**
  * design.md 16.13: the HP factor for normal waves once the player has passed the first target. It is
- * max(1, (sheetDps now / sheetDps at 5:00) ^ hpPowerExp), so late waves keep pace with the build. 1 before
- * the first fight and during a fight (the arena's adds never scale this way).
+ * max(1, 1 + hpPerLevel x levels gained since 5:00), keyed off level so every perk (crowd-clear included)
+ * counts. 1 before the first fight and during a fight (the arena's adds never scale this way).
  */
 export function wavePowerMul(w: World): number {
-  if (w.arena || w.powerBaseDps <= 0) return 1;
-  const ratio = sheetDps(w.stats, PERK_RULES.critMultiplier) / w.powerBaseDps;
-  return Math.max(1, Math.pow(ratio, SCALING.hpPowerExp));
+  if (w.arena || w.powerBaseLevel <= 0) return 1;
+  return Math.max(1, 1 + SCALING.hpPerLevel * (w.level - w.powerBaseLevel));
 }
 
 function weighted<K extends string>(w: World, weights: Record<K, number>, exclude: K[] = []): K {
@@ -1233,8 +1232,8 @@ function updateWarlord(w: World): void {
   const a = w.arena;
   if (!w.boss && a && w.time >= a.lockedAt + RUN.warningSec) {
     w.boss = createBoss(bossHost(w), w.target);
-    // The player's sheet DPS at the first target is the baseline that paces the later waves (design.md 16.13).
-    if (w.powerBaseDps <= 0) w.powerBaseDps = sheetDps(w.stats, PERK_RULES.critMultiplier);
+    // The player's level at the first target is the baseline that paces the later waves (design.md 16.13).
+    if (w.powerBaseLevel <= 0) w.powerBaseLevel = w.level;
     const kit = Object.fromEntries(CRATE_PERKS.map((id) => [id, w.stacks[id]]));
     w.fights.push({
       target: w.target,

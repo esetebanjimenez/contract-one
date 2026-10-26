@@ -42,9 +42,10 @@ export const SCALING = {
   contactPerMinute: 0.03, // contact damage x (1 + 0.03 m), at hit time
   rifleMovePerMinute: 0.05, // move time between shots 2.0 - 0.05 m (design.md 16.4)
   rifleMoveMin: 1.4,
-  // design.md 16.13: from 5:00 on, normal-wave HP also x (sheetDps / sheetDps-at-5:00)^hpPowerExp, so late
-  // waves keep pace with the player's build. Exponent below 1 keeps time-to-kill dropping as he levels.
-  hpPowerExp: 0.5,
+  // design.md 16.13: from 5:00 on, normal-wave HP also x (1 + hpPerLevel x levels gained since 5:00), so late
+  // waves keep pace with the player's investment. Keyed off level (not sheet DPS), so crowd-clear perks
+  // (ricochet, multishot, drones) count too — single-target DPS was blind to them (Esteban, 2026-10-26).
+  hpPerLevel: 0.15,
 };
 
 /** Veteran variant of any base type (design.md section 5, the old Elite; renamed in 16.12). Spawns in mass, no crates. */

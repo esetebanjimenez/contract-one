@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ELITE, ENEMIES } from '../src/data/enemies';
+import { ELITE, ENEMIES, SCALING } from '../src/data/enemies';
 import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
 import { SPAWN } from '../src/data/spawns';
@@ -1370,25 +1370,20 @@ describe('elite abilities (design.md 16.12)', () => {
 });
 
 describe('late waves scale with the player (design.md 16.13)', () => {
-  it('wavePowerMul is 1 before the first fight, scales by (dps/base)^0.5 after, and off during a fight', () => {
+  it('wavePowerMul is 1 before the first fight, grows per level gained after 5:00, and is off during a fight', () => {
     const w = createWorld(1);
     expect(wavePowerMul(w)).toBe(1); // no baseline captured yet
-    // Baseline = the no-perk sheet DPS; with the same build the ratio is 1.
-    w.powerBaseDps = sheetDps(w.stats, PERK_RULES.critMultiplier);
+    w.powerBaseLevel = w.level; // baseline at the first target; same level -> factor 1
     expect(wavePowerMul(w)).toBeCloseTo(1, 5);
-    // +300% damage is a 4x sheet DPS build, so the factor is 4^0.5 = 2.
-    w.stacks.dmg = 300;
-    w.stats = computeStats(w.stacks);
-    expect(wavePowerMul(w)).toBeCloseTo(2, 2);
-    // The exponent is below 1, so HP grows slower than DPS: time-to-kill still drops as he levels.
-    const dpsRatio = sheetDps(w.stats, PERK_RULES.critMultiplier) / w.powerBaseDps;
-    expect(wavePowerMul(w)).toBeLessThan(dpsRatio);
+    // 10 levels gained after 5:00 -> 1 + hpPerLevel x 10.
+    w.level += 10;
+    expect(wavePowerMul(w)).toBeCloseTo(1 + SCALING.hpPerLevel * 10, 5);
     // The arena's adds never scale this way.
     w.arena = { camX: 0, camY: 0, x0: 0, y0: 0, x1: 1, y1: 1, lockedAt: 0 };
     expect(wavePowerMul(w)).toBe(1);
   });
 
-  it('scales a post-5:00 wave enemy HP by the power factor, and not before 5:00', () => {
+  it('scales a post-5:00 wave enemy HP by the level factor, and not before 5:00', () => {
     const w = createWorld(7);
     w.player.hp = w.stats.maxHp = 1e9;
     // Before the first fight: no baseline, so a wave enemy keeps the plain per-minute HP.
@@ -1400,12 +1395,11 @@ describe('late waves scale with the player (design.md 16.13)', () => {
     expect(early).toBeTruthy();
     expect(early!.maxHp).toBeCloseTo(early!.def.hp * (1 + 0.14 * (w.contractTime / 60)), 0);
 
-    // Past the first fight with a 4x build: trash spawns at ~2x the plain HP.
+    // Past the first fight, 20 levels gained: trash spawns at (1 + hpPerLevel x 20) the plain HP.
     const f = createWorld(7);
     f.target = 1; // first target down; next fight is far off (9:00)
-    f.powerBaseDps = sheetDps(f.stats, PERK_RULES.critMultiplier);
-    f.stacks.dmg = 300;
-    f.stats = computeStats(f.stacks); // 4x sheet DPS -> factor 2
+    f.powerBaseLevel = f.level;
+    f.level += 20;
     f.player.hp = f.stats.maxHp = 1e9;
     setClock(f, Math.round(400 / DT)); // contract 6:40, between fights
     let late: Enemy | undefined;
@@ -1421,13 +1415,13 @@ describe('late waves scale with the player (design.md 16.13)', () => {
     }
     expect(late).toBeTruthy();
     const timeOnly = late!.def.hp * (1 + 0.14 * (at / 60));
-    expect(late!.maxHp / timeOnly).toBeCloseTo(2, 1);
+    expect(late!.maxHp / timeOnly).toBeCloseTo(1 + SCALING.hpPerLevel * 20, 1);
   });
 
   it('floors a post-5:00 elite HP at eliteDpsSec x sheet DPS', () => {
     const w = createWorld(9);
     w.target = 1; // between the first and second fights
-    w.powerBaseDps = 1;
+    w.powerBaseLevel = 1;
     w.stacks.dmg = 400;
     w.stacks.rof = 300;
     w.stats = computeStats(w.stacks); // a big build, so the DPS floor beats the x20 formula
