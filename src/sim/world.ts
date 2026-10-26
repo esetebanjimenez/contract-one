@@ -1,4 +1,4 @@
-import { BOSSES, LIEUTENANT_DOWN, sheetDps } from '../data/boss';
+import { BOSSES, LIEUTENANT_DOWN, bossHpAt } from '../data/boss';
 import { MAX_VIEW_HEIGHT, NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { ELITE, ENEMIES, VETERAN, ENEMY_BULLET_RADIUS, GRUNT_WEAPONS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 
@@ -292,13 +292,27 @@ export function bandAt(t: number) {
 }
 
 /**
- * design.md 16.13: the HP factor for normal waves once the player has passed the first target. It is
- * max(1, 1 + hpPerLevel x levels gained since 5:00), keyed off level so every perk (crowd-clear included)
- * counts. 1 before the first fight and during a fight (the arena's adds never scale this way).
+ * design.md 16.13/16.14: the uniform level lever. max(1, 1 + hpPerLevel x levels gained since the first
+ * target), keyed off level so every perk (crowd-clear included) counts. Drives trash, elite and boss HP.
  */
-export function wavePowerMul(w: World): number {
-  if (w.arena || w.powerBaseLevel <= 0) return 1;
+export function levelMul(w: World): number {
+  if (w.powerBaseLevel <= 0) return 1;
   return Math.max(1, 1 + SCALING.hpPerLevel * (w.level - w.powerBaseLevel));
+}
+
+/** The level factor for normal waves: 1 during a fight so the arena's adds never scale (design.md 16.13). */
+export function wavePowerMul(w: World): number {
+  return w.arena ? 1 : levelMul(w);
+}
+
+/**
+ * design.md 16.14: the HP factor for bosses and elites. It rides an EXPECTED-level schedule (a reference
+ * pace per minute of contract time since the first target), not the player's own level — so a fast-leveling
+ * crowd build never makes its own boss tankier, and leveling always helps. 1 before the first target.
+ */
+export function stageMulAt(contractTime: number): number {
+  const gain = SCALING.expectedLevelPerMin * Math.max(0, (contractTime - BOSSES[0].atSec) / 60);
+  return Math.max(1, 1 + SCALING.hpPerLevel * gain);
 }
 
 function weighted<K extends string>(w: World, weights: Record<K, number>, exclude: K[] = []): K {
@@ -368,10 +382,10 @@ export function eliteDef(def: EnemyDef): EnemyDef {
 function spawnElite(w: World): Enemy {
   const def = eliteDef(regularType(w, riflemenAlive(w) >= SPAWN.maxRiflemen));
   const p = edgePoint(w, w.rng() * Math.PI * 2);
-  const base = def.hp * ELITE.byType[def.id].hp * (1 + SCALING.hpPerMinute * (w.contractTime / 60));
-  // From 5:00 on, floor the elite's HP at a few seconds of the player's sheet DPS (design.md 16.13).
-  const dpsFloor = w.contractTime >= BOSSES[0].atSec ? ELITE.dpsSec * sheetDps(w.stats, PERK_RULES.critMultiplier) : 0;
-  const maxHp = Math.max(base, dpsFloor);
+  // design.md 16.14: the elite rides the boss schedule (expected level), so a DPS build shreds it while a
+  // crowd-clear build has to work for the kill — without its own fast leveling making it tankier. Pre-5:00
+  // elites (schedule factor 1) are unchanged.
+  const maxHp = def.hp * ELITE.byType[def.id].hp * (1 + SCALING.hpPerMinute * (w.contractTime / 60)) * stageMulAt(w.contractTime);
   const e: Enemy = {
     id: w.nextEnemyId++,
     def,
@@ -1231,9 +1245,10 @@ function updateWarlord(w: World): void {
   if (w.won) return;
   const a = w.arena;
   if (!w.boss && a && w.time >= a.lockedAt + RUN.warningSec) {
-    w.boss = createBoss(bossHost(w), w.target);
-    // The player's level at the first target is the baseline that paces the later waves (design.md 16.13).
+    // The player's level at the first target is the baseline the waves scale from (design.md 16.13).
     if (w.powerBaseLevel <= 0) w.powerBaseLevel = w.level;
+    // Boss HP rides the contract-stage schedule, not the player's level (design.md 16.14).
+    w.boss = createBoss(bossHost(w), w.target, bossHpAt(w.target, stageMulAt(BOSSES[w.target].atSec)));
     const kit = Object.fromEntries(CRATE_PERKS.map((id) => [id, w.stacks[id]]));
     w.fights.push({
       target: w.target,

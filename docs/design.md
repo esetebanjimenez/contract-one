@@ -637,5 +637,36 @@ At ~3 seconds of single-target sheet DPS — and with real fire split across the
 - The screen stays readable late (§1): no new bodies, just tougher ones.
 
 **Needs:**
-- **Data:** `hpPerLevel` and `eliteDpsSec` in `src/data/enemies.ts`; the 5:00 level baseline captured on the world when the first target spawns; `powerMul` applied in the wave-spawn path (`src/sim/world.ts`) and the sheet-DPS floor in the elite spawn. No art.
+- **Data:** `hpPerLevel` in `src/data/enemies.ts`; the level baseline captured on the world at the first target; `powerMul` applied in the wave-spawn path (`src/sim/world.ts`). The elite floor started on sheet DPS, then moved onto the contract-stage schedule in §16.14. No art.
 - **Sim:** `src/data/` changes, so the sim table posts. Add to `tools/sim-report.ts` the median player HP at each target's spawn and damage taken per minute in the 5:00–13:00 window, so "waves got threatening" is visible. Bots fight the walled arena badly (§16.5), so Esteban's run is the arbiter; the sim guards against regressions (reach rate holds, idle still dies before 2:00).
+
+### 16.14 Bosses and elites off a contract-stage schedule, so build choice matters (Esteban, 2026-10-26)
+
+§16.13 put the **waves** on the player's level. This takes **bosses and elites off the single-target sheet-DPS coupling** that set boss HP (§16.5) and floored elite HP (§16.13 part 2), and onto a **fixed contract-stage schedule** instead. The point is build identity: **choosing DPS or crowd-clear finally means something** against a boss.
+
+**Why the old coupling erased build identity.** §16.5 set boss HP = a multiple of the player's single-target sheet DPS. So when you built damage, the boss's HP rose in lockstep and your kill time stayed **flat** — your DPS investment was cancelled out, and the fight became "circle until dead" (Esteban's words). Crowd-clear doesn't help a single target either, so *neither axis mattered*. Decoupling boss HP from your DPS breaks that: high single-target damage now actually shortens the fight.
+
+**Why a schedule, not the player's own level.** The obvious fix is to scale boss HP by level, like the waves. But boss HP coupled to *your* level has a trap: a crowd-clear build **levels faster** (more kills → more scrap), so it would reach bosses at a higher level and face a *tankier* boss — i.e. leveling would punish you, exactly the opposite of §16.13's rule that *progression is the reward.* So bosses and elites scale off an **expected-level schedule** keyed to **contract time** (how far into the contract the fight is), not the player's actual level. The boss is the same wall no matter how fast you levelled; leveling only ever helps.
+
+With that, the DPS-vs-CC choice reads cleanly off single-target DPS alone:
+- **DPS build** → high single-target damage vs the scheduled wall → **shreds** bosses (a fast payoff), but weaker crowd-clear, so the waves press it harder (§16.13).
+- **Crowd-clear build** (ricochet, multishot, drones) → melts the waves, but low single-target damage vs the same wall → a **long, tense** grind toward the 2:00 enrage.
+- **Balanced** → moderate at both.
+
+**Real stakes (Esteban, 2026-10-26).** The spread is meant to have teeth: a balanced build lands in 60–120 s, a DPS build kills fast, and a pure crowd-clear or defence build often **can't finish before enrage**. The enrage timer (§14.3) is the teacher — *you must invest some single-target to beat a boss.*
+
+**Model.**
+- **Schedule factor:** `S(t) = max(1, 1 + hpPerLevel × expectedLevelPerMin × minutes of contract time past the first target)`, with **expectedLevelPerMin = 5** (a reference leveling pace) and the shared `hpPerLevel = 0.15`. `S` is 1 at the first target and rises on the clock: ≈ 4× at LT. VIPER (9:00), ≈ 7× at the Warlord (13:00).
+- **Bosses:** `HP = baseHp × S(atSec)`, floored at `hpMin` (2000). Starting `baseHp`: **LT. HAMMER 8,000, LT. VIPER 12,000, THE WARLORD 18,000** → ~8k / 48k / 126k at their stages, the same for every player. Damage scales (×1 / ×1.25 / ×1.5) are unchanged — HP only.
+- **Elites:** the §16.12 formula × `S(spawn time)` (same schedule; replaces the sheet-DPS floor). Pre-5:00 elites (`S` = 1) are unchanged.
+- **Waves and Veterans:** still the player's own level (§16.13) — there the scaling is net-neutral (you cleared them), so no trap.
+
+**Levers, in order (Esteban's playtest first):**
+1. Per-boss `baseHp` (8k / 12k / 18k) — each boss's absolute size / balanced-build fight length.
+2. `expectedLevelPerMin` (5) — how fast the schedule ramps across the contract.
+3. `hpPerLevel` (0.15, shared with the waves) — the common sensitivity.
+
+**Scope and non-goals.**
+- `sheetDps` (§16.5–16.9) stays as the measure of a build's single-target output (still tested), it just no longer drives HP.
+- **Sim:** the schedule makes boss HP player-independent, which finally lets the sim show the asymmetry: at LT. VIPER every bot faces the same 48,000 HP, and `kite-smart` (DPS-leaning) kills it in ~0:51 while `cc` (crowd-clear) grinds to ~3:08 and **enrages** — same wall, decided by single-target DPS. A unit test proves the core property: a DPS build and a crowd-clear build at the same level get **identical** boss HP. The arena still beats the bots on survival (§16.5), so reach/kill rates are a regression guard, not the arbiter — Esteban's playtest tunes the feel.
+- Still open: the bosses are also "circle until dead" because dodging is trivial for a +move build (§16.13 note). Making the HP matter is half the fix; the dodge-pressure half (attack density/speed, move-speed in the arena) is a later pass.

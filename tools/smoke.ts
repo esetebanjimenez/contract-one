@@ -6,7 +6,7 @@
 import { BOSS, BOSSES } from '../src/data/boss';
 import { runBot, type Bot } from './bots';
 
-const bots: Bot[] = ['idle', 'kite', 'kite-smart', 'collector'];
+const bots: Bot[] = ['idle', 'kite', 'kite-smart', 'collector', 'cc'];
 const seeds = [1, 2];
 const failures: string[] = [];
 let reachedBoss = 0;

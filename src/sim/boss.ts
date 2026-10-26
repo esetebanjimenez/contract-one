@@ -1,5 +1,4 @@
-import { BOSS, BOSSES, VIPER, WARLORD, bossHp, type DpsStats } from '../data/boss';
-import { PERK_RULES } from '../data/perks';
+import { BOSS, BOSSES, VIPER, WARLORD, type DpsStats } from '../data/boss';
 import { MAX_VIEW_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { PLAYER } from '../data/player';
 import { CAPS, DT } from '../data/sim';
@@ -109,8 +108,9 @@ export interface BossHost {
 const HALF_W = NATIVE_WIDTH / 2;
 const HALF_H = MAX_VIEW_HEIGHT / 2;
 
-export function createBoss(h: BossHost, target = 0): Boss {
-  const hp = bossHp(h.stats, PERK_RULES.critMultiplier, BOSSES[target].hpDpsSec);
+// design.md 16.14: HP is set by the caller from the level lever (BOSSES[target].baseHp at the first fight).
+export function createBoss(h: BossHost, target = 0, maxHp = BOSSES[target].baseHp): Boss {
+  const hp = Math.max(BOSS.hpMin, Math.round(maxHp));
   return {
     target,
     // Walks in from the top edge, 120 px off-screen (design.md 14.2).

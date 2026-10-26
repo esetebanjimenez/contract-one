@@ -58,7 +58,7 @@ function nearestCrate(w: World, range: number): { x: number; y: number } | null 
 
 const KITE_CRATE_PULL = 0.04;
 
-export type Bot = 'idle' | 'kite' | 'kite-smart' | 'collector';
+export type Bot = 'idle' | 'kite' | 'kite-smart' | 'collector' | 'cc';
 
 /** Move away from the weighted crowd and enemy bullets, with a sideways orbit so it does not run in a straight line. */
 function kiteInput(w: World): Input {
@@ -172,6 +172,7 @@ function collectorInput(w: World): Input {
   return m > 0 ? { mx: fx / m, my: fy / m } : { mx: 0, my: 0 };
 }
 
+// kite-smart: a balanced, DPS-leaning build (the reference skilled player).
 const PRIORITY: PerkId[] = [
   'dmg',
   'rof',
@@ -191,9 +192,32 @@ const PRIORITY: PerkId[] = [
   'magnet',
 ];
 
+// cc: a crowd-clear build. It loads the perks that only help a crowd (ricochet chains, multishot spread)
+// plus fire rate to feed them, and skimps on the per-hit single-target multipliers (damage, crit). Shows
+// the §16.14 asymmetry: it clears waves fast (so it levels fast) but grinds against a single boss.
+const PRIORITY_CC: PerkId[] = [
+  'ricochet',
+  'multishot',
+  'rof',
+  'drone',
+  'explosive',
+  'grenade',
+  'pierce',
+  'move',
+  'maxhp',
+  'armor',
+  'regen',
+  'magnet',
+  'bspeed',
+  'cooldown',
+  'crit',
+  'dmg',
+];
+
 function pick(w: World, bot: Bot): void {
-  if (bot === 'kite-smart') {
-    const id = PRIORITY.find((p) => w.offer.some((o) => o.id === p)) ?? w.offer[0].id;
+  const pr = bot === 'kite-smart' ? PRIORITY : bot === 'cc' ? PRIORITY_CC : null;
+  if (pr) {
+    const id = pr.find((p) => w.offer.some((o) => o.id === p)) ?? w.offer[0].id;
     choosePerk(w, id);
   } else {
     choosePerk(w, w.offer[Math.floor(w.rng() * w.offer.length)].id);

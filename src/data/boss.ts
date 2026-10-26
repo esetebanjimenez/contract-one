@@ -4,18 +4,26 @@ import { DRONE, EXPLOSIVE, GRENADE, overflow } from './perks';
 export interface Target {
   name: string; // working name, shown on the boss bar
   atSec: number; // contract time of the fight (the clock pauses during it)
-  hpDpsSec: number; // HP = this x the player's single-target sheet DPS at spawn (design.md 16.5)
+  baseHp: number; // HP = this x the level factor at spawn (design.md 16.14); the uniform lever, not sheet DPS
   damageScale: number; // charge, bullet and mine damage (contact damage is set per attack style)
   final: boolean; // killing him ends the contract
   style: 'charger' | 'gunner' | 'warlord'; // which attack set he fights with
   radius: number; // body and hit radius, px (scales with his sprite: 30 for 96x96)
 }
 
+// design.md 16.14: boss HP scales with player level (the same lever as the waves), not single-target DPS,
+// so a DPS build shreds bosses while a crowd-clear build grinds toward enrage. baseHp is the HP at the
+// first target's level (level factor 1); later bosses ride the factor up as the player levels.
 export const BOSSES: Target[] = [
-  { name: 'LT. HAMMER', atSec: 300, hpDpsSec: 40, damageScale: 1, final: false, style: 'charger', radius: 30 },
-  { name: 'LT. VIPER', atSec: 540, hpDpsSec: 50, damageScale: 1.25, final: false, style: 'gunner', radius: 26 },
-  { name: 'THE WARLORD', atSec: 780, hpDpsSec: 60, damageScale: 1.5, final: true, style: 'warlord', radius: 40 }, // 128x128
+  { name: 'LT. HAMMER', atSec: 300, baseHp: 8000, damageScale: 1, final: false, style: 'charger', radius: 30 },
+  { name: 'LT. VIPER', atSec: 540, baseHp: 12000, damageScale: 1.25, final: false, style: 'gunner', radius: 26 },
+  { name: 'THE WARLORD', atSec: 780, baseHp: 18000, damageScale: 1.5, final: true, style: 'warlord', radius: 40 }, // 128x128
 ];
+
+/** design.md 16.14: a target's HP is baseHp x the level factor at spawn, with the §16.5 floor as the minimum. */
+export function bossHpAt(target: number, levelMul: number): number {
+  return Math.max(BOSS.hpMin, Math.round(BOSSES[target].baseHp * levelMul));
+}
 
 /**
  * THE WARLORD, both styles (design.md 16.11): LT. HAMMER's charge and ring plus LT. VIPER's burst,
@@ -124,6 +132,10 @@ export function sheetDps(s: DpsStats, critMultiplier: number): number {
   return (gun + drones + grenades) * crit;
 }
 
-export function bossHp(s: DpsStats, critMultiplier: number, hpDpsSec = BOSSES[0].hpDpsSec): number {
+/**
+ * Single-target sheet DPS x a seconds multiplier. No longer the boss HP driver (superseded by §16.14's
+ * level lever); kept as the measure of a build's single-target output (and tested as such).
+ */
+export function bossHp(s: DpsStats, critMultiplier: number, hpDpsSec = 40): number {
   return Math.max(BOSS.hpMin, Math.round(hpDpsSec * sheetDps(s, critMultiplier)));
 }

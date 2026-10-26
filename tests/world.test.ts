@@ -3,10 +3,10 @@ import { ELITE, ENEMIES, SCALING } from '../src/data/enemies';
 import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
 import { SPAWN } from '../src/data/spawns';
-import { CRATE, CRATE_PERKS, DRONE, GRENADE, PERKS, PERK_RULES, addStack } from '../src/data/perks';
+import { CRATE, CRATE_PERKS, DRONE, GRENADE, PERKS, addStack } from '../src/data/perks';
 import { computeStats, drawCrateOffer, drawOffer, softMove, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
-import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, WARLORD, bossHp, sheetDps } from '../src/data/boss';
+import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, WARLORD, bossHp, bossHpAt } from '../src/data/boss';
 import { PLAYER } from '../src/data/player';
 import { NATIVE_WIDTH } from '../src/data/display';
 import { bossRadius, checkPhase, createBoss, updateBoss, type ArtilleryCircle, type Boss, type BossHost, type Mine } from '../src/sim/boss';
@@ -29,6 +29,7 @@ import {
   eliteRifleMoveSec,
   lungeStep,
   wavePowerMul,
+  stageMulAt,
   type Enemy,
   type World,
 } from '../src/sim/world';
@@ -682,13 +683,13 @@ describe('three targets (design.md 16.11)', () => {
     const end = cameraAt(w, w.viewH);
     expect(end.x).toBeCloseTo(w.player.x - NATIVE_WIDTH / 2, 5);
   });
-  it('sends LT. VIPER at contract 9:00 with 50x sheet DPS', () => {
+  it('sends LT. VIPER at contract 9:00 with schedule-based HP (design.md 16.14)', () => {
     const w = godMode(9);
     toFight(w, 1);
     run(w, 10);
     expect(w.boss).not.toBeNull();
     expect(w.boss!.target).toBe(1);
-    expect(w.boss!.maxHp).toBe(bossHp(w.stats, w.stats.crit, BOSSES[1].hpDpsSec));
+    expect(w.boss!.maxHp).toBe(bossHpAt(1, stageMulAt(BOSSES[1].atSec)));
     expect(w.fights.at(-1)!.target).toBe(1);
   });
 });
@@ -1418,17 +1419,14 @@ describe('late waves scale with the player (design.md 16.13)', () => {
     expect(late!.maxHp / timeOnly).toBeCloseTo(1 + SCALING.hpPerLevel * 20, 1);
   });
 
-  it('floors a post-5:00 elite HP at eliteDpsSec x sheet DPS', () => {
+  it('scales a post-5:00 elite HP by the contract-stage schedule (design.md 16.14)', () => {
     const w = createWorld(9);
     w.target = 1; // between the first and second fights
-    w.powerBaseLevel = 1;
-    w.stacks.dmg = 400;
-    w.stacks.rof = 300;
-    w.stats = computeStats(w.stacks); // a big build, so the DPS floor beats the x20 formula
     w.player.hp = w.stats.maxHp = 1e9;
     setClock(w, Math.round(400 / DT));
     w.nextEliteAt = Math.round(w.contractTime);
     let e: Enemy | undefined;
+    let at = 0;
     for (let i = 0; i < 1200 && !e; i++) {
       if (w.phase !== 'play') {
         w.phase = 'play';
@@ -1436,11 +1434,48 @@ describe('late waves scale with the player (design.md 16.13)', () => {
       }
       step(w, { mx: 0, my: 0 });
       e = w.enemies.find((x) => x.elite);
+      at = w.contractTime;
     }
     expect(e).toBeTruthy();
-    const dps = sheetDps(w.stats, PERK_RULES.critMultiplier);
-    const base = e!.def.hp * ELITE.byType[e!.def.id].hp * (1 + 0.14 * (w.contractTime / 60));
-    expect(ELITE.dpsSec * dps).toBeGreaterThan(base); // the floor is the binding one here
-    expect(e!.maxHp).toBeCloseTo(ELITE.dpsSec * dps, 0);
+    const base = e!.def.hp * ELITE.byType[e!.def.id].hp * (1 + 0.14 * (at / 60));
+    const mul = stageMulAt(at);
+    expect(mul).toBeGreaterThan(1); // past 5:00, the schedule factor is binding
+    expect(e!.maxHp).toBeCloseTo(base * mul, 0);
+  });
+});
+
+describe('contract-stage boss scaling (design.md 16.14)', () => {
+  const bossHpFor = (build: (w: World) => void): number => {
+    const w = createWorld(5);
+    w.player.hp = w.stats.maxHp = 1e9;
+    w.level = 30; // both builds forced to the same level
+    build(w);
+    toFight(w, 0);
+    for (let i = 0; i < 20 * 60 && !w.boss; i++) {
+      if (w.phase !== 'play') {
+        w.phase = 'play';
+        w.pendingLevels = 0;
+      }
+      step(w, { mx: 0, my: 0 });
+    }
+    return w.boss!.maxHp;
+  };
+
+  it('gives the same boss HP to a DPS build and a crowd-clear build (the wall is the contract schedule)', () => {
+    // The old DPS-coupling (§16.5) scaled boss HP by single-target DPS, so a damage build just made the
+    // boss tankier and its kill time flat. Now HP is set by the contract-stage schedule, independent of
+    // build (and level), so both face the same wall and single-target damage decides the fight.
+    const dps = bossHpFor((w) => {
+      w.stacks.dmg = 500;
+      w.stacks.rof = 400;
+      w.stats = computeStats(w.stacks);
+    });
+    const cc = bossHpFor((w) => {
+      w.stacks.ricochet = 7;
+      w.stacks.multishot = 5;
+      w.stats = computeStats(w.stacks);
+    });
+    expect(dps).toBe(cc);
+    expect(dps).toBe(bossHpAt(0, stageMulAt(BOSSES[0].atSec))); // the first target's scheduled HP
   });
 });

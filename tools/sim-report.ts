@@ -7,7 +7,7 @@ import { BOSSES } from '../src/data/boss';
 import { runBot, type Bot, type RunResult } from './bots';
 
 const runs = Number(process.env.RUNS ?? 8);
-const bots: Bot[] = ['idle', 'kite', 'kite-smart', 'collector'];
+const bots: Bot[] = ['idle', 'kite', 'kite-smart', 'collector', 'cc'];
 const med = (xs: number[]): number => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] ?? 0;
 const pct = (n: number, of: number): number => (of ? Math.round((100 * n) / of) : 0);
 const fmt = (s: number): string => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -84,11 +84,11 @@ for (const bot of bots) {
     const secCell = smart
       ? check(within(sec, t.sec), fmt(sec), `kite-smart median ${b.name} fight ${fmt(sec)}; target ${range(t.sec, fmt)} (§16.11)`)
       : fmt(sec);
-    const enrCell = check(
-      enr < ENRAGE_MAX,
-      `${enr}%`,
-      `${bot} enrages in ${enr}% of ${b.name} fights; target under ${ENRAGE_MAX}% (§16.11)`,
-    );
+    // Only the reference bot has an enrage target; cc is a crowd-clear build and is meant to grind to
+    // enrage at bosses it can't out-DPS (design.md 16.14), so its enrage reads as data, not a warning.
+    const enrCell = smart
+      ? check(enr < ENRAGE_MAX, `${enr}%`, `kite-smart enrages in ${enr}% of ${b.name} fights; target under ${ENRAGE_MAX}% (§16.11)`)
+      : `${enr}%`;
     const hpAtSpawn = Math.round(med(fs.map((f) => f.playerHpPct))); // player HP % at his spawn (§16.13)
     fightRows.push(
       `| ${bot} | ${b.name} | ${pct(fs.length, runs)}% | ${med(fs.map((f) => f.level))} | ${med(fs.map((f) => f.hp)).toLocaleString('en-US')} | ${killCell} | ${secCell} | ${enrCell} | ${hpAtSpawn}% |`,
