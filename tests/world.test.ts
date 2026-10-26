@@ -422,15 +422,41 @@ describe('M3 contract', () => {
     expect(w.boss!.damageable).toBe(true);
     expect(w.boss!.y).toBeGreaterThanOrEqual(a.y0);
   });
-  it('clumps 8+ grounded pieces within 24 px into one at their centre', () => {
+  it('merges 3+ grounded pieces within 40 px near the player, and leaves a pair and flyers alone (16.3)', () => {
     const w = createWorld(3);
+    w.player.x = 0;
+    w.player.y = 0;
     w.pickups.length = 0;
-    for (let i = 0; i < 8; i++) w.pickups.push({ x: 100 + i * 2, y: 50, value: 1, age: 0, flying: false, cache: false, pop: 0 });
-    for (let i = 0; i < 7; i++) w.pickups.push({ x: 400 + i * 2, y: 50, value: 1, age: 0, flying: false, cache: false, pop: 0 });
+    const drop = (x: number, y: number, flying = false) => w.pickups.push({ x, y, value: 1, age: 0, flying, cache: false, pop: 0 });
+    // Three grounded within 40 px of the player merge; a flyer among them is left out of the merge.
+    drop(100, 0);
+    drop(120, 0);
+    drop(130, 0);
+    drop(115, 0, true); // flying: never merges
+    // A lone pair 60 px apart stays as two (below the group minimum).
+    drop(260, 0);
+    drop(260, 60);
     clumpPickups(w);
-    expect(w.pickups).toHaveLength(8);
-    expect(w.pickups[0]).toMatchObject({ x: 107, y: 50, value: 8 });
-    expect(w.pickups[0].pop).toBeGreaterThan(0);
+    const grounded = w.pickups.filter((k) => !k.flying);
+    const flyers = w.pickups.filter((k) => k.flying);
+    expect(flyers).toHaveLength(1);
+    const merged = grounded.find((k) => k.value === 3)!;
+    expect(merged).toBeTruthy();
+    expect(merged.x).toBeCloseTo((100 + 120 + 130) / 3, 5);
+    expect(merged.pop).toBeGreaterThan(0);
+    expect(grounded.filter((k) => k.value === 1)).toHaveLength(2); // the pair is untouched
+  });
+
+  it('merges a left-behind off-screen trail across the wider 80 px (16.3)', () => {
+    const w = createWorld(3);
+    w.player.x = 0;
+    w.player.y = 0;
+    w.pickups.length = 0;
+    // Three pieces 60-80 px apart, all more than 400 px from the player: too spread for 40 px, caught by 80 px.
+    for (const x of [500, 560, 580]) w.pickups.push({ x, y: 0, value: 2, age: 0, flying: false, cache: false, pop: 0 });
+    clumpPickups(w);
+    expect(w.pickups).toHaveLength(1);
+    expect(w.pickups[0].value).toBe(6);
   });
 });
 
