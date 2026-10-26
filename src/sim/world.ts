@@ -11,7 +11,7 @@ import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { RUN } from '../data/run';
 import { SPAWN, SPAWN_BANDS } from '../data/spawns';
-import { bossRadius, checkPhase, createBoss, updateBoss, type Boss, type BossHost, type Mine } from './boss';
+import { bossRadius, checkPhase, createBoss, updateBoss, type ArtilleryCircle, type Boss, type BossHost, type Mine } from './boss';
 import { SpatialGrid } from './grid';
 import { computeStats, drawCrateOffer, drawOffer, emptyStacks, type Offer, type PerkStacks, type PlayerStats } from './perks';
 import { createRng } from './rng';
@@ -83,7 +83,7 @@ export interface Grenade {
 
 /** Explosion effect for the renderer (damage is applied when it is created). */
 export interface Blast {
-  kind: 'he' | 'frag';
+  kind: 'he' | 'frag' | 'mine'; // mine: VIPER/Warlord mines and ARTILLERY CALL circles (design.md 16.11)
   x: number;
   y: number;
   at: number; // run time
@@ -156,6 +156,7 @@ export interface World {
   bullets: Bullet[];
   enemyBullets: Bullet[];
   mines: Mine[]; // LT. VIPER's (design.md 16.11); cleared when a fight ends
+  artillery: ArtilleryCircle[]; // THE WARLORD's ARTILLERY CALL circles (design.md 16.11)
   pickups: Pickup[];
   crates: Crate[];
   nextEliteAt: number; // contract time of the next scheduled elite (design.md 16.12)
@@ -219,6 +220,7 @@ export function createWorld(seed: number): World {
     bullets: [],
     enemyBullets: [],
     mines: [],
+    artillery: [],
     pickups: [],
     crates: [],
     nextEliteAt: ELITE.firstSec,
@@ -1123,10 +1125,13 @@ function bossHost(w: World): BossHost {
     level: w.level,
     stats: w.stats,
     player: w.player,
+    rng: w.rng,
     enemyBullets: w.enemyBullets,
     arena: w.arena,
     mines: w.mines,
+    artillery: w.artillery,
     hitPlayer: (dmg) => damagePlayer(w, dmg),
+    addBlast: (kind, x, y) => addBlast(w, kind, x, y),
     spawnAddsRing: (count, kind = 'grunt', angleOffset = 0) => {
       const def = ENEMIES[kind];
       for (let i = 0; i < count; i++) {
@@ -1225,6 +1230,7 @@ function lieutenantDown(w: World, b: Boss): void {
   w.kills += 1;
   w.enemyBullets.length = 0;
   w.mines.length = 0;
+  w.artillery.length = 0;
   const value = scrapForLevel(w.level + w.pendingLevels);
   const n = LIEUTENANT_DOWN.scrapPieces;
   w.scrapDropped += value;
@@ -1268,6 +1274,7 @@ function winContract(w: World): void {
   w.won = true;
   w.wonAt = w.time;
   w.kills += 1;
+  w.artillery.length = 0; // his circles vanish with him (clearField only runs if the field isn't empty)
 }
 
 /** Runs at the end of the tick, outside the grid queries that still index the enemy list. */
@@ -1276,6 +1283,7 @@ function clearField(w: World): void {
   w.enemies.length = 0;
   w.enemyBullets.length = 0;
   w.mines.length = 0;
+  w.artillery.length = 0;
 }
 
 function openLevelUp(w: World): void {

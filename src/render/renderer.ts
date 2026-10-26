@@ -1,6 +1,6 @@
 import { DT } from '../data/sim';
 import { Application, Assets, Container, Graphics, Sprite, Texture, TilingSprite } from 'pixi.js';
-import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, type Target } from '../data/boss';
+import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, WARLORD, type Target } from '../data/boss';
 import { JOYSTICK } from '../data/controls';
 import { LEVELS } from '../data/levels';
 import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
@@ -112,6 +112,12 @@ const ART = [
   'fx/fx_frag_03',
   'fx/fx_frag_04',
   'fx/fx_frag_05',
+  'fx/artillery_ring_00',
+  'fx/enemy_grenade_00',
+  'fx/enemy_grenade_01',
+  'fx/enemy_grenade_shadow_00',
+  'warlordfinal_t1_phase2_throw_00',
+  'warlordfinal_t1_phase3_throw_00',
 ] as const;
 type ArtId = (typeof ART)[number];
 
@@ -189,6 +195,8 @@ interface BossArt {
   /** Charge wind-up and aim frames for the phase 2 and 3 looks; a phase without one falls back to phase 1. */
   phaseWindup: Partial<Record<2 | 3, ArtId>>;
   phaseAim: Partial<Record<2 | 3, ArtId>>;
+  /** ARTILLERY CALL throw pose per phase (design.md 16.11, the Warlord only). */
+  phaseThrow: Partial<Record<2 | 3, ArtId>>;
 }
 const BOSS_ART: Record<Target['style'], BossArt> = {
   charger: {
@@ -204,6 +212,7 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseWalk: {},
     phaseWindup: {},
     phaseAim: {},
+    phaseThrow: {},
   },
   gunner: {
     size: 96,
@@ -218,6 +227,7 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseWalk: {},
     phaseWindup: {},
     phaseAim: {},
+    phaseThrow: {},
   },
   warlord: {
     size: 128,
@@ -235,6 +245,7 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     },
     phaseWindup: { 2: 'warlordfinal_t1_phase2_windup_00', 3: 'warlordfinal_t1_phase3_windup_00' },
     phaseAim: { 2: 'warlordfinal_t1_phase2_aim_00', 3: 'warlordfinal_t1_phase3_aim_00' },
+    phaseThrow: { 2: 'warlordfinal_t1_phase2_throw_00', 3: 'warlordfinal_t1_phase3_throw_00' },
   },
 };
 const bossFrames = (a: BossArt): ArtId[] =>
@@ -250,6 +261,7 @@ const bossFrames = (a: BossArt): ArtId[] =>
     ...(a.phaseWalk[3] ?? []),
     ...Object.values(a.phaseWindup),
     ...Object.values(a.phaseAim),
+    ...Object.values(a.phaseThrow),
   ].filter((x): x is ArtId => x !== null);
 const WARLORD_FRAME_MS = 180;
 const TELEGRAPH_COLOR = 0xff4a1c;
@@ -267,6 +279,8 @@ const BLAST_ANIM = {
     frames: ['fx/fx_frag_00', 'fx/fx_frag_01', 'fx/fx_frag_02', 'fx/fx_frag_03', 'fx/fx_frag_04', 'fx/fx_frag_05'] as ArtId[],
     frameMs: 110,
   },
+  // Mines and ARTILLERY CALL circles share the small HE blast (design.md 16.11: artillery reuses the mine blast).
+  mine: { frames: ['fx/fx_he_00', 'fx/fx_he_01', 'fx/fx_he_02', 'fx/fx_he_03', 'fx/fx_he_04'] as ArtId[], frameMs: 90 },
 };
 const DRONE_ROTOR_MS = 60;
 const GRENADE_BLINK_MS = 100;
@@ -311,6 +325,9 @@ export class Renderer {
   private bullets!: Pool;
   private blasts!: Pool;
   private mines!: Pool;
+  private artilleryRings!: Pool;
+  private artilleryShadows!: Pool;
+  private artilleryGrenades!: Pool;
   private crates!: Pool;
   private crateShadows!: Pool;
   private drones!: Pool;
@@ -363,6 +380,8 @@ export class Renderer {
     this.bullets = new Pool(layers[4]);
     this.blasts = new Pool(layers[5]);
     this.mines = new Pool(layers[0]); // on the sand, under everyone
+    this.artilleryRings = new Pool(layers[0]); // ARTILLERY CALL circles sit on the sand, under the units
+    this.artilleryShadows = new Pool(layers[0]);
     this.crateShadows = new Pool(layers[0]);
     this.crates = new Pool(layers[0]);
     this.merc = new Sprite(this.tex.merc_t1_idle_00);
@@ -379,6 +398,7 @@ export class Renderer {
     const grenades = new Container();
     this.drones = new Pool(drones);
     this.grenades = new Pool(grenades);
+    this.artilleryGrenades = new Pool(grenades); // the thrown grenade arcs over everything on the ground
     // Blasts draw above enemies (Artist, 16.7); drones fly over the merc; grenades arc over everything on the ground.
     // Damage numbers sit above everything in the arena, below the HUD (design.md 16.10).
     this.world.addChild(layers[0], layers[1], this.fx, layers[5], layers[2], drones, grenades, layers[3], layers[4], this.numbers.layer);
@@ -461,7 +481,9 @@ export class Renderer {
     // Wind-up and aim use the frame drawn for his current phase, else phase 1 (Esteban's run: he snapped back to full HP
     // looks before each charge).
     const ph = b.phase === 1 ? null : (b.phase as 2 | 3);
-    if (b.state === 'telegraph' && set.windup) art = (ph && set.phaseWindup[ph]) || set.windup;
+    if (b.throwT >= 0 && ph && set.phaseThrow[ph])
+      art = set.phaseThrow[ph]!; // ARTILLERY CALL throw pose
+    else if (b.state === 'telegraph' && set.windup) art = (ph && set.phaseWindup[ph]) || set.windup;
     else if (b.burstLeft > 0 && set.fire) art = (ph && set.phaseAim[ph] && set.fire === set.aim ? set.phaseAim[ph] : null) || set.fire;
     else if (b.aimT >= 0 && set.aim) art = (ph && set.phaseAim[ph]) || set.aim;
     else if (b.moving && b.state !== 'stagger') {
@@ -512,6 +534,40 @@ export class Renderer {
         .lineTo(Math.round(x1), Math.round(y1))
         .stroke({ color: TELEGRAPH_COLOR, width: 3, alpha: blink ? 0.9 : 0.5 });
     }
+  }
+
+  /**
+   * ARTILLERY CALL circles (design.md 16.11): the ring sits on the sand, a red-orange fill closes inward
+   * over 1.5 s, and a grenade arcs in from the Warlord over the last of it. The fill draws into this.fx.
+   */
+  private drawArtillery(w: World): void {
+    const A = WARLORD.artillery;
+    const b = w.boss;
+    let ng = 0;
+    w.artillery.forEach((c, i) => {
+      const x = Math.round(c.x);
+      const y = Math.round(c.y);
+      const frac = Math.min(1, c.t / A.fillSec);
+      this.artilleryRings.get(i, this.tex['fx/artillery_ring_00']).position.set(x, y);
+      // Inward fill: a red-orange stroke from the edge (r) in to r*(1-frac), so at frac=1 the circle is full.
+      const r = A.radiusPx;
+      if (frac > 0) this.fx.circle(x, y, r * (1 - frac / 2)).stroke({ color: TELEGRAPH_COLOR, width: Math.max(1, r * frac), alpha: 0.5 });
+      // The grenade arcs in from the Warlord over the last grenadeSec, with a small shadow on the ground.
+      const gStart = A.fillSec - A.grenadeSec;
+      if (b && c.t >= gStart) {
+        const k = Math.min(1, (c.t - gStart) / A.grenadeSec);
+        const gx = Math.round(b.x + (c.x - b.x) * k);
+        const gy = Math.round(b.y + (c.y - b.y) * k);
+        const lift = Math.round(Math.sin(k * Math.PI) * 24);
+        this.artilleryShadows.get(ng, this.tex['fx/enemy_grenade_shadow_00']).position.set(gx, gy);
+        const art: ArtId = Math.floor((c.t * 1000) / GRENADE_BLINK_MS) % 2 ? 'fx/enemy_grenade_01' : 'fx/enemy_grenade_00';
+        this.artilleryGrenades.get(ng, this.tex[art]).position.set(gx, gy - lift);
+        ng++;
+      }
+    });
+    this.artilleryRings.hideFrom(w.artillery.length);
+    this.artilleryShadows.hideFrom(ng);
+    this.artilleryGrenades.hideFrom(ng);
   }
 
   /** Called when the screen's aspect ratio changes the visible height. */
@@ -617,6 +673,7 @@ export class Renderer {
     });
     this.enemies.hideFrom(w.enemies.length);
     this.drawWarlord(w);
+    this.drawArtillery(w);
 
     w.enemyBullets.forEach((b, i) => this.enemyBullets.get(i, this.tex.bullet_enemy_00).position.set(Math.round(b.x), Math.round(b.y)));
     this.enemyBullets.hideFrom(w.enemyBullets.length);

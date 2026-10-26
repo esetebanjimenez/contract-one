@@ -9,7 +9,7 @@ import { createRng } from '../src/sim/rng';
 import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, WARLORD, bossHp } from '../src/data/boss';
 import { PLAYER } from '../src/data/player';
 import { NATIVE_WIDTH } from '../src/data/display';
-import { bossRadius, checkPhase, createBoss, updateBoss, type Boss, type BossHost, type Mine } from '../src/sim/boss';
+import { bossRadius, checkPhase, createBoss, updateBoss, type ArtilleryCircle, type Boss, type BossHost, type Mine } from '../src/sim/boss';
 import {
   choosePerk,
   createWorld,
@@ -347,9 +347,12 @@ describe('M3 contract', () => {
       level: w.level,
       player: w.player,
       enemyBullets: w.enemyBullets,
+      rng: () => 0.5,
       arena: null,
       mines: w.mines,
+      artillery: w.artillery,
       hitPlayer: () => {},
+      addBlast: () => {},
       spawnAddsRing: () => {},
     });
     expect(b.phase).toBe(2);
@@ -670,13 +673,19 @@ describe('LT. VIPER (design.md 16.11)', () => {
       level: 10,
       stats: { damage: 10, fireRate: 5, projectiles: 1, crit: 0 },
       player: { x: 0, y: 0 },
+      rng: createRng(99),
       enemyBullets: [] as BossHost['enemyBullets'],
       arena: null,
       mines: [] as Mine[],
+      artillery: [] as ArtilleryCircle[],
       hits: [] as number[],
       adds: [] as [number, string | undefined][],
+      blasts: [] as ['he' | 'frag' | 'mine', number, number][],
       hitPlayer(dmg: number) {
         h.hits.push(dmg);
+      },
+      addBlast(kind: 'he' | 'frag' | 'mine', x: number, y: number) {
+        h.blasts.push([kind, x, y]);
       },
       spawnAddsRing(count: number, kind?: 'grunt' | 'runner') {
         h.adds.push([count, kind]);
@@ -806,13 +815,19 @@ describe('THE WARLORD (design.md 16.11)', () => {
       level: 10,
       stats: { damage: 10, fireRate: 5, projectiles: 1, crit: 0 },
       player: { x: 0, y: 0 },
+      rng: createRng(99),
       enemyBullets: [] as BossHost['enemyBullets'],
       arena: null,
       mines: [] as Mine[],
+      artillery: [] as ArtilleryCircle[],
       hits: [] as number[],
       adds: [] as [number, string | undefined][],
+      blasts: [] as ['he' | 'frag' | 'mine', number, number][],
       hitPlayer(dmg: number) {
         h.hits.push(dmg);
+      },
+      addBlast(kind: 'he' | 'frag' | 'mine', x: number, y: number) {
+        h.blasts.push([kind, x, y]);
       },
       spawnAddsRing(count: number, kind?: 'grunt' | 'runner') {
         h.adds.push([count, kind]);
@@ -919,6 +934,199 @@ describe('THE WARLORD (design.md 16.11)', () => {
     h.time += DT;
     updateBoss(b, h);
     expect(h.hits).toEqual([WARLORD.contactDamage]);
+  });
+});
+
+describe('ARTILLERY CALL (design.md 16.11)', () => {
+  const host = () => {
+    const h = {
+      time: 0,
+      level: 10,
+      stats: { damage: 10, fireRate: 5, projectiles: 1, crit: 0 },
+      player: { x: 0, y: 0 },
+      rng: createRng(7),
+      enemyBullets: [] as BossHost['enemyBullets'],
+      arena: null as BossHost['arena'],
+      mines: [] as Mine[],
+      artillery: [] as ArtilleryCircle[],
+      hits: [] as number[],
+      blasts: [] as ['he' | 'frag' | 'mine', number, number][],
+      hitPlayer(dmg: number) {
+        h.hits.push(dmg);
+      },
+      addBlast(kind: 'he' | 'frag' | 'mine', x: number, y: number) {
+        h.blasts.push([kind, x, y]);
+      },
+      spawnAddsRing() {},
+    };
+    return h;
+  };
+  const A = WARLORD.artillery;
+  const scaled = A.damage * BOSSES[2].damageScale;
+  // A Warlord well away from the player, so his walk and contact never interfere with the circles.
+  const warlord = (h: ReturnType<typeof host>, phase: 2 | 3 = 2) => {
+    const b = createBoss(h, 2);
+    b.x = 600;
+    b.y = 0;
+    b.state = 'walk';
+    b.damageable = true;
+    b.arrivedAt = 0;
+    b.phase = phase;
+    b.chargeCd = 999;
+    b.ringCd = 999;
+    b.fanCd = 999;
+    b.burstCd = 999;
+    return b;
+  };
+  const tick = (b: Boss, h: ReturnType<typeof host>, sec: number) => {
+    for (let i = 0; i < Math.round(sec / DT); i++) {
+      h.time += DT;
+      updateBoss(b, h);
+    }
+  };
+  /** Steps until the throw drops its circles (throwT back to -1), returning the tick count (or -1). */
+  const tickToVolley = (b: Boss, h: ReturnType<typeof host>, maxSec = 2) => {
+    for (let i = 0; i < Math.round(maxSec / DT); i++) {
+      h.time += DT;
+      updateBoss(b, h);
+      if (b.throwT < 0 && h.artillery.length > 0) return i;
+    }
+    return -1;
+  };
+
+  it('never throws in phase 1', () => {
+    const h = host();
+    const b = warlord(h, 1 as 2);
+    b.artilleryCd = DT;
+    tick(b, h, 3);
+    expect(h.artillery.length).toBe(0);
+    expect(b.throwT).toBe(-1);
+  });
+
+  it('after the throw pose drops 3 circles in phase 2 and 5 in phase 3, and re-arms the timer', () => {
+    const h2 = host();
+    const b2 = warlord(h2, 2);
+    b2.artilleryCd = DT;
+    tick(b2, h2, A.throwSec - 0.05); // mid-throw: the pose is up, no circles yet
+    expect(b2.throwT).toBeGreaterThanOrEqual(0);
+    expect(h2.artillery.length).toBe(0);
+    tick(b2, h2, 0.1); // the throw completes
+    expect(b2.throwT).toBe(-1);
+    expect(h2.artillery.length).toBe(A.circles[2]);
+
+    const h3 = host();
+    const b3 = warlord(h3, 3);
+    b3.artilleryCd = DT;
+    expect(tickToVolley(b3, h3)).toBeGreaterThanOrEqual(0);
+    expect(h3.artillery.length).toBe(A.circles[3]);
+    expect(b3.artilleryCd).toBeCloseTo(A.everySec[3], 5); // re-armed the moment the circles drop
+  });
+
+  it('lands the first circle on the player and the rest 80-140 px away, none overlapping a circle or a mine', () => {
+    const h = host();
+    const b = warlord(h, 3);
+    h.player.x = 120;
+    h.player.y = -80;
+    h.mines.push({ x: 120 + 100, y: -80, age: 0, damage: 1 });
+    b.artilleryCd = DT;
+    tick(b, h, A.throwSec + 0.1);
+    const cs = h.artillery;
+    expect(cs.length).toBe(A.circles[3]);
+    // First circle is centred on the player's position at the throw.
+    expect(Math.hypot(cs[0].x - h.player.x, cs[0].y - h.player.y)).toBeCloseTo(0, 5);
+    for (let i = 1; i < cs.length; i++) {
+      const d = Math.hypot(cs[i].x - h.player.x, cs[i].y - h.player.y);
+      expect(d).toBeGreaterThanOrEqual(A.minPx - 1e-6);
+      expect(d).toBeLessThanOrEqual(A.maxPx + 1e-6);
+    }
+    // No two circles overlap, and none overlaps the mine.
+    for (let i = 0; i < cs.length; i++) {
+      for (let j = i + 1; j < cs.length; j++) {
+        expect(Math.hypot(cs[i].x - cs[j].x, cs[i].y - cs[j].y)).toBeGreaterThanOrEqual(2 * A.radiusPx - 1e-6);
+      }
+      for (const m of h.mines) {
+        expect(Math.hypot(cs[i].x - m.x, cs[i].y - m.y)).toBeGreaterThanOrEqual(A.radiusPx + VIPER.mines.radiusPx - 1e-6);
+      }
+    }
+  });
+
+  it('fills over 1.5 s, then explodes once for 30 (20 x 1.5) with a mine blast if the player is inside', () => {
+    const h = host();
+    const b = warlord(h, 2);
+    h.player.x = 0;
+    h.player.y = -300; // clear of his body at x=600
+    b.artilleryCd = DT;
+    tick(b, h, A.throwSec + 0.1);
+    const c = h.artillery[0];
+    expect(Math.hypot(c.x - h.player.x, c.y - h.player.y)).toBeCloseTo(0, 5);
+    expect(c.damage).toBe(scaled);
+    tick(b, h, A.fillSec - 0.2); // still filling
+    expect(h.artillery).toContain(c);
+    expect(h.hits).not.toContain(scaled);
+    tick(b, h, 0.25); // past the fill: it explodes
+    expect(h.artillery).not.toContain(c);
+    expect(h.hits).toContain(scaled);
+    expect(h.blasts.some(([k]) => k === 'mine')).toBe(true);
+  });
+
+  it('never charges while throwing, and a throw pushes his next charge back', () => {
+    const h = host();
+    const b = warlord(h, 2);
+    b.chargeCd = 0; // a charge is overdue
+    b.throwT = 0; // but he is mid-throw
+    let telegraphed = false;
+    let chargeAtVolley = -1;
+    for (let i = 0; i < Math.round((A.throwSec + 0.1) / DT); i++) {
+      const throwing = b.throwT >= 0;
+      h.time += DT;
+      updateBoss(b, h);
+      telegraphed ||= b.state === 'telegraph' || b.state === 'charge';
+      if (throwing && b.throwT < 0 && chargeAtVolley < 0) chargeAtVolley = b.chargeCd; // the completion tick
+    }
+    expect(telegraphed).toBe(false);
+    expect(chargeAtVolley).toBeCloseTo(A.chargePushbackSec, 5); // pushed back from 0 the moment he throws
+  });
+
+  it('pauses the ARTILLERY CALL timer while a charge runs', () => {
+    const h = host();
+    const b = warlord(h, 2);
+    b.state = 'telegraph';
+    b.stateT = 10; // held in the charge telegraph
+    b.artilleryCd = 3;
+    tick(b, h, 1);
+    expect(b.artilleryCd).toBe(3); // unchanged: the timer only counts while he walks
+  });
+
+  it('a mine detonation emits the shared mine blast', () => {
+    const h = host();
+    const b = warlord(h, 2);
+    b.chargeCd = 999;
+    h.player.x = 50;
+    h.player.y = 50;
+    h.mines.push({ x: 50, y: 50, age: VIPER.mines.armSec + 0.1, damage: 7 });
+    tick(b, h, DT);
+    expect(h.mines.length).toBe(0);
+    expect(h.hits).toContain(7);
+    expect(h.blasts).toContainEqual(['mine', 50, 50]);
+  });
+
+  it('clears the circles when the Warlord dies in the real loop', () => {
+    const w = createWorld(13);
+    w.player.hp = w.stats.maxHp = 1e9;
+    toFight(w, 2);
+    for (let i = 0; i < 20 * 60 && !w.boss?.damageable; i++) {
+      if (w.phase === 'levelup' || w.phase === 'crate') {
+        w.phase = 'play';
+        w.pendingLevels = 0;
+      }
+      step(w, { mx: 0, my: 0 });
+    }
+    expect(w.boss!.target).toBe(2);
+    w.artillery.push({ x: w.player.x + 10, y: w.player.y, t: 0, damage: 30 });
+    w.boss!.hp = 1;
+    for (let i = 0; i < 600 && !w.won; i++) step(w, { mx: 0, my: 0 });
+    expect(w.won).toBe(true);
+    expect(w.artillery.length).toBe(0);
   });
 });
 

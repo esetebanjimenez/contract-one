@@ -3,7 +3,7 @@
  * ?scene=levelup | crate | crates | boss | viper | warlord | results | grunts | numbers fast-forwards a seeded kite-smart run to that screen, then hands it to the game.
  */
 import { boot } from '../../src/game';
-import { BOSSES, VIPER } from '../../src/data/boss';
+import { BOSSES, VIPER, WARLORD } from '../../src/data/boss';
 import { ENEMIES, gruntWeapon, type GruntWeapon } from '../../src/data/enemies';
 import { DT } from '../../src/data/sim';
 import { PLAYER } from '../../src/data/player';
@@ -130,6 +130,19 @@ function build(scene: Scene): World {
     b.hp = b.maxHp * 0.6;
     b.ringCd = DT;
     playUntil(w, 'kite-smart', (x) => x.time >= b.arrivedAt + 3.6);
+    // ARTILLERY CALL (design.md 16.11): drop a volley and hold the capture mid-fill, grenade arcing in.
+    b.chargeCd = 99;
+    b.ringCd = 99;
+    b.aimT = -1;
+    b.burstLeft = 0;
+    b.state = 'walk';
+    b.artilleryCd = 0;
+    b.throwT = -1;
+    playUntil(
+      w,
+      'kite-smart',
+      (x) => x.artillery.length >= WARLORD.artillery.circles[2] && x.artillery[0].t >= WARLORD.artillery.fillSec - 0.3,
+    );
     w.player.invuln = 0;
     w.player.hp = w.stats.maxHp;
     return w;

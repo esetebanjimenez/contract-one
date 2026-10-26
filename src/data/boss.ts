@@ -28,6 +28,22 @@ export const WARLORD = {
   ringEverySec: 3, // phase 2+, every phase (enrage still goes to 1 s)
   adds: { grunts: 8, runners: 4, everySec: 8 }, // phase 3
   chargeMines: 1, // phase 3: dropped where each charge starts
+  // ARTILLERY CALL (design.md 16.11): his own attack, makes standing still punishable. Not in phase 1.
+  // He stops in a throw pose, then target circles appear: one on the player, the rest 80-140 px away,
+  // never overlapping each other or a mine. Each fills inward over fillSec, then explodes over its radius.
+  artillery: {
+    everySec: { 2: 7, 3: 6 } as Record<2 | 3, number>,
+    throwSec: 0.4, // throw pose before the circles drop
+    fillSec: 1.5, // the ring fills inward, then explodes
+    grenadeSec: 0.4, // a grenade arcs in from him over the last of the fill
+    circles: { 2: 3, 3: 5 } as Record<2 | 3, number>,
+    radiusPx: 18, // the circle is 36 px across
+    minPx: 80, // the extra circles land this far from the player ...
+    maxPx: 140, // ... out to here, inside the arena walls
+    damage: 20, // x his damageScale (1.5) = 30 per circle; Ceramic Plates applies
+    chargePushbackSec: 1, // a throw pushes his next charge back; the timer also pauses during a charge
+    placeTries: 24, // attempts to find a non-overlapping spot for each extra circle
+  },
 };
 
 /**
