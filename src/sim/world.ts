@@ -1,4 +1,4 @@
-import { BOSSES, LIEUTENANT_DOWN } from '../data/boss';
+import { BOSSES, LIEUTENANT_DOWN, sheetDps } from '../data/boss';
 import { MAX_VIEW_HEIGHT, NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { ELITE, ENEMIES, VETERAN, ENEMY_BULLET_RADIUS, GRUNT_WEAPONS, KNOCKBACK_PX, SCALING, type EnemyDef } from '../data/enemies';
 
@@ -125,6 +125,7 @@ export interface Fight {
   crates: number; // supply crates opened before he spawned (design.md 16.12)
   kit: Partial<Record<PerkId, number>>; // crate perks owned at his spawn
   elites: number; // scheduled elites killed before he spawned (design.md 16.12)
+  playerHpPct: number; // the player's HP %, 0..100, when he spawned (wave-pressure proxy, design.md 16.13)
 }
 
 export interface World {
@@ -159,6 +160,9 @@ export interface World {
   artillery: ArtilleryCircle[]; // THE WARLORD's ARTILLERY CALL circles (design.md 16.11)
   pickups: Pickup[];
   crates: Crate[];
+  powerBaseDps: number; // the player's sheet DPS at the first target (design.md 16.13); 0 before it spawns
+  waveDamageLate: number; // HP the player has lost to waves (not fights) from 5:00 on (sim metric, 16.13)
+  waveSecLate: number; // seconds spent in post-5:00 waves (not in a fight), for the damage-per-minute metric
   nextEliteAt: number; // contract time of the next scheduled elite (design.md 16.12)
   elitesSpawned: number;
   elitesKilled: number;
@@ -223,6 +227,9 @@ export function createWorld(seed: number): World {
     artillery: [],
     pickups: [],
     crates: [],
+    powerBaseDps: 0,
+    waveDamageLate: 0,
+    waveSecLate: 0,
     nextEliteAt: ELITE.firstSec,
     elitesSpawned: 0,
     elitesKilled: 0,
@@ -282,6 +289,17 @@ export function bandAt(t: number) {
   let b = SPAWN_BANDS[0];
   for (const x of SPAWN_BANDS) if (t >= x.fromSec) b = x;
   return b;
+}
+
+/**
+ * design.md 16.13: the HP factor for normal waves once the player has passed the first target. It is
+ * max(1, (sheetDps now / sheetDps at 5:00) ^ hpPowerExp), so late waves keep pace with the build. 1 before
+ * the first fight and during a fight (the arena's adds never scale this way).
+ */
+export function wavePowerMul(w: World): number {
+  if (w.arena || w.powerBaseDps <= 0) return 1;
+  const ratio = sheetDps(w.stats, PERK_RULES.critMultiplier) / w.powerBaseDps;
+  return Math.max(1, Math.pow(ratio, SCALING.hpPowerExp));
 }
 
 function weighted<K extends string>(w: World, weights: Record<K, number>, exclude: K[] = []): K {
@@ -351,7 +369,10 @@ export function eliteDef(def: EnemyDef): EnemyDef {
 function spawnElite(w: World): Enemy {
   const def = eliteDef(regularType(w, riflemenAlive(w) >= SPAWN.maxRiflemen));
   const p = edgePoint(w, w.rng() * Math.PI * 2);
-  const maxHp = def.hp * ELITE.byType[def.id].hp * (1 + SCALING.hpPerMinute * (w.contractTime / 60));
+  const base = def.hp * ELITE.byType[def.id].hp * (1 + SCALING.hpPerMinute * (w.contractTime / 60));
+  // From 5:00 on, floor the elite's HP at a few seconds of the player's sheet DPS (design.md 16.13).
+  const dpsFloor = w.contractTime >= BOSSES[0].atSec ? ELITE.dpsSec * sheetDps(w.stats, PERK_RULES.critMultiplier) : 0;
+  const maxHp = Math.max(base, dpsFloor);
   const e: Enemy = {
     id: w.nextEnemyId++,
     def,
@@ -499,7 +520,8 @@ function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef):
   }
   const { def, veteran } = force ? { def: force, veteran: false } : pickType(w, pressure);
   const p = edgePoint(w, angle);
-  const maxHp = def.hp * (veteran ? VETERAN.hp : 1) * (1 + SCALING.hpPerMinute * (w.contractTime / 60));
+  // design.md 16.13: trash and Veterans scale with the player's build once past the first target.
+  const maxHp = def.hp * (veteran ? VETERAN.hp : 1) * (1 + SCALING.hpPerMinute * (w.contractTime / 60)) * wavePowerMul(w);
   const e: Enemy = {
     id: w.nextEnemyId++,
     def,
@@ -773,7 +795,10 @@ function retarget(w: World, bl: Bullet, from: Enemy, speed: number): boolean {
 function damagePlayer(w: World, dmg: number): void {
   const p = w.player;
   if (p.invuln > 0 || w.won) return;
-  p.hp -= Math.max(1, dmg - w.stats.armor);
+  const taken = Math.max(1, dmg - w.stats.armor);
+  p.hp -= taken;
+  // Track HP lost to waves (not boss fights) from 5:00 on, so the sim can show late waves biting (design.md 16.13).
+  if (!w.arena && w.contractTime >= BOSSES[0].atSec) w.waveDamageLate += taken;
   p.invuln = PLAYER.invulnSec;
   if (p.hp <= 0) {
     p.hp = 0;
@@ -879,6 +904,8 @@ export function step(w: World, input: Input): void {
   // The contract clock runs only between fights (design.md 16.11).
   if (!w.arena) w.contractTicks++;
   w.contractTime = w.contractTicks * DT;
+  // Seconds spent in post-5:00 waves (not in a fight), for the wave damage-per-minute metric (design.md 16.13).
+  if (!w.arena && !w.won && w.contractTime >= BOSSES[0].atSec) w.waveSecLate += DT;
   const p = w.player;
 
   // Player movement.
@@ -1206,6 +1233,8 @@ function updateWarlord(w: World): void {
   const a = w.arena;
   if (!w.boss && a && w.time >= a.lockedAt + RUN.warningSec) {
     w.boss = createBoss(bossHost(w), w.target);
+    // The player's sheet DPS at the first target is the baseline that paces the later waves (design.md 16.13).
+    if (w.powerBaseDps <= 0) w.powerBaseDps = sheetDps(w.stats, PERK_RULES.critMultiplier);
     const kit = Object.fromEntries(CRATE_PERKS.map((id) => [id, w.stacks[id]]));
     w.fights.push({
       target: w.target,
@@ -1217,6 +1246,7 @@ function updateWarlord(w: World): void {
       crates: w.cratesOpened,
       elites: w.elitesKilled,
       kit,
+      playerHpPct: (100 * w.player.hp) / w.stats.maxHp,
     });
   }
   const b = w.boss;
