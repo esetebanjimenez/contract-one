@@ -590,7 +590,7 @@ Esteban's full-contract run (18:28, level 66, 2/3 targets, the Warlord at 1%) ma
 **Targets (Esteban's next full run comes first):**
 - The late game is no longer trivial: Lieutenant 2 and the Warlord fights are inside 60–120 s and the player has to move with intent, not just circle.
 - Sim: report crates opened per run and the crate perks owned at each target. Kite-smart reaching the Warlord should have opened 5–8 crates.
-- If it's still trivial, the next lever is the Scrap needed per level after 5:00 (level 66 at 18:28 is still a lot of picks), then the gap between elites (2:00).
+- If it's still trivial, the next lever is the Scrap needed per level after 5:00 (level 66 at 18:28 is still a lot of picks), then the gap between elites (2:00). **Superseded by §16.13:** it stayed trivial between the bosses, but slowing level-ups would kill progression, so we scale the waves to the player instead.
 
 **Needs:**
 - **Art:** the crate sprite (olive, dull brass straps, glint and bob, no warn frame), a larger starred lieutenant crate, and the crate-screen header.
@@ -598,3 +598,41 @@ Esteban's full-contract run (18:28, level 66, 2/3 targets, the Warlord at 1%) ma
 - **Sim:** bots open any crate they touch and pick by their usual rule. Report elites killed and crates opened per target.
 - **Code:** the elite HP bar (drawn in code, no new art).
 
+
+### 16.13 Late waves scale with the player (Esteban, 2026-10-26)
+
+Esteban's winning full-contract run (15:38, level 68, 3/3) showed the waves **between** the bosses go trivial. Before the first target (0:00–5:00) they're a real fight; from 5:00 on the build one-shots everything, so nothing survives to reach the player and the run becomes "circle and mulch" between bosses. The level-up curve is **not** the lever: progression cadence is the genre's core reward, and slowing it makes the player feel stuck. Instead the **world scales to the player after the first boss**, the way the genre's benchmarks do — Vampire Survivors multiplies enemy HP by the player's level (snapshot at spawn), Brotato layers a per-wave HP curve plus elites — both keep late enemies alive by scaling the opposition, not by throttling the player. We already do this for bosses (§16.5: boss HP = a multiple of the player's sheet DPS); this extends the same sheet-DPS pacing to the post-5:00 waves.
+
+Two parts, both **only from 5:00 on** (pre-5:00 waves are unchanged; Esteban confirms they're well-tuned), both snapshot at spawn like §12.1, and **neither adds enemies, speed or density** — the threat is survivability, so the screen stays readable (§1, §12).
+
+**Power ratio.** `P = sheetDps(now) / sheetDps(at 5:00)`, where sheet DPS is the §16.5 figure and the denominator is snapshot when the first target spawns. `P` is 1.0 at 5:00 and grows as the player levels through the contract; it never counts below 1. There is no jump at 5:00, and the fix touches only the exact window where the player pulls ahead.
+
+**1. Trash and Veterans — partial HP scaling.** Every normal-wave enemy (Grunt, Runner, Heavy, Rifleman and their Veterans — not the bosses' arena adds) spawned at contract time ≥ 5:00 gets an extra HP factor on top of the §12.1 per-minute curve:
+
+> `powerMul = max(1, P ^ hpPowerExp)`, with **hpPowerExp = 0.5** (starting value).
+
+Because the exponent is below 1, the player still kills faster as they grow: effective time-to-kill falls as `P^(hpPowerExp − 1)`, so a 4× stronger build clears a given enemy ~2× faster while that enemy is only ~2× tankier. The power fantasy holds; the screen just stops being a vacuum. At `hpPowerExp = 0` this is today's behaviour; at `1` enemies fully track the player (flat time-to-kill, a treadmill). We start at 0.5 and tune toward "trash still melts, but enough survives the walk in to pressure the player."
+
+**2. Scheduled elites — the threat layer.** The scheduled elite (§16.12) is the readable mini-boss (HP bar, abilities). Its HP today is a fixed multiple of its base type, so late in a run it melts like everything else. From 5:00 its HP follows sheet DPS, floored at the current formula so early or weak-build elites are unchanged:
+
+> `elite HP = max( §16.12 formula , eliteDpsSec × sheetDps(now) )`, with **eliteDpsSec = 3** (starting value).
+
+At ~3 seconds of single-target sheet DPS — and with real fire split across the crowd, so the elite only takes a fraction of it — a late elite is a multi-second kill that forces the player to break off and handle its ability: a pressure spike every 2:00, not a speed bump.
+
+**Scope and non-goals.**
+- Pre-5:00 is untouched. Spawn rate, counts, the 250 cap, speeds and contact damage are all unchanged — this is HP only, to protect readability (§1) and the "threat per enemy, not more enemies" rule (§12).
+- Boss fights are a separate problem (Esteban: the bosses themselves are "circle until dead"). That is a later pass on their attack density and dodge pressure, not this change. The bosses' phase-3 adds keep today's HP.
+
+**Levers, in order, if it's off (tune from Esteban's playtest first, then the sim):**
+1. `hpPowerExp` (0.5) — the main dial for how much late trash survives.
+2. `eliteDpsSec` (3) — how much of a fight each scheduled elite is.
+3. Only if the gaps between elites still feel empty: tighten the elite cadence after 5:00 (§16.12's 2:00) or seed the late pressure rings (§16.11, at 7:00/8:00/11:00/12:00) with Veterans. Density stays the last resort, for readability.
+
+**Targets.**
+- Waves between the bosses are no longer trivial: a naive kite can't stand still or circle untouched from 5:00 on, and reaches each target having spent HP.
+- Progression still feels fast: trash time-to-kill keeps **dropping** as the player levels (never flat), and no level-up is slowed.
+- The screen stays readable late (§1): no new bodies, just tougher ones.
+
+**Needs:**
+- **Data:** `hpPowerExp` and `eliteDpsSec` in `src/data/enemies.ts`; the 5:00 sheet-DPS baseline captured on the world when the first target spawns; `powerMul` applied in the wave-spawn path (`src/sim/world.ts`) and the DPS floor in the elite spawn. No art.
+- **Sim:** `src/data/` changes, so the sim table posts. Add to `tools/sim-report.ts` the median player HP at each target's spawn and damage taken per minute in the 5:00–13:00 window, so "waves got threatening" is visible. Bots fight the walled arena badly (§16.5), so Esteban's run is the arbiter; the sim guards against regressions (reach rate holds, idle still dies before 2:00).
