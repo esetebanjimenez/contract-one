@@ -60,7 +60,11 @@ const runRows = bots.map((bot) => {
       )
     : `${level}`;
   const done = pct(rs.filter((r) => r.bossKilled).length, runs);
-  return `| ${bot} | ${surv} | ${reachCell} | ${levelCell} | ${med(rs.map((r) => r.targetsDown))}/${BOSSES.length} | ${done}% |`;
+  // Pooled across runs (total HP lost / total wave seconds), so the rate isn't drowned by runs that
+  // never reached the post-5:00 waves (§16.13).
+  const wSec = rs.reduce((a, r) => a + r.waveSecLate, 0);
+  const waveDps = wSec > 0 ? Math.round((60 * rs.reduce((a, r) => a + r.waveDmgLate, 0)) / wSec) : 0;
+  return `| ${bot} | ${surv} | ${reachCell} | ${levelCell} | ${med(rs.map((r) => r.targetsDown))}/${BOSSES.length} | ${done}% | ${waveDps} |`;
 });
 
 const fightRows: string[] = [];
@@ -85,8 +89,9 @@ for (const bot of bots) {
       `${enr}%`,
       `${bot} enrages in ${enr}% of ${b.name} fights; target under ${ENRAGE_MAX}% (§16.11)`,
     );
+    const hpAtSpawn = Math.round(med(fs.map((f) => f.playerHpPct))); // player HP % at his spawn (§16.13)
     fightRows.push(
-      `| ${bot} | ${b.name} | ${pct(fs.length, runs)}% | ${med(fs.map((f) => f.level))} | ${med(fs.map((f) => f.hp)).toLocaleString('en-US')} | ${killCell} | ${secCell} | ${enrCell} |`,
+      `| ${bot} | ${b.name} | ${pct(fs.length, runs)}% | ${med(fs.map((f) => f.level))} | ${med(fs.map((f) => f.hp)).toLocaleString('en-US')} | ${killCell} | ${secCell} | ${enrCell} | ${hpAtSpawn}% |`,
     );
   });
 }
@@ -118,12 +123,12 @@ for (const bot of bots) {
 const lines = [
   `### Sim table (${runs} runs per bot)`,
   '',
-  `| Bot | Median survival | Reached ${BOSSES[0].name} | Level at ${BOSSES[0].name} | Median targets down | Contract complete |`,
-  '|---|---|---|---|---|---|',
+  `| Bot | Median survival | Reached ${BOSSES[0].name} | Level at ${BOSSES[0].name} | Median targets down | Contract complete | Wave HP/min (5:00+) |`,
+  '|---|---|---|---|---|---|---|',
   ...runRows,
   '',
-  '| Bot | Target | Reached | Level at spawn | HP at spawn | Kills | Median fight | Enraged |',
-  '|---|---|---|---|---|---|---|---|',
+  '| Bot | Target | Reached | Level at spawn | HP at spawn | Kills | Median fight | Enraged | Player HP at spawn |',
+  '|---|---|---|---|---|---|---|---|---|',
   ...fightRows,
   '',
   '| Bot | Target | Elites killed by spawn | Crates opened by spawn | EXTRA BARREL | FRAG OUT | DRONE BUDDY | HE ROUNDS |',

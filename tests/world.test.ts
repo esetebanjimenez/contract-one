@@ -3,10 +3,10 @@ import { ELITE, ENEMIES } from '../src/data/enemies';
 import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
 import { SPAWN } from '../src/data/spawns';
-import { CRATE, CRATE_PERKS, DRONE, GRENADE, PERKS, addStack } from '../src/data/perks';
+import { CRATE, CRATE_PERKS, DRONE, GRENADE, PERKS, PERK_RULES, addStack } from '../src/data/perks';
 import { computeStats, drawCrateOffer, drawOffer, softMove, emptyStacks, makeOffer, rollTier } from '../src/sim/perks';
 import { createRng } from '../src/sim/rng';
-import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, WARLORD, bossHp } from '../src/data/boss';
+import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, WARLORD, bossHp, sheetDps } from '../src/data/boss';
 import { PLAYER } from '../src/data/player';
 import { NATIVE_WIDTH } from '../src/data/display';
 import { bossRadius, checkPhase, createBoss, updateBoss, type ArtilleryCircle, type Boss, type BossHost, type Mine } from '../src/sim/boss';
@@ -28,6 +28,7 @@ import {
   eliteDef,
   eliteRifleMoveSec,
   lungeStep,
+  wavePowerMul,
   type Enemy,
   type World,
 } from '../src/sim/world';
@@ -1365,5 +1366,87 @@ describe('elite abilities (design.md 16.12)', () => {
     expect(tick(0, -50)).toBe(false); // on cooldown
     w.time = e.lungeReadyAt!;
     expect(tick(0, -50)).toBe(true);
+  });
+});
+
+describe('late waves scale with the player (design.md 16.13)', () => {
+  it('wavePowerMul is 1 before the first fight, scales by (dps/base)^0.5 after, and off during a fight', () => {
+    const w = createWorld(1);
+    expect(wavePowerMul(w)).toBe(1); // no baseline captured yet
+    // Baseline = the no-perk sheet DPS; with the same build the ratio is 1.
+    w.powerBaseDps = sheetDps(w.stats, PERK_RULES.critMultiplier);
+    expect(wavePowerMul(w)).toBeCloseTo(1, 5);
+    // +300% damage is a 4x sheet DPS build, so the factor is 4^0.5 = 2.
+    w.stacks.dmg = 300;
+    w.stats = computeStats(w.stacks);
+    expect(wavePowerMul(w)).toBeCloseTo(2, 2);
+    // The exponent is below 1, so HP grows slower than DPS: time-to-kill still drops as he levels.
+    const dpsRatio = sheetDps(w.stats, PERK_RULES.critMultiplier) / w.powerBaseDps;
+    expect(wavePowerMul(w)).toBeLessThan(dpsRatio);
+    // The arena's adds never scale this way.
+    w.arena = { camX: 0, camY: 0, x0: 0, y0: 0, x1: 1, y1: 1, lockedAt: 0 };
+    expect(wavePowerMul(w)).toBe(1);
+  });
+
+  it('scales a post-5:00 wave enemy HP by the power factor, and not before 5:00', () => {
+    const w = createWorld(7);
+    w.player.hp = w.stats.maxHp = 1e9;
+    // Before the first fight: no baseline, so a wave enemy keeps the plain per-minute HP.
+    let early: Enemy | undefined;
+    for (let i = 0; i < 400 && !early; i++) {
+      step(w, { mx: 0, my: 0 });
+      early = w.enemies.find((e) => !e.veteran && !e.elite && !e.fleeing);
+    }
+    expect(early).toBeTruthy();
+    expect(early!.maxHp).toBeCloseTo(early!.def.hp * (1 + 0.14 * (w.contractTime / 60)), 0);
+
+    // Past the first fight with a 4x build: trash spawns at ~2x the plain HP.
+    const f = createWorld(7);
+    f.target = 1; // first target down; next fight is far off (9:00)
+    f.powerBaseDps = sheetDps(f.stats, PERK_RULES.critMultiplier);
+    f.stacks.dmg = 300;
+    f.stats = computeStats(f.stacks); // 4x sheet DPS -> factor 2
+    f.player.hp = f.stats.maxHp = 1e9;
+    setClock(f, Math.round(400 / DT)); // contract 6:40, between fights
+    let late: Enemy | undefined;
+    let at = 0;
+    for (let i = 0; i < 600 && !late; i++) {
+      if (f.phase !== 'play') {
+        f.phase = 'play';
+        f.pendingLevels = 0;
+      }
+      step(f, { mx: 0, my: 0 });
+      late = f.enemies.find((e) => !e.veteran && !e.elite && !e.fleeing && !e.noScrap);
+      at = f.contractTime;
+    }
+    expect(late).toBeTruthy();
+    const timeOnly = late!.def.hp * (1 + 0.14 * (at / 60));
+    expect(late!.maxHp / timeOnly).toBeCloseTo(2, 1);
+  });
+
+  it('floors a post-5:00 elite HP at eliteDpsSec x sheet DPS', () => {
+    const w = createWorld(9);
+    w.target = 1; // between the first and second fights
+    w.powerBaseDps = 1;
+    w.stacks.dmg = 400;
+    w.stacks.rof = 300;
+    w.stats = computeStats(w.stacks); // a big build, so the DPS floor beats the x20 formula
+    w.player.hp = w.stats.maxHp = 1e9;
+    setClock(w, Math.round(400 / DT));
+    w.nextEliteAt = Math.round(w.contractTime);
+    let e: Enemy | undefined;
+    for (let i = 0; i < 1200 && !e; i++) {
+      if (w.phase !== 'play') {
+        w.phase = 'play';
+        w.pendingLevels = 0;
+      }
+      step(w, { mx: 0, my: 0 });
+      e = w.enemies.find((x) => x.elite);
+    }
+    expect(e).toBeTruthy();
+    const dps = sheetDps(w.stats, PERK_RULES.critMultiplier);
+    const base = e!.def.hp * ELITE.byType[e!.def.id].hp * (1 + 0.14 * (w.contractTime / 60));
+    expect(ELITE.dpsSec * dps).toBeGreaterThan(base); // the floor is the binding one here
+    expect(e!.maxHp).toBeCloseTo(ELITE.dpsSec * dps, 0);
   });
 });

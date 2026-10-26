@@ -42,6 +42,9 @@ export const SCALING = {
   contactPerMinute: 0.03, // contact damage x (1 + 0.03 m), at hit time
   rifleMovePerMinute: 0.05, // move time between shots 2.0 - 0.05 m (design.md 16.4)
   rifleMoveMin: 1.4,
+  // design.md 16.13: from 5:00 on, normal-wave HP also x (sheetDps / sheetDps-at-5:00)^hpPowerExp, so late
+  // waves keep pace with the player's build. Exponent below 1 keeps time-to-kill dropping as he levels.
+  hpPowerExp: 0.5,
 };
 
 /** Veteran variant of any base type (design.md section 5, the old Elite; renamed in 16.12). Spawns in mass, no crates. */
@@ -57,6 +60,9 @@ export const ELITE = {
   everySec: 120,
   size: 1.5,
   scrap: 15,
+  // design.md 16.13: from 5:00 on, an elite's HP is floored at this many seconds of the player's sheet DPS,
+  // so late elites stay multi-second mini-boss fights instead of melting. Early elites keep the x20 formula.
+  dpsSec: 3,
   // Per-type HP, speed and contact multipliers (design.md 16.12, elite abilities, Esteban 2026-10-25).
   byType: {
     grunt: { hp: 20, speed: 0.9, contact: 1.5 },

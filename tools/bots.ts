@@ -211,6 +211,7 @@ export interface FightResult {
   crates: number; // crates opened before his spawn
   kit: Partial<Record<PerkId, number>>; // crate perks at his spawn
   elites: number; // scheduled elites killed before his spawn
+  playerHpPct: number; // the player's HP % when he spawned (design.md 16.13)
 }
 
 export interface RunResult {
@@ -230,6 +231,8 @@ export interface RunResult {
   perks: string;
   cratesOpened: number;
   cratesDropped: number;
+  waveDmgLate: number; // total HP lost to post-5:00 waves (design.md 16.13)
+  waveSecLate: number; // seconds spent in post-5:00 waves (pool these two across runs for a rate)
   stepMsAvg: number;
 }
 
@@ -283,6 +286,7 @@ export function runBot(seed: number, bot: Bot, maxSec = MAX_RUN_SEC): RunResult 
         crates: f.crates,
         kit: f.kit,
         elites: f.elites,
+        playerHpPct: f.playerHpPct,
       };
     }),
     level: w.level,
@@ -292,6 +296,8 @@ export function runBot(seed: number, bot: Bot, maxSec = MAX_RUN_SEC): RunResult 
     peakBullets: w.peakBullets,
     cratesOpened: w.cratesOpened,
     cratesDropped: w.cratesDropped,
+    waveDmgLate: w.waveDamageLate,
+    waveSecLate: w.waveSecLate,
     perks: PERKS.map((d) => `${d.id}${w.stacks[d.id]}`).join(' '),
     stepMsAvg: ms / Math.max(1, w.tick),
   };
