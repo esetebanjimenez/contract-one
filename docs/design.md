@@ -690,3 +690,14 @@ So a high-DPS build still has to *play the mechanic* (it can't facetank and shre
 **Needs:**
 - **Design only for now.** Implementation is a later pass: per-boss kit changes in `src/sim/boss.ts` (Hammer guard + charge cadence, Viper retreat + mine trail, Warlord artillery density and coverage), fixed boss HP in `src/data/boss.ts` replacing §16.14's `stageMulAt`, elites reverted to the §16.13 floor, and enrage softened to an anti-stall net.
 - **Sim:** bots fight the walled arena badly (§16.5) and can't demonstrate dodge skill, so the sim is a **regression guard only** (reach rates hold, idle still dies before 2:00); Esteban's playtest is the arbiter for boss feel. A later telegraph/dodge-success metric could help tune fairness.
+
+**Playtest 2 revisions (Esteban, 2026-10-27).** First playtest of the skill-gate bosses (16:21, level 67, 3/3, a DPS-monster build: +407% damage, +318% fire rate, +100% crit). All three were trivial — the two without a damage gate (Viper, Warlord) melted before their mechanics engaged, and Hammer was a long but toothless sponge. Fixes:
+
+- **HAMMER — more threat, less grind.** Three additions so he demands attention, not just time:
+  - **Slam shockwave** (`BOSS.slam`): a full bullet ring radiating from where each charge stops. Rushing in to punish means clearing the ring first — a spacing beat on the window.
+  - **Phase-3 multi-charge** (`BOSS.multiCharge`): he chains re-aimed charges, so one sidestep isn't enough; the punish window opens only after the last.
+  - **Shield mobs** (`BOSS.shieldAdds`): tanky Heavies (HP × a multiplier) march in from phase 1, splitting the player's focus between the charge and the high-HP enemies (replaces his old phase-3 grunt ring; Heavies already carry shields in the art). HP trimmed (9k→7k) so the guard isn't a grind.
+- **VIPER — actually evasive.** He was stopping at hold distance *inside* gun range and soaking bullets. Now: hold distance wider than the arena so he **always flees** until a wall corners him; a **much smaller hitbox** (radius 26→16); and his **mines laid midway** between him and the player (not behind him), so you cross the minefield to reach him.
+- **THE WARLORD — ramped HP** (20k→45k) so a strong build can't delete him before ARTILLERY CALL (phase 2) even fires.
+
+Still playtest-tuned, and the fixed HP tuned to a strong build raises the floor for weak ones — the skill mechanics (dodge, chase, survive) are meant to carry the fight length, with HP and the 3:00 enrage as backstops. Shield visual for Hammer's armor window (shield up = guarded, down = exposed) is still an art task; `bossVulnerable()` is exposed for it.

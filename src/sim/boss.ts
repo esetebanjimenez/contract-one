@@ -22,6 +22,7 @@ export interface Boss {
   dirY: number;
   chargeLeft: number; // px of dash left
   vulnT: number; // design.md 16.15: seconds left in HAMMER's post-charge vulnerable window (0 = guarded)
+  chargeChain: number; // design.md 16.15: phase-3 charges still to chain after this one (0 = last)
   gap: number; // index of the rotating gap in the bullet ring
   facing: number; // radians
   flash: number;
@@ -119,7 +120,7 @@ export interface BossHost {
   mines: Mine[];
   artillery: ArtilleryCircle[];
   hitPlayer(dmg: number): void;
-  spawnAddsRing(count: number, kind?: 'grunt' | 'runner', angleOffset?: number): void;
+  spawnAddsRing(count: number, kind?: 'grunt' | 'runner' | 'heavy', angleOffset?: number, hpMul?: number): void;
   /** Spawn an explosion effect (damage is applied by the caller). Mines and artillery share the mine blast. */
   addBlast(kind: 'he' | 'frag' | 'mine', x: number, y: number): void;
 }
@@ -147,6 +148,7 @@ export function createBoss(h: BossHost, target = 0, maxHp = BOSSES[target].hp): 
     dirY: 1,
     chargeLeft: 0,
     vulnT: 0,
+    chargeChain: 0,
     gap: 0,
     facing: Math.PI / 2,
     flash: 0,
@@ -202,6 +204,50 @@ function fireRing(b: Boss, h: BossHost): void {
     });
   }
   b.gap = (b.gap + 3) % n; // the gap rotates every ring
+}
+
+/** design.md 16.15: HAMMER's slam — a full ring of bullets radiating from where his charge stops. */
+function slam(b: Boss, h: BossHost): void {
+  const S = BOSS.slam;
+  for (let i = 0; i < S.bullets; i++) {
+    if (h.enemyBullets.length >= CAPS.enemyBullets) break;
+    const a = (i / S.bullets) * Math.PI * 2;
+    h.enemyBullets.push({
+      x: b.x,
+      y: b.y,
+      vx: Math.cos(a) * S.speed,
+      vy: Math.sin(a) * S.speed,
+      rangeLeft: S.range,
+      damage: S.damage * BOSSES[b.target].damageScale,
+      pierceLeft: 0,
+      bounces: 0,
+      hit: [],
+    });
+  }
+}
+
+/**
+ * A charge ends (distance done or into a wall). design.md 16.15: HAMMER slams, and in phase 3 chains a
+ * re-aimed charge if any are left — the punish window opens only after the last. The Warlord just recovers.
+ */
+function endCharge(b: Boss, h: BossHost): void {
+  if (isCharger(b)) slam(b, h);
+  if (isCharger(b) && b.phase === 3 && b.chargeChain > 0) {
+    b.chargeChain--;
+    const p = h.player;
+    const dx = p.x - b.x;
+    const dy = p.y - b.y;
+    const d = Math.hypot(dx, dy) || 1;
+    b.dirX = dx / d;
+    b.dirY = dy / d;
+    b.facing = Math.atan2(dy, dx);
+    b.state = 'telegraph';
+    b.stateT = BOSS.charge.telegraphSec;
+    return;
+  }
+  b.state = 'walk';
+  b.chargeCd = chargeEvery(b);
+  b.vulnT = BOSS.guard.recoverSec; // he overshoots and is exposed — the punish window
 }
 
 function shoot(b: Boss, h: BossHost, angle: number, speed: number, damage: number, range: number): void {
@@ -354,14 +400,17 @@ function gunnerAttacks(b: Boss, h: BossHost, dx: number, dy: number, d: number):
   b.mineCd -= DT;
   if (b.mineCd <= 0) {
     b.mineCd += M.everySec;
-    // A row of mines behind him, across his line to the player.
-    const bx = -dx / d;
-    const by = -dy / d;
+    // design.md 16.15: a row of mines laid midway between him and the player, across the approach lane, so
+    // the player walks through the minefield to reach him.
+    const fx = dx / d;
+    const fy = dy / d;
+    const midX = b.x + dx * 0.5;
+    const midY = b.y + dy * 0.5;
     for (let i = 0; i < M.count; i++) {
       const o = (i - (M.count - 1) / 2) * M.spacingPx;
       h.mines.push({
-        x: b.x + bx * M.behindPx - by * o,
-        y: b.y + by * M.behindPx + bx * o,
+        x: midX - fy * o,
+        y: midY + fx * o,
         age: 0,
         damage: M.damage * BOSSES[b.target].damageScale,
       });
@@ -496,6 +545,8 @@ export function updateBoss(b: Boss, h: BossHost): void {
       }
       if (b.chargeCd <= 0) {
         b.nextCharge = false;
+        // design.md 16.15: HAMMER chains extra charges in phase 3; a single charge otherwise.
+        b.chargeChain = isCharger(b) && b.phase === 3 ? BOSS.multiCharge.chainInPhase3 : 0;
         b.state = 'telegraph';
         b.stateT = BOSS.charge.telegraphSec;
         b.dirX = dx / d;
@@ -521,11 +572,7 @@ export function updateBoss(b: Boss, h: BossHost): void {
       b.y += b.dirY * m;
       b.chargeLeft -= m;
       b.moving = true;
-      if (b.chargeLeft <= 0) {
-        b.state = 'walk';
-        b.chargeCd = chargeEvery(b);
-        b.vulnT = BOSS.guard.recoverSec; // design.md 16.15: he overshoots and is exposed — the punish window
-      }
+      if (b.chargeLeft <= 0) endCharge(b, h);
       break;
     }
   }
@@ -536,10 +583,10 @@ export function updateBoss(b: Boss, h: BossHost): void {
     const cx = Math.min(ar.x1 - r, Math.max(ar.x0 + r, b.x));
     const cy = Math.min(ar.y1 - r, Math.max(ar.y0 + r, b.y));
     if ((cx !== b.x || cy !== b.y) && b.state === 'charge') {
-      b.state = 'walk';
+      b.x = cx;
+      b.y = cy;
       b.chargeLeft = 0;
-      b.chargeCd = chargeEvery(b);
-      b.vulnT = BOSS.guard.recoverSec; // design.md 16.15: a charge into a wall leaves him exposed too
+      endCharge(b, h); // design.md 16.15: a charge into a wall slams and recovers (or chains) here too
     }
     b.x = cx;
     b.y = cy;
@@ -583,11 +630,13 @@ export function updateBoss(b: Boss, h: BossHost): void {
         fireRing(b, h);
       }
     }
-    if (b.phase === 3) {
+    // design.md 16.15: HAMMER's shield mobs — tanky Heavies closing in, so the player splits focus between
+    // the charge and the high-HP enemies. Replaces his old phase-3 grunt ring.
+    if (b.phase >= BOSS.shieldAdds.fromPhase) {
       b.addsCd -= DT;
       if (b.addsCd <= 0) {
-        b.addsCd += BOSS.phase3.addsEverySec;
-        h.spawnAddsRing(BOSS.phase3.adds);
+        b.addsCd += BOSS.shieldAdds.everySec;
+        h.spawnAddsRing(BOSS.shieldAdds.count, 'heavy', 0, BOSS.shieldAdds.hpMul);
       }
     }
   }
