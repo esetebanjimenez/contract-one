@@ -1177,13 +1177,18 @@ function bossHost(w: World): BossHost {
     artillery: w.artillery,
     hitPlayer: (dmg) => damagePlayer(w, dmg),
     addBlast: (kind, x, y) => addBlast(w, kind, x, y),
-    spawnAddsRing: (count, kind = 'grunt', angleOffset = 0) => {
+    spawnAddsRing: (count, kind = 'grunt', angleOffset = 0, hpMul = 1) => {
       const def = ENEMIES[kind];
       for (let i = 0; i < count; i++) {
         const ang = (i / count) * Math.PI * 2 + angleOffset;
         const e = spawnOne(w, ang, true, def);
         if (!e) continue;
         e.noScrap = true;
+        // design.md 16.15: HAMMER's shield mobs spawn tanky (hpMul) so they persist and split the player's focus.
+        if (hpMul !== 1) {
+          e.hp *= hpMul;
+          e.maxHp *= hpMul;
+        }
         if (w.arena) {
           // Evenly spaced just outside the arena edges, walking in.
           const pt = arenaEdgePoint(w.arena, ang, def.radius + RUN.arenaBandPx);

@@ -15,9 +15,9 @@ export interface Target {
 // windows" — the same wall for every build and level, player-independent. It no longer rides sheet DPS
 // (§16.5) or a contract-stage schedule (§16.14, retired). The main playtest lever for each fight's length.
 export const BOSSES: Target[] = [
-  { name: 'LT. HAMMER', atSec: 300, hp: 9000, damageScale: 1, final: false, style: 'charger', radius: 30 },
-  { name: 'LT. VIPER', atSec: 540, hp: 13000, damageScale: 1.25, final: false, style: 'gunner', radius: 26 },
-  { name: 'THE WARLORD', atSec: 780, hp: 20000, damageScale: 1.5, final: true, style: 'warlord', radius: 40 }, // 128x128
+  { name: 'LT. HAMMER', atSec: 300, hp: 7000, damageScale: 1, final: false, style: 'charger', radius: 30 },
+  { name: 'LT. VIPER', atSec: 540, hp: 13000, damageScale: 1.25, final: false, style: 'gunner', radius: 16 }, // small, evasive (16.15)
+  { name: 'THE WARLORD', atSec: 780, hp: 45000, damageScale: 1.5, final: true, style: 'warlord', radius: 40 }, // 128x128
 ];
 
 /**
@@ -58,9 +58,10 @@ export const WARLORD = {
  * scale; contact damage 25 is the spec's number as written. Phase rules, stagger and walls as 14.3/14.9.
  */
 export const VIPER = {
-  // design.md 16.15: the sniper keeps his distance and snipes — a big hold so the player has to chase him
-  // down. He can't kite through a wall, so the skill is cornering him through his own mine trail.
-  holdPx: 240, // keeps about this far from the player
+  // design.md 16.15 (playtest 2): the sniper always backs off — a hold wider than the arena, so he keeps
+  // fleeing until a wall corners him instead of stopping inside gun range to soak bullets. The skill is
+  // chasing and cornering him through his own mine trail.
+  holdPx: 520, // keeps about this far from the player (always flees in practice)
   holdSlackPx: 15, // stands still within holdPx +/- this
   speed: 45,
   contactDamage: 25,
@@ -68,10 +69,10 @@ export const VIPER = {
   burst: { firstAfterSec: 1, everySec: 2.5, trackSec: 0.6, lockSec: 0.2, bullets: 3, shotGapSec: 0.08, speed: 160, damage: 12, range: 700 },
   // Phase 2+: a fan toward the player, alternating with the burst (never fired while a burst is aiming or firing).
   fan: { everySec: 4, firstAfterSec: 2, bullets: 7, spreadDeg: 60, speed: 100, damage: 12, range: 700 },
-  // design.md 16.15: a mine trail dropped behind him as he backs off, from phase 1 (not just phase 3), so
-  // the player can't walk a straight line at him. Mines sit wider apart than the trigger, so stepping on
-  // one sets off only that one. Phase 3 also brings Runners from the arena edges with no Scrap.
-  mines: { everySec: 6, count: 3, behindPx: 24, spacingPx: 36, armSec: 1, triggerPx: 30, radiusPx: 30, damage: 25, fuseSec: 10 },
+  // design.md 16.15 (playtest 2): a mine trail laid midway between him and the player (not just behind him),
+  // from phase 1, so the player walks through the minefield to reach him. Mines sit wider apart than the
+  // trigger, so stepping on one sets off only that one. Phase 3 also brings Runners from the edges, no Scrap.
+  mines: { everySec: 6, count: 3, spacingPx: 36, armSec: 1, triggerPx: 30, radiusPx: 30, damage: 25, fuseSec: 10 },
   adds: { count: 8, everySec: 8 },
 };
 
@@ -101,7 +102,16 @@ export const BOSS = {
   // and full damage during the `recoverSec` window after a charge ends (he overshoots and is exposed). So
   // you earn damage by surviving a charge and punishing the recovery; reduced-not-immune keeps a weak build
   // chipping and never makes the fight a hard DPS wall. Not applied to the gunner or the Warlord.
-  guard: { mul: 0.25, recoverSec: 1.2 },
+  guard: { mul: 0.25, recoverSec: 1.5 },
+  // design.md 16.15 (playtest 2): a shockwave ring at each charge impact, radiating from where HAMMER stops.
+  // Rushing in to punish means clearing the ring first — a spacing beat on the window. HAMMER only.
+  slam: { bullets: 18, speed: 160, damage: 16, range: 140 },
+  // design.md 16.15 (playtest 2): HAMMER spawns tanky Heavies (shield mobs) from this phase, so the player
+  // must split focus between dodging his charge and the high-HP enemies closing in. HAMMER only.
+  shieldAdds: { fromPhase: 1 as 1 | 2 | 3, everySec: 5, count: 2, hpMul: 12 },
+  // design.md 16.15 (playtest 2): in phase 3 HAMMER chains this many extra re-aimed charges, so one sidestep
+  // isn't enough; the punish window opens only after the whole chain. HAMMER only.
+  multiCharge: { chainInPhase3: 2 },
   phase2Below: 0.66,
   phase3Below: 0.33,
   phase3: { adds: 12, addsEverySec: 8, ringEverySec: 2, chargeEverySec: 2.5 },

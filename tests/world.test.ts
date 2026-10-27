@@ -745,14 +745,15 @@ describe('LT. VIPER (design.md 16.11)', () => {
       updateBoss(b, h);
     }
   };
-  it('holds about 160 px off, walking in when far and backing off when the player closes in', () => {
+  it('always backs off from the player (design.md 16.15): his hold is wider than the arena', () => {
     const h = host();
-    const far = viper(h, -300);
-    tick(far, h, 5);
-    expect(Math.abs(Math.hypot(far.x, far.y) - VIPER.holdPx)).toBeLessThanOrEqual(VIPER.holdSlackPx + 1);
-    const near = viper(h, -60);
-    tick(near, h, 5);
-    expect(Math.abs(Math.hypot(near.x, near.y) - VIPER.holdPx)).toBeLessThanOrEqual(VIPER.holdSlackPx + 1);
+    const b = viper(h, -120); // starts 120 px from the player, well inside the hold
+    const d0 = Math.hypot(b.x, b.y);
+    tick(b, h, 3);
+    const d1 = Math.hypot(b.x, b.y);
+    expect(d1).toBeGreaterThan(d0); // he fled, instead of settling in gun range
+    tick(b, h, 3);
+    expect(Math.hypot(b.x, b.y)).toBeGreaterThan(d1); // and keeps fleeing (no arena wall to corner him here)
   });
   it('tracks for 0.6 s, locks for 0.2 s, then fires 3 bullets down the locked line', () => {
     const h = host();
@@ -794,7 +795,7 @@ describe('LT. VIPER (design.md 16.11)', () => {
     tick(b, h, 0.3);
     expect(h.enemyBullets.length).toBe(0);
   });
-  it('drops 3 mines behind him in phase 3 that arm after 1 s and blow up on the player', () => {
+  it('lays 3 mines midway to the player in phase 3 that arm after 1 s and blow up on him', () => {
     const h = host();
     const b = viper(h);
     b.phase = 3;
@@ -803,11 +804,12 @@ describe('LT. VIPER (design.md 16.11)', () => {
     tick(b, h, DT);
     expect(h.mines.length).toBe(VIPER.mines.count);
     expect(h.adds).toEqual([[VIPER.adds.count, 'runner']]);
-    for (const m of h.mines) expect(Math.hypot(m.x, m.y)).toBeGreaterThan(Math.hypot(b.x, b.y)); // behind him
+    for (const m of h.mines) expect(Math.hypot(m.x, m.y)).toBeLessThan(Math.hypot(b.x, b.y)); // midway: nearer the player than him
     const m = h.mines[1];
     h.player.x = m.x;
     h.player.y = m.y;
     b.x = 500; // keep his body out of the way
+    b.mineCd = 999; // don't lay a fresh row while we wait on this one
     tick(b, h, 0.5);
     expect(h.hits.length).toBe(0); // not armed yet
     tick(b, h, 0.6);
@@ -840,7 +842,11 @@ describe('LT. VIPER (design.md 16.11)', () => {
     expect(w.boss!.damageable).toBe(true);
     w.mines.push({ x: w.player.x + 999, y: w.player.y, age: 0, damage: 1 });
     w.boss!.hp = 1;
-    for (let i = 0; i < 600 && w.targetsDown < 2; i++) step(w, { mx: 0, my: 0 });
+    // VIPER now flees out of a stationary player's range (design.md 16.15), so chase him to land the shot.
+    for (let i = 0; i < 600 && w.targetsDown < 2; i++) {
+      const b = w.boss;
+      step(w, { mx: b ? Math.sign(b.x - w.player.x) : 0, my: b ? Math.sign(b.y - w.player.y) : 0 });
+    }
     expect(w.targetsDown).toBe(2);
     expect(w.mines.length).toBe(0);
   });
@@ -897,7 +903,7 @@ describe('THE WARLORD (design.md 16.11)', () => {
     const h = host();
     expect(bossRadius(warlord(h))).toBe(40);
     expect(bossRadius(createBoss(h, 0))).toBe(30);
-    expect(bossRadius(createBoss(h, 1))).toBe(26);
+    expect(bossRadius(createBoss(h, 1))).toBe(16); // VIPER is small and evasive (design.md 16.15)
   });
   it('takes turns between the charge and the aimed burst, one every 3 s', () => {
     const h = host();
@@ -1501,9 +1507,12 @@ describe('bosses are skill gates (design.md 16.15)', () => {
       arena: null as BossHost['arena'],
       mines: [] as Mine[],
       artillery: [] as ArtilleryCircle[],
+      adds: [] as [number, string | undefined, number | undefined][],
       hitPlayer() {},
       addBlast() {},
-      spawnAddsRing() {},
+      spawnAddsRing(count: number, kind?: string, _ang?: number, hpMul?: number) {
+        h.adds.push([count, kind, hpMul]);
+      },
     };
     return h;
   };
@@ -1538,5 +1547,65 @@ describe('bosses are skill gates (design.md 16.15)', () => {
     expect(b.state).toBe('walk');
     expect(b.vulnT).toBeGreaterThan(0); // the punish window is now open
     expect(bossDamageMul(b)).toBe(1);
+  });
+
+  it('fires a slam shockwave ring when a HAMMER charge ends (playtest 2, design.md 16.15)', () => {
+    const h = host();
+    const b = createBoss(h, 0);
+    b.damageable = true;
+    b.state = 'charge';
+    b.chargeLeft = 1;
+    b.dirX = 0;
+    b.dirY = 1;
+    b.phase = 1;
+    updateBoss(b, h);
+    expect(h.enemyBullets.length).toBe(BOSS.slam.bullets); // a full ring from his stop point
+    for (const s of h.enemyBullets) expect(Math.hypot(s.vx, s.vy)).toBeCloseTo(BOSS.slam.speed, 5);
+    // The Warlord, who reuses the charge, does not slam.
+    const h2 = host();
+    const w = createBoss(h2, 2);
+    w.damageable = true;
+    w.state = 'charge';
+    w.chargeLeft = 1;
+    w.dirX = 0;
+    w.dirY = 1;
+    updateBoss(w, h2);
+    expect(h2.enemyBullets.length).toBe(0);
+  });
+
+  it('chains phase-3 charges and only opens the window after the last (playtest 2, design.md 16.15)', () => {
+    const h = host();
+    const b = createBoss(h, 0);
+    b.damageable = true;
+    b.phase = 3;
+    b.state = 'charge';
+    b.chargeLeft = 1;
+    b.dirX = 0;
+    b.dirY = 1;
+    b.chargeChain = 1; // one more charge to chain
+    updateBoss(b, h);
+    expect(b.state).toBe('telegraph'); // straight into the next charge, no walk
+    expect(b.chargeChain).toBe(0);
+    expect(b.vulnT).toBe(0); // still guarded — the window waits for the last charge
+    // Finish the chained charge: now it recovers and the window opens.
+    b.state = 'charge';
+    b.chargeLeft = 1;
+    updateBoss(b, h);
+    expect(b.state).toBe('walk');
+    expect(b.vulnT).toBeGreaterThan(0);
+  });
+
+  it('spawns tanky Heavy shield mobs for HAMMER from phase 1 (playtest 2, design.md 16.15)', () => {
+    const h = host();
+    const b = createBoss(h, 0);
+    b.damageable = true;
+    b.state = 'walk';
+    b.phase = 1;
+    b.addsCd = 0;
+    updateBoss(b, h);
+    const heavy = h.adds.find((a) => a[1] === 'heavy');
+    expect(heavy).toBeTruthy();
+    expect(heavy![0]).toBe(BOSS.shieldAdds.count);
+    expect(heavy![2]).toBe(BOSS.shieldAdds.hpMul); // spawned tanky
   });
 });
