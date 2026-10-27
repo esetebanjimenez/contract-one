@@ -194,7 +194,8 @@ const PRIORITY: PerkId[] = [
 
 // cc: a crowd-clear build. It loads the perks that only help a crowd (ricochet chains, multishot spread)
 // plus fire rate to feed them, and skimps on the per-hit single-target multipliers (damage, crit). Shows
-// the §16.14 asymmetry: it clears waves fast (so it levels fast) but grinds against a single boss.
+// the skill-gate boss fights (§16.15): it clears waves fast but, with low single-target damage and no
+// dodge skill in the bot, grinds against a single boss.
 const PRIORITY_CC: PerkId[] = [
   'ricochet',
   'multishot',

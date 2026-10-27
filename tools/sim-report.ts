@@ -85,7 +85,7 @@ for (const bot of bots) {
       ? check(within(sec, t.sec), fmt(sec), `kite-smart median ${b.name} fight ${fmt(sec)}; target ${range(t.sec, fmt)} (§16.11)`)
       : fmt(sec);
     // Only the reference bot has an enrage target; cc is a crowd-clear build and is meant to grind to
-    // enrage at bosses it can't out-DPS (design.md 16.14), so its enrage reads as data, not a warning.
+    // enrage at bosses it can't out-DPS (design.md 16.15), so its enrage reads as data, not a warning.
     const enrCell = smart
       ? check(enr < ENRAGE_MAX, `${enr}%`, `kite-smart enrages in ${enr}% of ${b.name} fights; target under ${ENRAGE_MAX}% (§16.11)`)
       : `${enr}%`;

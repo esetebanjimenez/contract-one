@@ -21,6 +21,7 @@ export interface Boss {
   dirX: number; // locked charge direction
   dirY: number;
   chargeLeft: number; // px of dash left
+  vulnT: number; // design.md 16.15: seconds left in HAMMER's post-charge vulnerable window (0 = guarded)
   gap: number; // index of the rotating gap in the bullet ring
   facing: number; // radians
   flash: number;
@@ -72,6 +73,24 @@ function isWarlord(b: Boss): boolean {
   return BOSSES[b.target].style === 'warlord';
 }
 
+function isCharger(b: Boss): boolean {
+  return BOSSES[b.target].style === 'charger';
+}
+
+/**
+ * design.md 16.15: HAMMER's armor window. The charger takes `BOSS.guard.mul` of all damage while guarded,
+ * and full damage during his post-charge vulnerable window (`vulnT > 0`). Every other boss takes full
+ * damage always (VIPER is a positional gate, the Warlord a survival gate — neither is armored).
+ */
+export function bossDamageMul(b: Boss): number {
+  return isCharger(b) && b.vulnT <= 0 ? BOSS.guard.mul : 1;
+}
+
+/** design.md 16.15: true while the charger is in his punishable window (for the render hit-flash / tell). */
+export function bossVulnerable(b: Boss): boolean {
+  return isCharger(b) && b.vulnT > 0;
+}
+
 /** His body and hit radius (design.md 16.11: the Warlord's bigger sprite gets a bigger body). */
 export function bossRadius(b: Boss): number {
   return BOSSES[b.target].radius;
@@ -108,8 +127,8 @@ export interface BossHost {
 const HALF_W = NATIVE_WIDTH / 2;
 const HALF_H = MAX_VIEW_HEIGHT / 2;
 
-// design.md 16.14: HP is set by the caller from the level lever (BOSSES[target].baseHp at the first fight).
-export function createBoss(h: BossHost, target = 0, maxHp = BOSSES[target].baseHp): Boss {
+// design.md 16.15: HP is the target's fixed skill-gate number (BOSSES[target].hp), the same for every build.
+export function createBoss(h: BossHost, target = 0, maxHp = BOSSES[target].hp): Boss {
   const hp = Math.max(BOSS.hpMin, Math.round(maxHp));
   return {
     target,
@@ -127,6 +146,7 @@ export function createBoss(h: BossHost, target = 0, maxHp = BOSSES[target].baseH
     dirX: 0,
     dirY: 1,
     chargeLeft: 0,
+    vulnT: 0,
     gap: 0,
     facing: Math.PI / 2,
     flash: 0,
@@ -329,24 +349,25 @@ function gunnerAttacks(b: Boss, h: BossHost, dx: number, dy: number, d: number):
   }
   tickBurst(b, h, dx, dy, d);
   if (b.phase >= 2) tickFan(b, h, dx, dy);
-  if (b.phase === 3) {
-    const M = VIPER.mines;
-    b.mineCd -= DT;
-    if (b.mineCd <= 0) {
-      b.mineCd += M.everySec;
-      // A row of mines behind him, across his line to the player.
-      const bx = -dx / d;
-      const by = -dy / d;
-      for (let i = 0; i < M.count; i++) {
-        const o = (i - (M.count - 1) / 2) * M.spacingPx;
-        h.mines.push({
-          x: b.x + bx * M.behindPx - by * o,
-          y: b.y + by * M.behindPx + bx * o,
-          age: 0,
-          damage: M.damage * BOSSES[b.target].damageScale,
-        });
-      }
+  // design.md 16.15: the mine trail runs from phase 1, so the player can't walk a straight line at him.
+  const M = VIPER.mines;
+  b.mineCd -= DT;
+  if (b.mineCd <= 0) {
+    b.mineCd += M.everySec;
+    // A row of mines behind him, across his line to the player.
+    const bx = -dx / d;
+    const by = -dy / d;
+    for (let i = 0; i < M.count; i++) {
+      const o = (i - (M.count - 1) / 2) * M.spacingPx;
+      h.mines.push({
+        x: b.x + bx * M.behindPx - by * o,
+        y: b.y + by * M.behindPx + bx * o,
+        age: 0,
+        damage: M.damage * BOSSES[b.target].damageScale,
+      });
     }
+  }
+  if (b.phase === 3) {
     b.addsCd -= DT;
     if (b.addsCd <= 0) {
       b.addsCd += VIPER.adds.everySec;
@@ -402,6 +423,7 @@ export function updateBoss(b: Boss, h: BossHost): void {
   const dy = p.y - b.y;
   const d = Math.hypot(dx, dy) || 1;
   if (b.flash > 0) b.flash -= DT;
+  if (b.vulnT > 0) b.vulnT -= DT;
   const gunner = isGunner(b);
   const warlord = isWarlord(b);
   const r = bossRadius(b);
@@ -502,6 +524,7 @@ export function updateBoss(b: Boss, h: BossHost): void {
       if (b.chargeLeft <= 0) {
         b.state = 'walk';
         b.chargeCd = chargeEvery(b);
+        b.vulnT = BOSS.guard.recoverSec; // design.md 16.15: he overshoots and is exposed — the punish window
       }
       break;
     }
@@ -516,6 +539,7 @@ export function updateBoss(b: Boss, h: BossHost): void {
       b.state = 'walk';
       b.chargeLeft = 0;
       b.chargeCd = chargeEvery(b);
+      b.vulnT = BOSS.guard.recoverSec; // design.md 16.15: a charge into a wall leaves him exposed too
     }
     b.x = cx;
     b.y = cy;
