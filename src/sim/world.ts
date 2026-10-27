@@ -11,7 +11,17 @@ import { PLAYER } from '../data/player';
 import { CAPS, DT, GRID_CELL, SEPARATION } from '../data/sim';
 import { RUN } from '../data/run';
 import { SPAWN, SPAWN_BANDS } from '../data/spawns';
-import { bossRadius, checkPhase, createBoss, updateBoss, type ArtilleryCircle, type Boss, type BossHost, type Mine } from './boss';
+import {
+  bossDamageMul,
+  bossRadius,
+  checkPhase,
+  createBoss,
+  updateBoss,
+  type ArtilleryCircle,
+  type Boss,
+  type BossHost,
+  type Mine,
+} from './boss';
 import { SpatialGrid } from './grid';
 import { computeStats, drawCrateOffer, drawOffer, emptyStacks, type Offer, type PerkStacks, type PlayerStats } from './perks';
 import { createRng } from './rng';
@@ -160,7 +170,7 @@ export interface World {
   artillery: ArtilleryCircle[]; // THE WARLORD's ARTILLERY CALL circles (design.md 16.11)
   pickups: Pickup[];
   crates: Crate[];
-  powerBaseDps: number; // the player's sheet DPS at the first target (design.md 16.13); 0 before it spawns
+  powerBaseLevel: number; // the player's level at the first target (design.md 16.13); 0 before it spawns
   waveDamageLate: number; // HP the player has lost to waves (not fights) from 5:00 on (sim metric, 16.13)
   waveSecLate: number; // seconds spent in post-5:00 waves (not in a fight), for the damage-per-minute metric
   nextEliteAt: number; // contract time of the next scheduled elite (design.md 16.12)
@@ -227,7 +237,7 @@ export function createWorld(seed: number): World {
     artillery: [],
     pickups: [],
     crates: [],
-    powerBaseDps: 0,
+    powerBaseLevel: 0,
     waveDamageLate: 0,
     waveSecLate: 0,
     nextEliteAt: ELITE.firstSec,
@@ -292,14 +302,13 @@ export function bandAt(t: number) {
 }
 
 /**
- * design.md 16.13: the HP factor for normal waves once the player has passed the first target. It is
- * max(1, (sheetDps now / sheetDps at 5:00) ^ hpPowerExp), so late waves keep pace with the build. 1 before
- * the first fight and during a fight (the arena's adds never scale this way).
+ * design.md 16.13: the HP factor for normal waves once the player has passed the first target.
+ * max(1, 1 + hpPerLevel x levels gained since 5:00), keyed off level so every perk (crowd-clear included)
+ * counts. 1 before the first fight and during a fight (the arena's adds never scale this way).
  */
 export function wavePowerMul(w: World): number {
-  if (w.arena || w.powerBaseDps <= 0) return 1;
-  const ratio = sheetDps(w.stats, PERK_RULES.critMultiplier) / w.powerBaseDps;
-  return Math.max(1, Math.pow(ratio, SCALING.hpPowerExp));
+  if (w.arena || w.powerBaseLevel <= 0) return 1;
+  return Math.max(1, 1 + SCALING.hpPerLevel * (w.level - w.powerBaseLevel));
 }
 
 function weighted<K extends string>(w: World, weights: Record<K, number>, exclude: K[] = []): K {
@@ -370,7 +379,8 @@ function spawnElite(w: World): Enemy {
   const def = eliteDef(regularType(w, riflemenAlive(w) >= SPAWN.maxRiflemen));
   const p = edgePoint(w, w.rng() * Math.PI * 2);
   const base = def.hp * ELITE.byType[def.id].hp * (1 + SCALING.hpPerMinute * (w.contractTime / 60));
-  // From 5:00 on, floor the elite's HP at a few seconds of the player's sheet DPS (design.md 16.13).
+  // From 5:00 on, floor the elite's HP at a few seconds of the player's sheet DPS (design.md 16.13), so a
+  // late elite stays a single-target mini-boss fight instead of melting. Early elites keep the x20 formula.
   const dpsFloor = w.contractTime >= BOSSES[0].atSec ? ELITE.dpsSec * sheetDps(w.stats, PERK_RULES.critMultiplier) : 0;
   const maxHp = Math.max(base, dpsFloor);
   const e: Enemy = {
@@ -637,7 +647,8 @@ function addBlast(w: World, kind: Blast['kind'], x: number, y: number): void {
 function damageBoss(w: World, dmg: number, crit: boolean): void {
   const wb = w.boss;
   if (!wb || !wb.damageable || wb.hp <= 0 || w.won) return;
-  const d = Math.min(wb.hp, dmg);
+  // design.md 16.15: HAMMER's armor window — reduced damage while guarded, full in his punish window.
+  const d = Math.min(wb.hp, dmg * bossDamageMul(wb));
   addDamageNumber(w, BOSS_KEY, wb.x, wb.y - bossRadius(wb) - DAMAGE_NUMBERS.abovePx, d, crit);
   wb.hp -= d;
   w.bossDamage += d;
@@ -1232,9 +1243,10 @@ function updateWarlord(w: World): void {
   if (w.won) return;
   const a = w.arena;
   if (!w.boss && a && w.time >= a.lockedAt + RUN.warningSec) {
+    // The player's level at the first target is the baseline the waves scale from (design.md 16.13).
+    if (w.powerBaseLevel <= 0) w.powerBaseLevel = w.level;
+    // Boss HP is the target's fixed skill-gate number (design.md 16.15), the same for every build.
     w.boss = createBoss(bossHost(w), w.target);
-    // The player's sheet DPS at the first target is the baseline that paces the later waves (design.md 16.13).
-    if (w.powerBaseDps <= 0) w.powerBaseDps = sheetDps(w.stats, PERK_RULES.critMultiplier);
     const kit = Object.fromEntries(CRATE_PERKS.map((id) => [id, w.stacks[id]]));
     w.fights.push({
       target: w.target,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ELITE, ENEMIES } from '../src/data/enemies';
+import { ELITE, ENEMIES, SCALING } from '../src/data/enemies';
 import { scrapForLevel } from '../src/data/levels';
 import { CAPS, DT } from '../src/data/sim';
 import { SPAWN } from '../src/data/spawns';
@@ -9,7 +9,17 @@ import { createRng } from '../src/sim/rng';
 import { BOSS, BOSSES, LIEUTENANT_DOWN, VIPER, WARLORD, bossHp, sheetDps } from '../src/data/boss';
 import { PLAYER } from '../src/data/player';
 import { NATIVE_WIDTH } from '../src/data/display';
-import { bossRadius, checkPhase, createBoss, updateBoss, type ArtilleryCircle, type Boss, type BossHost, type Mine } from '../src/sim/boss';
+import {
+  bossDamageMul,
+  bossRadius,
+  checkPhase,
+  createBoss,
+  updateBoss,
+  type ArtilleryCircle,
+  type Boss,
+  type BossHost,
+  type Mine,
+} from '../src/sim/boss';
 import {
   choosePerk,
   createWorld,
@@ -682,13 +692,13 @@ describe('three targets (design.md 16.11)', () => {
     const end = cameraAt(w, w.viewH);
     expect(end.x).toBeCloseTo(w.player.x - NATIVE_WIDTH / 2, 5);
   });
-  it('sends LT. VIPER at contract 9:00 with 50x sheet DPS', () => {
+  it('sends LT. VIPER at contract 9:00 with his fixed skill-gate HP (design.md 16.15)', () => {
     const w = godMode(9);
     toFight(w, 1);
     run(w, 10);
     expect(w.boss).not.toBeNull();
     expect(w.boss!.target).toBe(1);
-    expect(w.boss!.maxHp).toBe(bossHp(w.stats, w.stats.crit, BOSSES[1].hpDpsSec));
+    expect(w.boss!.maxHp).toBe(BOSSES[1].hp);
     expect(w.fights.at(-1)!.target).toBe(1);
   });
 });
@@ -808,6 +818,7 @@ describe('LT. VIPER (design.md 16.11)', () => {
     const h = host();
     h.mines.push({ x: 300, y: 300, age: 0, damage: 1 });
     const b = viper(h);
+    b.mineCd = 999; // isolate the one planted mine from his own phase-1 trail (design.md 16.15)
     tick(b, h, VIPER.mines.fuseSec - 0.1);
     expect(h.mines.length).toBe(1);
     tick(b, h, 0.2);
@@ -1370,25 +1381,20 @@ describe('elite abilities (design.md 16.12)', () => {
 });
 
 describe('late waves scale with the player (design.md 16.13)', () => {
-  it('wavePowerMul is 1 before the first fight, scales by (dps/base)^0.5 after, and off during a fight', () => {
+  it('wavePowerMul is 1 before the first fight, grows per level gained after 5:00, and is off during a fight', () => {
     const w = createWorld(1);
     expect(wavePowerMul(w)).toBe(1); // no baseline captured yet
-    // Baseline = the no-perk sheet DPS; with the same build the ratio is 1.
-    w.powerBaseDps = sheetDps(w.stats, PERK_RULES.critMultiplier);
+    w.powerBaseLevel = w.level; // baseline at the first target; same level -> factor 1
     expect(wavePowerMul(w)).toBeCloseTo(1, 5);
-    // +300% damage is a 4x sheet DPS build, so the factor is 4^0.5 = 2.
-    w.stacks.dmg = 300;
-    w.stats = computeStats(w.stacks);
-    expect(wavePowerMul(w)).toBeCloseTo(2, 2);
-    // The exponent is below 1, so HP grows slower than DPS: time-to-kill still drops as he levels.
-    const dpsRatio = sheetDps(w.stats, PERK_RULES.critMultiplier) / w.powerBaseDps;
-    expect(wavePowerMul(w)).toBeLessThan(dpsRatio);
+    // 10 levels gained after 5:00 -> 1 + hpPerLevel x 10.
+    w.level += 10;
+    expect(wavePowerMul(w)).toBeCloseTo(1 + SCALING.hpPerLevel * 10, 5);
     // The arena's adds never scale this way.
     w.arena = { camX: 0, camY: 0, x0: 0, y0: 0, x1: 1, y1: 1, lockedAt: 0 };
     expect(wavePowerMul(w)).toBe(1);
   });
 
-  it('scales a post-5:00 wave enemy HP by the power factor, and not before 5:00', () => {
+  it('scales a post-5:00 wave enemy HP by the level factor, and not before 5:00', () => {
     const w = createWorld(7);
     w.player.hp = w.stats.maxHp = 1e9;
     // Before the first fight: no baseline, so a wave enemy keeps the plain per-minute HP.
@@ -1400,12 +1406,11 @@ describe('late waves scale with the player (design.md 16.13)', () => {
     expect(early).toBeTruthy();
     expect(early!.maxHp).toBeCloseTo(early!.def.hp * (1 + 0.14 * (w.contractTime / 60)), 0);
 
-    // Past the first fight with a 4x build: trash spawns at ~2x the plain HP.
+    // Past the first fight, 20 levels gained: trash spawns at (1 + hpPerLevel x 20) the plain HP.
     const f = createWorld(7);
     f.target = 1; // first target down; next fight is far off (9:00)
-    f.powerBaseDps = sheetDps(f.stats, PERK_RULES.critMultiplier);
-    f.stacks.dmg = 300;
-    f.stats = computeStats(f.stacks); // 4x sheet DPS -> factor 2
+    f.powerBaseLevel = f.level;
+    f.level += 20;
     f.player.hp = f.stats.maxHp = 1e9;
     setClock(f, Math.round(400 / DT)); // contract 6:40, between fights
     let late: Enemy | undefined;
@@ -1421,13 +1426,13 @@ describe('late waves scale with the player (design.md 16.13)', () => {
     }
     expect(late).toBeTruthy();
     const timeOnly = late!.def.hp * (1 + 0.14 * (at / 60));
-    expect(late!.maxHp / timeOnly).toBeCloseTo(2, 1);
+    expect(late!.maxHp / timeOnly).toBeCloseTo(1 + SCALING.hpPerLevel * 20, 1);
   });
 
-  it('floors a post-5:00 elite HP at eliteDpsSec x sheet DPS', () => {
+  it('floors a post-5:00 elite HP at eliteDpsSec x sheet DPS (design.md 16.13)', () => {
     const w = createWorld(9);
     w.target = 1; // between the first and second fights
-    w.powerBaseDps = 1;
+    w.powerBaseLevel = 1;
     w.stacks.dmg = 400;
     w.stacks.rof = 300;
     w.stats = computeStats(w.stacks); // a big build, so the DPS floor beats the x20 formula
@@ -1448,5 +1453,90 @@ describe('late waves scale with the player (design.md 16.13)', () => {
     const base = e!.def.hp * ELITE.byType[e!.def.id].hp * (1 + 0.14 * (w.contractTime / 60));
     expect(ELITE.dpsSec * dps).toBeGreaterThan(base); // the floor is the binding one here
     expect(e!.maxHp).toBeCloseTo(ELITE.dpsSec * dps, 0);
+  });
+});
+
+describe('bosses are skill gates (design.md 16.15)', () => {
+  const bossHpFor = (build: (w: World) => void): number => {
+    const w = createWorld(5);
+    w.player.hp = w.stats.maxHp = 1e9;
+    w.level = 30; // forced level, to prove HP is independent of it too
+    build(w);
+    toFight(w, 0);
+    for (let i = 0; i < 20 * 60 && !w.boss; i++) {
+      if (w.phase !== 'play') {
+        w.phase = 'play';
+        w.pendingLevels = 0;
+      }
+      step(w, { mx: 0, my: 0 });
+    }
+    return w.boss!.maxHp;
+  };
+
+  it('gives every build the same fixed boss HP (no DPS or level coupling)', () => {
+    // The boss is a skill gate, not a DPS check: its HP is a fixed number, the same wall for a DPS build,
+    // a crowd-clear build and any level. Single-target damage and skill decide the fight, not a scaled HP.
+    const dps = bossHpFor((w) => {
+      w.stacks.dmg = 500;
+      w.stacks.rof = 400;
+      w.stats = computeStats(w.stacks);
+    });
+    const cc = bossHpFor((w) => {
+      w.stacks.ricochet = 7;
+      w.stacks.multishot = 5;
+      w.stats = computeStats(w.stacks);
+    });
+    expect(dps).toBe(cc);
+    expect(dps).toBe(BOSSES[0].hp); // LT. HAMMER's fixed HP
+  });
+
+  const host = () => {
+    const h = {
+      time: 0,
+      level: 10,
+      stats: { damage: 10, fireRate: 5, projectiles: 1, crit: 0 },
+      player: { x: 0, y: 1000 }, // well away, so the boss just walks and never contacts
+      rng: createRng(99),
+      enemyBullets: [] as BossHost['enemyBullets'],
+      arena: null as BossHost['arena'],
+      mines: [] as Mine[],
+      artillery: [] as ArtilleryCircle[],
+      hitPlayer() {},
+      addBlast() {},
+      spawnAddsRing() {},
+    };
+    return h;
+  };
+
+  it('armors HAMMER except in his post-charge window; VIPER and the Warlord are never armored', () => {
+    // A charger (LT. HAMMER): guarded by default, full damage only while the vulnerable window is open.
+    const hammer = createBoss(host(), 0);
+    hammer.vulnT = 0;
+    expect(bossDamageMul(hammer)).toBeCloseTo(BOSS.guard.mul); // guarded
+    hammer.vulnT = BOSS.guard.recoverSec;
+    expect(bossDamageMul(hammer)).toBe(1); // punish window: full damage
+    // The gunner (VIPER) and the Warlord take full damage always — their gates are positional / survival.
+    const viper = createBoss(host(), 1);
+    const warlord = createBoss(host(), 2);
+    viper.vulnT = 0;
+    warlord.vulnT = 0;
+    expect(bossDamageMul(viper)).toBe(1);
+    expect(bossDamageMul(warlord)).toBe(1);
+  });
+
+  it("opens HAMMER's vulnerable window when a charge ends", () => {
+    const h = host();
+    const b = createBoss(h, 0);
+    b.damageable = true;
+    b.state = 'charge';
+    b.chargeLeft = 1; // about to finish this frame
+    b.dirX = 0;
+    b.dirY = 1;
+    b.vulnT = 0;
+    expect(bossDamageMul(b)).toBeCloseTo(BOSS.guard.mul); // guarded mid-charge
+    updateBoss(b, h);
+    expect(b.state).toBe('walk');
+    expect(b.vulnT).toBeGreaterThan(0); // the punish window is now open
+    expect(bossDamageMul(b)).toBe(1);
   });
 });

@@ -9,7 +9,7 @@ export const RUN = {
   arenaBandPx: 8, // hazard-tape band; the walls are its inner edge
   arenaGrowSec: 0.5,
   fleeSpeedMul: 1.5,
-  enrageFightSec: 120, // each target enrages 2:00 after he is fully on-screen (his own fight clock, design.md 14.3, 16.11)
+  enrageFightSec: 180, // design.md 16.15: a far anti-stall net (3:00 on his fight clock), not the challenge — the fight is decided by the dodge-and-punish dance, not this clock
   // Presentation (real seconds, UI only).
   winSlowMoSec: 1,
   winSlowMoScale: 0.3,

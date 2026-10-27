@@ -601,17 +601,19 @@ Esteban's full-contract run (18:28, level 66, 2/3 targets, the Warlord at 1%) ma
 
 ### 16.13 Late waves scale with the player (Esteban, 2026-10-26)
 
-Esteban's winning full-contract run (15:38, level 68, 3/3) showed the waves **between** the bosses go trivial. Before the first target (0:00–5:00) they're a real fight; from 5:00 on the build one-shots everything, so nothing survives to reach the player and the run becomes "circle and mulch" between bosses. The level-up curve is **not** the lever: progression cadence is the genre's core reward, and slowing it makes the player feel stuck. Instead the **world scales to the player after the first boss**, the way the genre's benchmarks do — Vampire Survivors multiplies enemy HP by the player's level (snapshot at spawn), Brotato layers a per-wave HP curve plus elites — both keep late enemies alive by scaling the opposition, not by throttling the player. We already do this for bosses (§16.5: boss HP = a multiple of the player's sheet DPS); this extends the same sheet-DPS pacing to the post-5:00 waves.
+Esteban's winning full-contract run (15:38, level 68, 3/3) showed the waves **between** the bosses go trivial. Before the first target (0:00–5:00) they're a real fight; from 5:00 on the build one-shots everything, so nothing survives to reach the player and the run becomes "circle and mulch" between bosses. The level-up curve is **not** the lever: progression cadence is the genre's core reward, and slowing it makes the player feel stuck. Instead the **world scales to the player after the first boss**, the way the genre's benchmarks do — Vampire Survivors multiplies enemy HP by the player's level (snapshot at spawn), Brotato layers a per-wave HP curve plus elites — both keep late enemies alive by scaling the opposition, not by throttling the player.
+
+**Revision (Esteban, 2026-10-26):** the first cut scaled trash HP by the player's **single-target sheet DPS** (the §16.5 figure). A second playtest (15:33, level 69, 3/3) felt *easier*, not harder — because that build leaned on **RICOCHET +7** and **DRONE BUDDY +6**, and single-target sheet DPS is blind to crowd-clear (it counts ricochet as zero and multishot at half). The perks that actually trivialise a crowd didn't raise trash HP at all. So part 1 now scales off the player's **level** — the Vampire Survivors model — which rises with *every* perk, crowd-clear included, and can't be gamed by build. (The elite floor in part 2 stays on sheet DPS: an elite is a single target, where ricochet and multishot don't help, so single-target DPS is the right measure there.)
 
 Two parts, both **only from 5:00 on** (pre-5:00 waves are unchanged; Esteban confirms they're well-tuned), both snapshot at spawn like §12.1, and **neither adds enemies, speed or density** — the threat is survivability, so the screen stays readable (§1, §12).
 
-**Power ratio.** `P = sheetDps(now) / sheetDps(at 5:00)`, where sheet DPS is the §16.5 figure and the denominator is snapshot when the first target spawns. `P` is 1.0 at 5:00 and grows as the player levels through the contract; it never counts below 1. There is no jump at 5:00, and the fix touches only the exact window where the player pulls ahead.
+**Level baseline.** The player's **level at 5:00** (snapshot when the first target spawns) is the baseline. There is no jump at 5:00, and the fix touches only the levels gained after the player pulls ahead.
 
-**1. Trash and Veterans — partial HP scaling.** Every normal-wave enemy (Grunt, Runner, Heavy, Rifleman and their Veterans — not the bosses' arena adds) spawned at contract time ≥ 5:00 gets an extra HP factor on top of the §12.1 per-minute curve:
+**1. Trash and Veterans — HP scales with level.** Every normal-wave enemy (Grunt, Runner, Heavy, Rifleman and their Veterans — not the bosses' arena adds) spawned at contract time ≥ 5:00 gets an extra HP factor on top of the §12.1 per-minute curve:
 
-> `powerMul = max(1, P ^ hpPowerExp)`, with **hpPowerExp = 0.5** (starting value).
+> `powerMul = max(1, 1 + hpPerLevel × (level − level at 5:00))`, with **hpPerLevel = 0.15** (starting value).
 
-Because the exponent is below 1, the player still kills faster as they grow: effective time-to-kill falls as `P^(hpPowerExp − 1)`, so a 4× stronger build clears a given enemy ~2× faster while that enemy is only ~2× tankier. The power fantasy holds; the screen just stops being a vacuum. At `hpPowerExp = 0` this is today's behaviour; at `1` enemies fully track the player (flat time-to-kill, a treadmill). We start at 0.5 and tune toward "trash still melts, but enough survives the walk in to pressure the player."
+Each level gained after the first boss makes late trash ~15% tankier. Because the player's damage grows *multiplicatively* with those same levels (and far faster than +15%/level), time-to-kill still **drops** as they level — the power fantasy holds, the screen just stops being a vacuum — but a ricochet/drone build no longer gets a free pass, because every pick that earned the level counts. At `hpPerLevel = 0` this is the old behaviour; higher values make late waves bite harder. Tune from Esteban's playtest and the sim.
 
 **2. Scheduled elites — the threat layer.** The scheduled elite (§16.12) is the readable mini-boss (HP bar, abilities). Its HP today is a fixed multiple of its base type, so late in a run it melts like everything else. From 5:00 its HP follows sheet DPS, floored at the current formula so early or weak-build elites are unchanged:
 
@@ -621,18 +623,70 @@ At ~3 seconds of single-target sheet DPS — and with real fire split across the
 
 **Scope and non-goals.**
 - Pre-5:00 is untouched. Spawn rate, counts, the 250 cap, speeds and contact damage are all unchanged — this is HP only, to protect readability (§1) and the "threat per enemy, not more enemies" rule (§12).
-- Boss fights are a separate problem (Esteban: the bosses themselves are "circle until dead"). That is a later pass on their attack density and dodge pressure, not this change. The bosses' phase-3 adds keep today's HP.
+- Boss fights are a separate problem (Esteban: the bosses themselves are "circle until dead"). That is a later pass on their attack density and dodge pressure — now §16.15 — not this change. The bosses' phase-3 adds keep today's HP.
 
 **Levers, in order, if it's off (tune from Esteban's playtest first, then the sim):**
-1. `hpPowerExp` (0.5) — the main dial for how much late trash survives.
+1. `hpPerLevel` (0.15) — the main dial for how much late trash survives.
 2. `eliteDpsSec` (3) — how much of a fight each scheduled elite is.
 3. Only if the gaps between elites still feel empty: tighten the elite cadence after 5:00 (§16.12's 2:00) or seed the late pressure rings (§16.11, at 7:00/8:00/11:00/12:00) with Veterans. Density stays the last resort, for readability.
+4. If HP alone can't counter a pure chain build (ricochet mows through any HP), scale enemy **speed** or **contact damage** late instead, so the few that reach the player bite — not more HP (Esteban, 2026-10-26).
 
 **Targets.**
-- Waves between the bosses are no longer trivial: a naive kite can't stand still or circle untouched from 5:00 on, and reaches each target having spent HP.
+- Waves between the bosses are no longer trivial for **any** build — crowd-clear builds (ricochet, drones, multishot) included, since level captures them: a naive kite can't stand still or circle untouched from 5:00 on, and reaches each target having spent HP.
 - Progression still feels fast: trash time-to-kill keeps **dropping** as the player levels (never flat), and no level-up is slowed.
 - The screen stays readable late (§1): no new bodies, just tougher ones.
 
 **Needs:**
-- **Data:** `hpPowerExp` and `eliteDpsSec` in `src/data/enemies.ts`; the 5:00 sheet-DPS baseline captured on the world when the first target spawns; `powerMul` applied in the wave-spawn path (`src/sim/world.ts`) and the DPS floor in the elite spawn. No art.
+- **Data:** `hpPerLevel` in `src/data/enemies.ts`; the level baseline captured on the world at the first target; `powerMul` applied in the wave-spawn path (`src/sim/world.ts`). The elite floor is the part-2 sheet-DPS formula above (§16.14's move onto a contract-stage schedule was retired; see §16.15). No art.
 - **Sim:** `src/data/` changes, so the sim table posts. Add to `tools/sim-report.ts` the median player HP at each target's spawn and damage taken per minute in the 5:00–13:00 window, so "waves got threatening" is visible. Bots fight the walled arena badly (§16.5), so Esteban's run is the arbiter; the sim guards against regressions (reach rate holds, idle still dies before 2:00).
+
+### 16.14 Bosses and elites off a contract-stage schedule (RETIRED — see §16.15)
+
+**Retired (Esteban, 2026-10-27).** This section proposed taking boss (and elite) HP off the single-target sheet-DPS coupling (§16.5) and onto a fixed contract-stage schedule `S(t) = max(1, 1 + hpPerLevel × expectedLevelPerMin × minutes past the first target)`, so a DPS build would shred bosses while a crowd-clear build ground to enrage — the idea being that the DPS-vs-CC choice would finally read off the boss fight.
+
+It's retired because it **kept the boss a DPS check** — you win if your damage beats a clock. That's still "circle until dead" with a different number on the wall, and it decides the fight before it starts (did you take the right perks?). §16.15 reframes bosses as **skill gates** — positioning, dodging, reaction, punish timing — that any build can pass by playing well and fail by playing badly, and moves the DPS-vs-CC expression entirely into the **waves** (§16.13). Boss HP becomes a fixed, tuned number (§16.15), not a schedule.
+
+**Kept from the exploration:** decoupling boss HP from the player's *own* level was right — coupling it would punish a fast-levelling crowd build with a tankier boss, and leveling must always be the reward (§16.13). §16.15 keeps boss HP player-independent. Elites return to the §16.13 model as wave-threat mini-bosses (not skill gates): the §16.13 part-2 sheet-DPS floor, not a schedule.
+
+### 16.15 Bosses are skill gates, not DPS checks (Esteban, 2026-10-27)
+
+The run's challenge splits in two: **waves test the build, bosses test the player.** Waves are where DPS-vs-crowd-clear is expressed and §16.13 keeps them honest. A boss is a **skill gate** — positioning, reading telegraphs, reaction, punish timing — that *any* build can pass by playing well and fail by playing badly, regardless of perks. This retires the scaling-lever line (§16.5, §16.14): coupling boss HP to a number made the fight "circle until dead," decided before it started. The fight should demand something the perk sheet can't give.
+
+The benchmarks back the split. Vampire Survivors gates its one real boss (the Reaper) behind a **mechanic** — percent-HP items and freeze, not raw DPS — and is otherwise pure crowd-clear in the waves. Brotato telegraphs its difficulty spikes on a fixed schedule so you prepare and position. Neither lets you out-stat a boss you can't play.
+
+**The core mechanic: damage is earned through a skill window, not a DPS race.** Each boss gates *when* and *how* you can hurt it, and each gates it differently:
+- **Armor window** (Hammer) — armored except in a window you earn by surviving an attack.
+- **Positional window** (Viper) — you can only land hits once you've out-maneuvered him.
+- **Survival window** (Warlord) — hit him whenever you've survived to a safe beat; survival itself is the gate.
+
+So a high-DPS build still has to *play the mechanic* (it can't facetank and shred), and a low-DPS build isn't walled out — it just needs more clean reps at the window. **Skill scales the kill, not perks.**
+
+**Per-boss kits** (each an expansion of the boss's existing identity, not a new boss):
+
+**LT. HAMMER — the brawler (dodge & punish).**
+- Takes heavily **reduced** damage (~75%, *not* immune) while not charging — a guard.
+- Charges **more often, with a shorter telegraph, and faster.**
+- Vulnerable window: after he commits and overshoots/skids to a stop (~1 s exposed). Dodge the charge, then punish the recovery.
+- Teaches patient dodge-and-punish timing. Reduced-not-immune means a weak build still chips but a player who nails every window kills fast — the fight is never a hard DPS wall.
+
+**LT. VIPER — the sniper (approach under fire).**
+- Actively **backs off and kites**, sniping from max range with his bursts and fans (§16.11).
+- Drops **mines along his retreat** so you can't walk a straight line at him — promotes his phase-3 mines to his core identity.
+- The "window" is positional, not a stat: **corner him.** He can't kite through a wall, so the skill is herding him into a corner through the minefield while dodging, then unloading when he's trapped.
+- Teaches aggressive closing and spacing — the opposite discipline to Hammer.
+
+**THE WARLORD — the finale (spatial survival).**
+- ARTILLERY CALL (§16.11) **more frequent, bigger circles, near-full-arena coverage** — escalating area denial that funnels you through shrinking safe pockets.
+- Damage is free whenever you've survived to a safe beat.
+- Hard fairness rule: the pattern must **always** leave a readable, reachable safe lane (overlapping circles that leave a moving gap). If a beat has no solvable gap, it's a bug, not difficulty.
+- Combines Hammer's dodge and Viper's spacing as the climax. Teaches reading an escalating pattern and route planning.
+
+**Enrage's new job.** Today enrage (§14.3) is the "you ran out of DPS, you lose" fail state. Under skill gates the pressure is the **attack escalation** (faster charges, denser artillery), so enrage is no longer the challenge. Keep a soft enrage far out as an **anti-stall net** — it stops a no-damage build from circling forever — but the fight is decided by the dance, not the clock.
+
+**Boss HP is a fixed, tuned number**, sized to "N clean skill windows" for a competent player of a reasonable build to kill inside the §16.11 target fight length. Not a multiple of sheet DPS (§16.5) and not a schedule (§16.14) — both retired for bosses. It stays player-independent. Waves keep §16.13; elites stay wave-threat mini-bosses (§16.13), not skill gates.
+
+**Open question — the damage floor.** Hammer's armor window is the one place build still matters at a boss: a pure crowd-clear build with near-zero single-target damage can dodge perfectly and still barely scratch a 75%-reduced boss. Decision needed — is the floor *"any build with some single-target damage wins on skill,"* or *"a zero-single-target build genuinely can't beat Hammer, and that's the cost of going full crowd"*? The reduced-not-immune guard keeps it from being a hard wall either way; the exact reduction and Hammer's HP tune against whichever answer we pick.
+
+**Needs:**
+- **Design only for now.** Implementation is a later pass: per-boss kit changes in `src/sim/boss.ts` (Hammer guard + charge cadence, Viper retreat + mine trail, Warlord artillery density and coverage), fixed boss HP in `src/data/boss.ts` replacing §16.14's `stageMulAt`, elites reverted to the §16.13 floor, and enrage softened to an anti-stall net.
+- **Sim:** bots fight the walled arena badly (§16.5) and can't demonstrate dodge skill, so the sim is a **regression guard only** (reach rates hold, idle still dies before 2:00); Esteban's playtest is the arbiter for boss feel. A later telegraph/dodge-success metric could help tune fairness.
