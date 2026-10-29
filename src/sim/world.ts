@@ -21,6 +21,7 @@ import {
   type Boss,
   type BossHost,
   type Mine,
+  type Smoke,
 } from './boss';
 import { SpatialGrid } from './grid';
 import { computeStats, drawCrateOffer, drawOffer, emptyStacks, type Offer, type PerkStacks, type PlayerStats } from './perks';
@@ -69,6 +70,7 @@ export interface Bullet {
   bounces: number;
   hit: number[]; // enemy ids already hit (for pierce)
   explodes?: boolean; // can roll HE ROUNDS: gun and drone bullets (design.md 16.9)
+  tracer?: boolean; // LT. VIPER's sniper rounds render a fading streak — the reveal (design.md 16.16)
 }
 
 /** DRONE BUDDY body: orbits the merc, faces and shoots its own nearest target. */
@@ -169,6 +171,7 @@ export interface World {
   bullets: Bullet[];
   enemyBullets: Bullet[];
   mines: Mine[]; // LT. VIPER's (design.md 16.11); cleared when a fight ends
+  smokes: Smoke[]; // LT. VIPER's smoke-break clouds (design.md 16.16), visual only
   artillery: ArtilleryCircle[]; // THE WARLORD's ARTILLERY CALL circles (design.md 16.11)
   pickups: Pickup[];
   crates: Crate[];
@@ -246,6 +249,7 @@ export function createWorld(seed: number, sandbox?: SandboxConfig): World {
     bullets: [],
     enemyBullets: [],
     mines: [],
+    smokes: [],
     artillery: [],
     pickups: [],
     crates: [],
@@ -468,7 +472,17 @@ export function rifleMoveSec(t: number): number {
  * eases from the arena view back onto the merc over LIEUTENANT_DOWN.cameraEaseSec (Esteban: it looked like a teleport).
  */
 export function cameraAt(w: World, viewH: number): { x: number; y: number } {
-  if (w.arena) return { x: w.arena.camX, y: w.arena.camY };
+  if (w.arena) {
+    // Follow the player, clamped to the arena rect. For a screen-sized arena (scale 1) the clamp range
+    // collapses to a point, so the camera stays frozen exactly as before (design.md 16.16).
+    const a = w.arena;
+    const band = RUN.arenaBandPx;
+    const clamp = (v: number, lo: number, hi: number): number => (lo >= hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
+    return {
+      x: clamp(w.player.x - HALF_W, a.x0 - band, a.x1 + band - NATIVE_WIDTH),
+      y: clamp(w.player.y - viewH / 2, a.y0 - band - RUN.arenaHudPx, a.y1 + band - viewH),
+    };
+  }
   const fx = w.player.x - HALF_W;
   const fy = w.player.y - viewH / 2;
   const ce = w.camEase;
@@ -1196,6 +1210,7 @@ function bossHost(w: World): BossHost {
     arena: w.arena,
     mines: w.mines,
     artillery: w.artillery,
+    smokes: w.smokes,
     hitPlayer: (dmg) => damagePlayer(w, dmg),
     addBlast: (kind, x, y) => addBlast(w, kind, x, y),
     spawnAddsRing: (count, kind = 'grunt', angleOffset = 0, hpMul = 1) => {
@@ -1221,21 +1236,25 @@ function bossHost(w: World): BossHost {
   };
 }
 
-/** At each fight: freeze the camera on the current view and turn every enemy into a harmless runner. */
+/**
+ * At each fight: lock the arena and turn every enemy into a harmless runner. The arena is a screen-sized box
+ * (scale 1, camera frozen) by default; a boss with arenaScale > 1 gets a bigger box the camera follows
+ * (design.md 16.16). camX/camY stay the lock-time view (the baseline a scale-1 camera holds).
+ */
 function lockArena(w: World): void {
   const p = w.player;
   const camX = Math.round(p.x - NATIVE_WIDTH / 2);
   const camY = Math.round(p.y - w.viewH / 2);
   const band = RUN.arenaBandPx;
-  w.arena = {
-    camX,
-    camY,
-    x0: camX + band,
-    y0: camY + RUN.arenaHudPx + band,
-    x1: camX + NATIVE_WIDTH - band,
-    y1: camY + w.viewH - band,
-    lockedAt: w.time,
-  };
+  const scale = BOSSES[w.target].arenaScale ?? 1;
+  // The screen-sized interior, scaled up around its centre (= where the scale-1 arena would sit).
+  const iw = NATIVE_WIDTH - 2 * band;
+  const ih = w.viewH - RUN.arenaHudPx - 2 * band;
+  const cx = camX + band + iw / 2;
+  const cy = camY + RUN.arenaHudPx + band + ih / 2;
+  const hw = (iw * scale) / 2;
+  const hh = (ih * scale) / 2;
+  w.arena = { camX, camY, x0: cx - hw, y0: cy - hh, x1: cx + hw, y1: cy + hh, lockedAt: w.time };
   for (const e of w.enemies) e.fleeing = true;
   w.enemyBullets.length = 0;
 }
@@ -1305,6 +1324,7 @@ function lieutenantDown(w: World, b: Boss): void {
   w.kills += 1;
   w.enemyBullets.length = 0;
   w.mines.length = 0;
+  w.smokes.length = 0;
   w.artillery.length = 0;
   const value = scrapForLevel(w.level + w.pendingLevels);
   const n = LIEUTENANT_DOWN.scrapPieces;
@@ -1337,7 +1357,11 @@ function openCrate(w: World, i: number): void {
  * 204 px out (the edge of the tallest view plus 24 px), so none land within 200 px in the first 3 s.
  */
 function releaseArena(w: World): void {
-  if (w.arena) w.camEase = { fromX: w.arena.camX, fromY: w.arena.camY, at: w.time };
+  // Ease from the camera's actual position (a big arena's follows the player, not the lock-time view).
+  if (w.arena) {
+    const cam = cameraAt(w, w.viewH);
+    w.camEase = { fromX: cam.x, fromY: cam.y, at: w.time };
+  }
   w.arena = null;
   w.boss = null;
   w.bossArrivedAt = -1;
@@ -1358,6 +1382,7 @@ function clearField(w: World): void {
   w.enemies.length = 0;
   w.enemyBullets.length = 0;
   w.mines.length = 0;
+  w.smokes.length = 0;
   w.artillery.length = 0;
 }
 

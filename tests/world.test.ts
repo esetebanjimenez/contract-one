@@ -19,6 +19,7 @@ import {
   type Boss,
   type BossHost,
   type Mine,
+  type Smoke,
 } from '../src/sim/boss';
 import {
   choosePerk,
@@ -362,6 +363,7 @@ describe('M3 contract', () => {
       arena: null,
       mines: w.mines,
       artillery: w.artillery,
+      smokes: w.smokes,
       hitPlayer: () => {},
       addBlast: () => {},
       spawnAddsRing: () => {},
@@ -715,6 +717,7 @@ describe('LT. VIPER (design.md 16.11)', () => {
       arena: null,
       mines: [] as Mine[],
       artillery: [] as ArtilleryCircle[],
+      smokes: [] as Smoke[],
       hits: [] as number[],
       adds: [] as [number, string | undefined][],
       blasts: [] as ['he' | 'frag' | 'mine', number, number][],
@@ -864,6 +867,7 @@ describe('THE WARLORD (design.md 16.11)', () => {
       arena: null,
       mines: [] as Mine[],
       artillery: [] as ArtilleryCircle[],
+      smokes: [] as Smoke[],
       hits: [] as number[],
       adds: [] as [number, string | undefined][],
       blasts: [] as ['he' | 'frag' | 'mine', number, number][],
@@ -993,6 +997,7 @@ describe('ARTILLERY CALL (design.md 16.11)', () => {
       arena: null as BossHost['arena'],
       mines: [] as Mine[],
       artillery: [] as ArtilleryCircle[],
+      smokes: [] as Smoke[],
       hits: [] as number[],
       blasts: [] as ['he' | 'frag' | 'mine', number, number][],
       hitPlayer(dmg: number) {
@@ -1507,6 +1512,7 @@ describe('bosses are skill gates (design.md 16.15)', () => {
       arena: null as BossHost['arena'],
       mines: [] as Mine[],
       artillery: [] as ArtilleryCircle[],
+      smokes: [] as Smoke[],
       adds: [] as [number, string | undefined, number | undefined][],
       hitPlayer() {},
       addBlast() {},
@@ -1638,5 +1644,70 @@ describe('sandbox (start menu)', () => {
     for (let i = 0; i < 10 * 60 && !w.won; i++) step(w, { mx: 0, my: 0 });
     expect(w.won).toBe(true); // a single-boss run: the kill ends it
     expect(w.targetsDown).toBe(1);
+  });
+});
+
+describe('big arena & smoke break (design.md 16.16)', () => {
+  const toBoss = (w: World, i: number): void => {
+    w.player.hp = w.stats.maxHp = 1e9;
+    toFight(w, i);
+    for (let k = 0; k < 20 * 60 && !w.boss; k++) {
+      if (w.phase !== 'play') {
+        w.phase = 'play';
+        w.pendingLevels = 0;
+      }
+      step(w, { mx: 0, my: 0 });
+    }
+  };
+
+  it('gives VIPER a big arena the camera follows; HAMMER stays screen-sized and frozen', () => {
+    const wv = createWorld(9);
+    toBoss(wv, 1);
+    expect(wv.arena).not.toBeNull();
+    expect(wv.arena!.x1 - wv.arena!.x0).toBeGreaterThan(NATIVE_WIDTH); // VIPER's arena is bigger than the screen
+    const c0 = cameraAt(wv, wv.viewH);
+    wv.player.x += 300;
+    expect(cameraAt(wv, wv.viewH).x).not.toBe(c0.x); // the camera follows him in the big arena
+
+    const wh = createWorld(3);
+    toBoss(wh, 0);
+    expect(wh.arena!.x1 - wh.arena!.x0).toBeLessThan(NATIVE_WIDTH); // HAMMER's arena fits the screen
+    const h0 = cameraAt(wh, wh.viewH);
+    wh.player.x += 60;
+    expect(cameraAt(wh, wh.viewH).x).toBe(h0.x); // frozen, as before
+  });
+
+  it('drops smoke and sprints to a new vantage when the player stays close', () => {
+    const h = {
+      time: 0,
+      level: 10,
+      stats: { damage: 10, fireRate: 5, projectiles: 1, crit: 0 },
+      player: { x: 20, y: 0 },
+      rng: createRng(42),
+      enemyBullets: [] as BossHost['enemyBullets'],
+      arena: { x0: -600, y0: -600, x1: 600, y1: 600 } as BossHost['arena'],
+      mines: [] as Mine[],
+      artillery: [] as ArtilleryCircle[],
+      smokes: [] as Smoke[],
+      hitPlayer() {},
+      addBlast() {},
+      spawnAddsRing() {},
+    };
+    const b = createBoss(h, 1); // LT. VIPER
+    b.x = 0;
+    b.y = 0;
+    b.state = 'walk';
+    b.damageable = true;
+    b.arrivedAt = 0;
+    for (let i = 0; i < Math.round((VIPER.break.sec + 0.5) / DT) && b.breakLeft <= 0; i++) {
+      h.time += DT;
+      updateBoss(b, h);
+      if (b.breakLeft <= 0) {
+        h.player.x = b.x + 20; // keep the player on him until he breaks
+        h.player.y = b.y;
+      }
+    }
+    expect(h.smokes.length).toBeGreaterThan(0); // dropped a smoke cloud
+    expect(b.breakLeft).toBeGreaterThan(0); // sprinting to a new vantage, not cornered
   });
 });
