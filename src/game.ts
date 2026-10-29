@@ -6,6 +6,7 @@ import { DT } from './data/sim';
 import { Renderer } from './render/renderer';
 import { choosePerk, createWorld, step, type World } from './sim/world';
 import { Hud } from './ui/hud';
+import { Menu } from './ui/menu';
 import { Controls } from './ui/input';
 import './ui/style.css';
 
@@ -51,22 +52,48 @@ export async function boot(first?: () => World): Promise<void> {
   await renderer.load();
   fit();
 
+  // Idle world as a backdrop until a mode is chosen; the opaque menu overlay covers it.
   let world = first ? first() : createWorld(Date.now() >>> 0);
-  const hud = new Hud(
-    frame,
-    (id) => choosePerk(world, id),
-    () => {
-      world = createWorld(Date.now() >>> 0);
-      outro = 0;
-      controls.reset();
-    },
-  );
-
+  let mode: 'menu' | 'running' = first ? 'running' : 'menu';
   let acc = 0;
   let outro = 0; // real seconds since the win or the death
   let seenDownAt = -1;
   let downSlow = 0; // real seconds of lieutenant-kill slow-mo left
+
+  const newContract = (): World => createWorld(Date.now() >>> 0);
+  const startRun = (factory: () => World): void => {
+    world = factory();
+    mode = 'running';
+    acc = 0;
+    outro = 0;
+    seenDownAt = -1;
+    downSlow = 0;
+    controls.reset();
+    menu.hide();
+  };
+
+  const hud = new Hud(
+    frame,
+    (id) => choosePerk(world, id),
+    () => {
+      // A sandbox run is a one-off; its results go back to the menu. A contract starts a fresh contract.
+      if (world.sandbox) {
+        mode = 'menu';
+        menu.showMain();
+      } else {
+        startRun(newContract);
+      }
+    },
+  );
+
+  const menu = new Menu(frame, {
+    onStart: () => startRun(newContract),
+    onSandbox: (cfg) => startRun(() => createWorld(Date.now() >>> 0, cfg)),
+  });
+  if (mode === 'menu') menu.showMain();
+
   app.ticker.add((t) => {
+    if (mode === 'menu') return; // the opaque menu overlay covers the frame; nothing to sim or draw
     const dt = t.deltaMS / 1000;
     // Paused: freeze the sim and the outro clock, hide the stick, and draw the held frame (dt 0).
     if (hud.paused) {

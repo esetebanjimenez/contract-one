@@ -162,6 +162,8 @@ export interface World {
   level: number;
   scrap: number; // scrap toward the next level
   pendingLevels: number;
+  pendingCrates: number; // Sandbox: queued crate picks to take before the fight (start menu)
+  sandbox: boolean; // Sandbox mode: a pre-built level, chosen crates and one boss, no waves (start menu)
   offer: Offer[];
   enemies: Enemy[];
   bullets: Bullet[];
@@ -212,7 +214,14 @@ const HALF_W = NATIVE_WIDTH / 2;
 // Spawns and "off-screen" use the tallest view, so nothing pops in on tall phones; the sim stays deterministic.
 const HALF_H = MAX_VIEW_HEIGHT / 2;
 
-export function createWorld(seed: number): World {
+/** Sandbox config (start menu): start at `level` with `crates` crate picks, then fight one boss, no waves. */
+export interface SandboxConfig {
+  level: number; // the player's starting level (he picks level-1 perks before the fight)
+  crates: number; // supply-crate picks offered before the fight
+  boss: number; // index into BOSSES
+}
+
+export function createWorld(seed: number, sandbox?: SandboxConfig): World {
   const stacks = emptyStacks();
   const stats = computeStats(stacks);
   return {
@@ -228,7 +237,10 @@ export function createWorld(seed: number): World {
     stats,
     level: 1,
     scrap: 0,
-    pendingLevels: 0,
+    // Sandbox starts at level 1 and grants level-1 level-up picks + the chosen crate picks before the fight.
+    pendingLevels: sandbox ? Math.max(0, Math.round(sandbox.level) - 1) : 0,
+    pendingCrates: sandbox ? Math.max(0, Math.round(sandbox.crates)) : 0,
+    sandbox: !!sandbox,
     offer: [],
     enemies: [],
     bullets: [],
@@ -259,7 +271,7 @@ export function createWorld(seed: number): World {
     arena: null,
     viewH: NATIVE_HEIGHT,
     bossDamage: 0,
-    target: 0,
+    target: sandbox ? Math.min(BOSSES.length - 1, Math.max(0, Math.round(sandbox.boss))) : 0,
     targetsDown: 0,
     fights: [],
     camEase: null,
@@ -551,6 +563,8 @@ function spawnOne(w: World, angle: number, pressure: boolean, force?: EnemyDef):
 }
 
 function updateSpawns(w: World, input: Input): void {
+  // Sandbox is a single boss fight with no waves (start menu).
+  if (w.sandbox) return;
   // No normal spawns once the arena locks; only the phase 3 adds (design.md 14.9).
   if (w.won || w.arena) return;
   // Held while the camera eases back after a release, so nothing pops in on screen (Game Designer, 16.11).
@@ -659,7 +673,8 @@ function damageBoss(w: World, dmg: number, crit: boolean): void {
   else {
     if (fl) fl.killedAt = w.time;
     w.targetsDown++;
-    if (BOSSES[wb.target].final) winContract(w);
+    // Sandbox is a single fight: any boss kill ends the run (start menu).
+    if (w.sandbox || BOSSES[wb.target].final) winContract(w);
     else lieutenantDown(w, wb);
   }
 }
@@ -926,7 +941,11 @@ export function step(w: World, input: Input): void {
   p.y += input.my * s * w.stats.speed * DT;
   p.moving = mag > 0;
   const next = BOSSES[w.target];
-  if (!w.arena && !w.won && next && w.contractTime >= next.atSec) lockArena(w);
+  // Sandbox: once all the pre-fight picks are taken, drop straight into the chosen boss (no waves, no clock).
+  if (w.sandbox && !w.arena && !w.boss && !w.won && w.pendingLevels === 0 && w.pendingCrates === 0) {
+    w.player.hp = w.stats.maxHp; // start the fight topped off
+    lockArena(w);
+  } else if (!w.arena && !w.won && next && w.contractTime >= next.atSec) lockArena(w);
   else if (w.arena && w.downAt >= w.arena.lockedAt && w.time >= w.downAt + LIEUTENANT_DOWN.tapeFadeSec) releaseArena(w);
   const ar = w.arena;
   if (ar) {
@@ -1162,6 +1181,8 @@ export function step(w: World, input: Input): void {
   if (w.won && (w.enemies.length || w.enemyBullets.length)) clearField(w);
   if (touched >= 0 && w.phase === 'play' && !w.won) openCrate(w, touched);
   if (w.phase === 'play' && w.pendingLevels > 0 && !w.won) openLevelUp(w);
+  // Sandbox: offer the queued crate picks after the level-ups, before the fight (start menu).
+  else if (w.phase === 'play' && w.sandbox && w.pendingCrates > 0 && !w.arena && !w.won) openSandboxCrate(w);
 }
 
 function bossHost(w: World): BossHost {
@@ -1345,6 +1366,12 @@ function openLevelUp(w: World): void {
   w.phase = 'levelup';
 }
 
+/** Sandbox: a crate pick with no physical crate, drawn from the crate pool (start menu). */
+function openSandboxCrate(w: World): void {
+  w.offer = drawCrateOffer(w.stacks, CRATE.cards, w.rng);
+  w.phase = 'crate';
+}
+
 export function choosePerk(w: World, id: PerkId): void {
   const o = w.offer.find((x) => x.id === id);
   if ((w.phase !== 'levelup' && w.phase !== 'crate') || !o) return;
@@ -1357,8 +1384,11 @@ export function choosePerk(w: World, id: PerkId): void {
   if (!crate) {
     w.level++;
     w.pendingLevels--;
+  } else if (w.pendingCrates > 0) {
+    w.pendingCrates--; // Sandbox: one of the queued crate picks (start menu)
   }
   w.offer = [];
   w.phase = 'play';
   if (w.pendingLevels > 0) openLevelUp(w);
+  else if (w.sandbox && w.pendingCrates > 0 && !w.arena) openSandboxCrate(w);
 }

@@ -1609,3 +1609,34 @@ describe('bosses are skill gates (design.md 16.15)', () => {
     expect(heavy![2]).toBe(BOSS.shieldAdds.hpMul); // spawned tanky
   });
 });
+
+describe('sandbox (start menu)', () => {
+  it('sets up a pre-built level, crate picks and a chosen boss', () => {
+    const w = createWorld(5, { level: 10, crates: 3, boss: 1 });
+    expect(w.sandbox).toBe(true);
+    expect(w.pendingLevels).toBe(9); // level 1 start, 9 picks to reach level 10
+    expect(w.pendingCrates).toBe(3);
+    expect(w.target).toBe(1); // LT. VIPER
+    expect(w.level).toBe(1);
+  });
+
+  it('takes the picks, drops straight into the chosen boss with no waves, and ends on the kill', () => {
+    const w = createWorld(7, { level: 8, crates: 2, boss: 0 });
+    for (let i = 0; i < 500 && (w.pendingLevels > 0 || w.pendingCrates > 0); i++) {
+      if (w.phase === 'levelup' || w.phase === 'crate') choosePerk(w, w.offer[0].id);
+      else step(w, { mx: 0, my: 0 });
+    }
+    expect(w.level).toBe(8); // started at the chosen level after the picks
+    expect(w.pendingCrates).toBe(0);
+    w.player.hp = w.stats.maxHp = 1e9; // survive the fight for the test
+    for (let i = 0; i < 20 * 60 && !w.boss; i++) step(w, { mx: 0, my: 0 });
+    expect(w.arena).not.toBeNull(); // dropped straight into the arena
+    expect(w.boss!.target).toBe(0); // the chosen boss, LT. HAMMER
+    expect(w.elitesSpawned).toBe(0); // sandbox never runs the wave/elite system
+    for (let i = 0; i < 30 * 60 && !w.boss!.damageable; i++) step(w, { mx: 0, my: 0 });
+    w.boss!.hp = 1;
+    for (let i = 0; i < 10 * 60 && !w.won; i++) step(w, { mx: 0, my: 0 });
+    expect(w.won).toBe(true); // a single-boss run: the kill ends it
+    expect(w.targetsDown).toBe(1);
+  });
+});

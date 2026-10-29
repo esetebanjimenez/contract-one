@@ -95,7 +95,7 @@ export class Hud {
     const fight = !!w.arena || w.won;
     const left = next ? next.atSec - w.contractTime : 0;
     const boss = w.boss;
-    this.timer.hidden = fight || !next;
+    this.timer.hidden = fight || !next || w.sandbox; // sandbox has no contract clock (start menu)
     if (!this.timer.hidden) {
       this.timer.textContent = `TARGET IN ${mmss(Math.ceil(left))}`;
       this.timer.classList.toggle('red', left <= RUN.timerRedLastSec);
@@ -105,7 +105,7 @@ export class Hud {
     this.enraged.hidden = !(boss && boss.hp > 0 && !w.won && w.phase !== 'dead' && enragedFor(boss, w.time) >= 0);
     if (fight) this.bossFill.style.width = boss ? `${(100 * Math.max(0, boss.hp)) / boss.maxHp}%` : '100%';
     const lockedFor = w.arena ? w.time - w.arena.lockedAt : -1;
-    if (w.won) this.setBanner(outroSec < RUN.winResultsDelaySec ? 'CONTRACT COMPLETE' : '', 'win');
+    if (w.won) this.setBanner(outroSec < RUN.winResultsDelaySec ? (w.sandbox ? 'TARGET DOWN' : 'CONTRACT COMPLETE') : '', 'win');
     else if (w.phase === 'dead')
       this.setBanner(outroSec >= RUN.loseFreezeSec && outroSec < RUN.loseFreezeSec + RUN.loseBannerSec ? 'KIA' : '', 'kia');
     else if (w.downAt >= 0 && w.time - w.downAt < LIEUTENANT_DOWN.bannerSec) this.setBanner('LIEUTENANT DOWN', 'win');
@@ -239,16 +239,18 @@ export class Hud {
 
   private showResults(w: World): void {
     const boss = w.boss;
-    const targets = `<div class="targets">TARGETS ${w.targetsDown}/${BOSSES.length}</div>`;
+    // Sandbox is a single boss fight (start menu): no contract, so skip the targets count and go back to the menu.
+    const title = w.sandbox ? (w.won ? 'TARGET DOWN' : 'KIA') : w.won ? 'CONTRACT COMPLETE' : 'CONTRACT FAILED';
+    const targets = w.sandbox ? '' : `<div class="targets">TARGETS ${w.targetsDown}/${BOSSES.length}</div>`;
     const hpLeft =
       !w.won && boss && boss.hp > 0 ? `<div class="hpleft">TARGET HP LEFT: ${Math.ceil((100 * boss.hp) / boss.maxHp)}%</div>` : '';
     const perks = this.perkList(w);
     this.modal.innerHTML =
       `<div class="results ${w.won ? 'won' : 'failed'}">` +
-      `<div class="title">${w.won ? 'CONTRACT COMPLETE' : 'CONTRACT FAILED'}</div>${targets}${hpLeft}` +
+      `<div class="title">${title}</div>${targets}${hpLeft}` +
       `${this.statsBlock(w, w.won ? w.wonAt : w.time)}` +
       `<div class="plabel">PERKS</div><div class="perks">${perks || '<div class="none">NO PERKS</div>'}</div>` +
-      `<button class="card restart newc" disabled>NEW CONTRACT</button></div>`;
+      `<button class="card restart newc" disabled>${w.sandbox ? 'MENU' : 'NEW CONTRACT'}</button></div>`;
     const btn = this.modal.querySelector<HTMLButtonElement>('.newc')!;
     // Locked briefly so a joystick release can't tap it by accident (design.md 14.6).
     setTimeout(() => (btn.disabled = false), RUN.resultsInputLockSec * 1000);
