@@ -9,6 +9,7 @@ export interface Target {
   final: boolean; // killing him ends the contract
   style: 'charger' | 'gunner' | 'warlord'; // which attack set he fights with
   radius: number; // body and hit radius, px (scales with his sprite: 30 for 96x96)
+  arenaScale?: number; // design.md 16.16: arena size vs the screen (default 1 = frozen cam; >1 = a big arena the camera follows)
 }
 
 // design.md 16.15: bosses are skill gates, not DPS checks, so HP is a fixed number sized to "N clean skill
@@ -16,7 +17,8 @@ export interface Target {
 // (§16.5) or a contract-stage schedule (§16.14, retired). The main playtest lever for each fight's length.
 export const BOSSES: Target[] = [
   { name: 'LT. HAMMER', atSec: 300, hp: 7000, damageScale: 1, final: false, style: 'charger', radius: 30 },
-  { name: 'LT. VIPER', atSec: 540, hp: 13000, damageScale: 1.25, final: false, style: 'gunner', radius: 16 }, // small, evasive (16.15)
+  // design.md 16.16: VIPER fights in a big arena — a sniper you hunt across open ground (camera follows).
+  { name: 'LT. VIPER', atSec: 540, hp: 13000, damageScale: 1.25, final: false, style: 'gunner', radius: 16, arenaScale: 2.6 },
   { name: 'THE WARLORD', atSec: 780, hp: 45000, damageScale: 1.5, final: true, style: 'warlord', radius: 40 }, // 128x128
 ];
 
@@ -58,13 +60,17 @@ export const WARLORD = {
  * scale; contact damage 25 is the spec's number as written. Phase rules, stagger and walls as 14.3/14.9.
  */
 export const VIPER = {
-  // design.md 16.15 (playtest 2): the sniper always backs off — a hold wider than the arena, so he keeps
-  // fleeing until a wall corners him instead of stopping inside gun range to soak bullets. The skill is
-  // chasing and cornering him through his own mine trail.
-  holdPx: 520, // keeps about this far from the player (always flees in practice)
+  // design.md 16.16: in his big arena he holds at a snipe distance and picks at the player; when the player
+  // closes and stays close, he drops smoke and sprints to a new vantage — you hunt him again (no cornering).
+  holdPx: 300, // snipe distance he drifts to keep
   holdSlackPx: 15, // stands still within holdPx +/- this
   speed: 45,
   contactDamage: 25,
+  // design.md 16.16: the smoke break. While the player is within `range`, a composure timer fills; at `sec`
+  // he drops a smoke cloud and sprints (`speed`) to a far vantage, for up to `dur`. `tries` candidate spots.
+  break: { range: 130, sec: 1.2, speed: 280, dur: 1.4, tries: 10, marginPx: 40 },
+  smoke: { radiusPx: 64, fuseSec: 1.6 },
+  tracerLen: 60, // length of the fading tracer streak behind each sniper round (the reveal)
   // Phase 1+: the aim line tracks, locks, then the burst fires down it.
   burst: { firstAfterSec: 1, everySec: 2.5, trackSec: 0.6, lockSec: 0.2, bullets: 3, shotGapSec: 0.08, speed: 160, damage: 12, range: 700 },
   // Phase 2+: a fan toward the player, alternating with the burst (never fired while a burst is aiming or firing).

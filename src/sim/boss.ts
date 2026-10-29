@@ -39,6 +39,11 @@ export interface Boss {
   burstCd: number;
   fanCd: number;
   mineCd: number;
+  // LT. VIPER's smoke break (design.md 16.16).
+  breakT: number; // composure filled while the player is close (-> a break at VIPER.break.sec)
+  breakLeft: number; // seconds left sprinting to a new vantage (0 = not breaking)
+  breakX: number; // sprint target
+  breakY: number;
   // THE WARLORD only: his next scheduled attack is a charge (else an aimed burst).
   nextCharge: boolean;
   // THE WARLORD only: ARTILLERY CALL (design.md 16.11). throwT counts the throw pose (-1 when not throwing).
@@ -52,6 +57,13 @@ export interface Mine {
   y: number;
   age: number;
   damage: number;
+}
+
+/** LT. VIPER's smoke cloud (design.md 16.16): cover for a break, pure visual, fades over VIPER.smoke.fuseSec. */
+export interface Smoke {
+  x: number;
+  y: number;
+  age: number;
 }
 
 /** THE WARLORD's ARTILLERY CALL circle (design.md 16.11): fills inward over fillSec, then explodes once. */
@@ -114,11 +126,13 @@ export interface BossHost {
     pierceLeft: number;
     bounces: number;
     hit: number[];
+    tracer?: boolean;
   }[];
   /** Locked boss arena (inner wall edges), or null before the lock. */
   arena: { x0: number; y0: number; x1: number; y1: number } | null;
   mines: Mine[];
   artillery: ArtilleryCircle[];
+  smokes: Smoke[];
   hitPlayer(dmg: number): void;
   spawnAddsRing(count: number, kind?: 'grunt' | 'runner' | 'heavy', angleOffset?: number, hpMul?: number): void;
   /** Spawn an explosion effect (damage is applied by the caller). Mines and artillery share the mine blast. */
@@ -164,6 +178,10 @@ export function createBoss(h: BossHost, target = 0, maxHp = BOSSES[target].hp): 
     burstCd: VIPER.burst.firstAfterSec,
     fanCd: VIPER.fan.firstAfterSec,
     mineCd: 0,
+    breakT: 0,
+    breakLeft: 0,
+    breakX: 0,
+    breakY: 0,
     nextCharge: true,
     throwT: -1,
     artilleryCd: WARLORD.artillery.everySec[2],
@@ -250,7 +268,7 @@ function endCharge(b: Boss, h: BossHost): void {
   b.vulnT = BOSS.guard.recoverSec; // he overshoots and is exposed — the punish window
 }
 
-function shoot(b: Boss, h: BossHost, angle: number, speed: number, damage: number, range: number): void {
+function shoot(b: Boss, h: BossHost, angle: number, speed: number, damage: number, range: number, tracer = false): void {
   if (h.enemyBullets.length >= CAPS.enemyBullets) return;
   h.enemyBullets.push({
     x: b.x,
@@ -262,7 +280,19 @@ function shoot(b: Boss, h: BossHost, angle: number, speed: number, damage: numbe
     pierceLeft: 0,
     bounces: 0,
     hit: [],
+    tracer,
   });
+}
+
+/** LT. VIPER's smoke clouds tick down and vanish (design.md 16.16); purely visual. */
+function updateSmokes(h: BossHost): void {
+  for (let i = h.smokes.length - 1; i >= 0; i--) {
+    h.smokes[i].age += DT;
+    if (h.smokes[i].age >= VIPER.smoke.fuseSec) {
+      h.smokes[i] = h.smokes[h.smokes.length - 1];
+      h.smokes.pop();
+    }
+  }
 }
 
 /** Mines tick whatever he is doing, stagger included. */
@@ -337,15 +367,81 @@ function spawnArtillery(b: Boss, h: BossHost): void {
   }
 }
 
-/** LT. VIPER holds about 160 px off: walks in when far, backs off when the player closes in. */
-function gunnerWalk(b: Boss, dx: number, dy: number, d: number, speed: number): void {
-  const off = d - VIPER.holdPx;
+/**
+ * design.md 16.16: VIPER holds at his snipe distance and picks at the player. When the player closes and
+ * stays close his composure fills; at break.sec he drops smoke and sprints to a new vantage (no cornering).
+ */
+function gunnerWalk(b: Boss, h: BossHost, dx: number, dy: number, d: number, speed: number): void {
   b.facing = Math.atan2(dy, dx);
-  if (Math.abs(off) <= VIPER.holdSlackPx) return;
-  const s = off > 0 ? 1 : -1;
-  b.x += (dx / d) * speed * DT * s;
-  b.y += (dy / d) * speed * DT * s;
-  b.moving = true;
+  // Breaking: sprint to the new vantage (firing is gated off in gunnerAttacks).
+  if (b.breakLeft > 0) {
+    const tx = b.breakX - b.x;
+    const ty = b.breakY - b.y;
+    const td = Math.hypot(tx, ty) || 1;
+    const stepPx = VIPER.break.speed * DT;
+    if (td <= stepPx) {
+      b.x = b.breakX;
+      b.y = b.breakY;
+      b.breakLeft = 0;
+    } else {
+      b.x += (tx / td) * stepPx;
+      b.y += (ty / td) * stepPx;
+      b.breakLeft -= DT;
+    }
+    b.moving = true;
+    return;
+  }
+  // Composure fills while the player is close, decays as he backs off; a full bar triggers the break.
+  if (d <= VIPER.break.range) {
+    b.breakT += DT;
+    if (b.breakT >= VIPER.break.sec) {
+      startBreak(b, h);
+      return;
+    }
+  } else {
+    b.breakT = Math.max(0, b.breakT - DT);
+  }
+  // Otherwise drift to keep his snipe distance (never flee into a wall).
+  const off = d - VIPER.holdPx;
+  if (Math.abs(off) > VIPER.holdSlackPx) {
+    const s = off > 0 ? 1 : -1;
+    b.x += (dx / d) * speed * DT * s;
+    b.y += (dy / d) * speed * DT * s;
+    b.moving = true;
+  }
+}
+
+/** Drop a smoke cloud and pick the vantage (farthest of a few candidates from the player) to sprint to. */
+function startBreak(b: Boss, h: BossHost): void {
+  b.breakT = 0;
+  b.breakLeft = VIPER.break.dur;
+  h.smokes.push({ x: b.x, y: b.y, age: 0 });
+  const p = h.player;
+  const a = h.arena;
+  const m = VIPER.break.marginPx;
+  let bestX = b.x;
+  let bestY = b.y;
+  let bestD = -1;
+  for (let i = 0; i < VIPER.break.tries; i++) {
+    let x: number;
+    let y: number;
+    if (a) {
+      x = a.x0 + m + h.rng() * Math.max(1, a.x1 - a.x0 - 2 * m);
+      y = a.y0 + m + h.rng() * Math.max(1, a.y1 - a.y0 - 2 * m);
+    } else {
+      const ang = h.rng() * Math.PI * 2;
+      x = p.x + Math.cos(ang) * 400;
+      y = p.y + Math.sin(ang) * 400;
+    }
+    const dd = (x - p.x) ** 2 + (y - p.y) ** 2;
+    if (dd > bestD) {
+      bestD = dd;
+      bestX = x;
+      bestY = y;
+    }
+  }
+  b.breakX = bestX;
+  b.breakY = bestY;
 }
 
 /** The aimed burst in flight: the line tracks, locks, then the bullets go down it. */
@@ -366,7 +462,7 @@ function tickBurst(b: Boss, h: BossHost, dx: number, dy: number, d: number): voi
   if (b.burstLeft > 0) {
     b.burstShotT -= DT;
     if (b.burstShotT <= 1e-9) {
-      shoot(b, h, Math.atan2(b.aimY, b.aimX), B.speed, B.damage, B.range);
+      shoot(b, h, Math.atan2(b.aimY, b.aimX), B.speed, B.damage, B.range, true); // tracer: the sniper reveal
       b.burstLeft--;
       b.burstShotT += B.shotGapSec;
       // Next aim starts everySec after this one did.
@@ -389,6 +485,7 @@ function tickFan(b: Boss, h: BossHost, dx: number, dy: number): void {
 
 /** LT. VIPER's attacks by phase (design.md 16.11). */
 function gunnerAttacks(b: Boss, h: BossHost, dx: number, dy: number, d: number): void {
+  if (b.breakLeft > 0) return; // no aiming/firing/mines while sprinting to a new vantage (design.md 16.16)
   if (b.aimT < 0 && b.burstLeft === 0) {
     b.burstCd -= DT;
     if (b.burstCd <= 0) b.aimT = 0;
@@ -480,6 +577,7 @@ export function updateBoss(b: Boss, h: BossHost): void {
   b.moving = false;
   updateMines(h);
   updateArtillery(h);
+  updateSmokes(h);
 
   switch (b.state) {
     case 'enter': {
@@ -506,7 +604,7 @@ export function updateBoss(b: Boss, h: BossHost): void {
       break;
     case 'walk': {
       if (gunner) {
-        gunnerWalk(b, dx, dy, d, speed);
+        gunnerWalk(b, h, dx, dy, d, speed);
         break;
       }
       // ARTILLERY CALL (design.md 16.11): the throw pose, then the circles. He stops and never charges

@@ -423,7 +423,7 @@ export class Renderer {
    * The band grows in from the screen edges over 0.5 s at the lock; the walls are its inner edge. After a
    * lieutenant kill it fades out over 0.5 s, then the arena releases (design.md 16.11).
    */
-  private drawBand(w: World): void {
+  private drawBand(w: World, camX: number, camY: number): void {
     const a = w.arena;
     this.band.visible = !!a && !w.won;
     if (!a || w.won) return;
@@ -431,14 +431,17 @@ export class Renderer {
     this.band.alpha = down ? Math.max(0, 1 - (w.time - w.downAt) / LIEUTENANT_DOWN.tapeFadeSec) : 1;
     const k = Math.min(1, (w.time - a.lockedAt) / RUN.arenaGrowSec);
     const t = Math.max(1, Math.round(RUN.arenaBandPx * k));
-    const top = RUN.arenaHudPx;
-    const W = NATIVE_WIDTH;
-    const H = this.viewH;
+    // The tape frame, drawn just outside the arena rect in screen coords (design.md 16.16): for a big arena
+    // the walls follow the camera; for a screen-sized arena they sit at the screen edge exactly as before.
+    const L = Math.round(a.x0 - camX);
+    const R = Math.round(a.x1 - camX);
+    const T = Math.round(a.y0 - camY);
+    const B = Math.round(a.y1 - camY);
     const rects = [
-      [0, top, W, t],
-      [0, H - t, W, t],
-      [0, top, t, H - top],
-      [W - t, top, t, H - top],
+      [L - t, T - t, R - L + 2 * t, t], // top
+      [L - t, B, R - L + 2 * t, t], // bottom
+      [L - t, T - t, t, B - T + 2 * t], // left
+      [R, T - t, t, B - T + 2 * t], // right
     ];
     rects.forEach(([x, y, rw, rh], i) => {
       const s = this.bandTape[i];
@@ -447,7 +450,7 @@ export class Renderer {
       s.height = rh;
     });
     this.bandLine.clear();
-    if (k >= 1) this.bandLine.rect(t, top + t, W - 2 * t, H - top - 2 * t).stroke({ color: 0x14110f, width: 1, alignment: 1 });
+    if (k >= 1) this.bandLine.rect(L, T, R - L, B - T).stroke({ color: 0x14110f, width: 1, alignment: 1 });
   }
 
   /** Mines (Artist, PR #23): mine_00 while arming, then blinking to mine_01 three times a second once armed. */
@@ -543,6 +546,34 @@ export class Renderer {
    * ARTILLERY CALL circles (design.md 16.11): the ring sits on the sand, a red-orange fill closes inward
    * over 1.5 s, and a grenade arcs in from the Warlord over the last of it. The fill draws into this.fx.
    */
+  /** LT. VIPER's smoke clouds (design.md 16.16): a translucent grey puff that grows and fades. */
+  private drawSmokes(w: World): void {
+    for (const s of w.smokes) {
+      const k = Math.min(1, s.age / VIPER.smoke.fuseSec);
+      const r = VIPER.smoke.radiusPx * (0.6 + 0.4 * k);
+      const a = 0.55 * (1 - k);
+      if (a <= 0) continue;
+      const x = Math.round(s.x);
+      const y = Math.round(s.y);
+      this.fx.circle(x, y, r).fill({ color: 0x8b8f96, alpha: a });
+      this.fx.circle(x, y, r * 0.6).fill({ color: 0xaab0b6, alpha: a * 0.8 });
+    }
+  }
+
+  /** LT. VIPER's tracer streaks (design.md 16.16): a bright line trailing each sniper round — the reveal. */
+  private drawTracers(w: World): void {
+    for (const b of w.enemyBullets) {
+      if (!b.tracer) continue;
+      const sp = Math.hypot(b.vx, b.vy) || 1;
+      const len = VIPER.tracerLen;
+      const x0 = Math.round(b.x);
+      const y0 = Math.round(b.y);
+      const x1 = Math.round(b.x - (b.vx / sp) * len);
+      const y1 = Math.round(b.y - (b.vy / sp) * len);
+      this.fx.moveTo(x0, y0).lineTo(x1, y1).stroke({ color: 0xffd23c, width: 2, alpha: 0.85 });
+    }
+  }
+
   private drawArtillery(w: World): void {
     const A = WARLORD.artillery;
     const b = w.boss;
@@ -585,7 +616,7 @@ export class Renderer {
     const cam = cameraAt(w, this.viewH);
     const camX = Math.round(cam.x);
     const camY = Math.round(cam.y);
-    this.drawBand(w);
+    this.drawBand(w, camX, camY);
     this.world.position.set(-camX, -camY);
     this.ground.tilePosition.set(-camX, -camY);
 
@@ -677,6 +708,8 @@ export class Renderer {
     this.enemies.hideFrom(w.enemies.length);
     this.drawWarlord(w);
     this.drawArtillery(w);
+    this.drawSmokes(w);
+    this.drawTracers(w);
 
     w.enemyBullets.forEach((b, i) => this.enemyBullets.get(i, this.tex.bullet_enemy_00).position.set(Math.round(b.x), Math.round(b.y)));
     this.enemyBullets.hideFrom(w.enemyBullets.length);

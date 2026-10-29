@@ -701,3 +701,21 @@ So a high-DPS build still has to *play the mechanic* (it can't facetank and shre
 - **THE WARLORD — ramped HP** (20k→45k) so a strong build can't delete him before ARTILLERY CALL (phase 2) even fires.
 
 Still playtest-tuned, and the fixed HP tuned to a strong build raises the floor for weak ones — the skill mechanics (dodge, chase, survive) are meant to carry the fight length, with HP and the 3:00 enrage as backstops. Shield visual for Hammer's armor window (shield up = guarded, down = exposed) is still an art task; `bossVulnerable()` is exposed for it.
+
+### 16.16 The arena as each boss's signature; VIPER in a big arena (Esteban, 2026-10-29)
+
+Playtest of the §16.15 VIPER found the small-arena "flee-and-corner" design broken: with nowhere to run he hit a wall in seconds and got pinned, so "cornering him" collapsed into "walk up, he stops, unload." The fix reframes the **arena size as a per-boss lever**: HAMMER is a cramped room where he bullies you; VIPER is open ground where a sniper is hard to find.
+
+**Arena scale (`Target.arenaScale`, default 1).** `lockArena` builds a box `arenaScale ×` the screen, centred where the screen-sized box would sit. The camera **follows the player, clamped to the arena rect** — and because the clamp range collapses to a point for a screen-sized box, a scale-1 arena stays frozen exactly as before (HAMMER and the Warlord are untouched). The hazard-tape walls now draw at the real arena edges relative to the camera, so in a big arena you only see a wall when you're near one. VIPER's arena is **2.6×**.
+
+**VIPER's fight — hunt, close, break, re-hunt.**
+- **Snipe from range.** He holds at a snipe distance (`holdPx` 300) and picks at the player with his aimed burst; most of the time he's off-screen.
+- **Tracer reveal** (the only locate tell — no arrow/minimap). Each sniper round leaves a bright fading streak (`VIPER.tracerLen`); you get shot from the dark, trace the line back, move that way.
+- **Smoke break** (`VIPER.break`). While the player stays within `break.range`, a composure timer fills; at `break.sec` he **drops a smoke cloud and sprints** (`break.speed`) to the farthest of a few candidate vantages, firing nothing until he arrives (`break.dur`). The smoke + his speed + the open space mean you lose him — no teleport, no cornering. Then his next tracer tells you where he went.
+
+So the loop is: **tracer → hunt → close → a few shots → smoke-break → re-hunt.** The big space is the challenge, and it makes his "keep your distance" fantasy finally work.
+
+**Mechanics / needs:**
+- Camera follow + clamp in `cameraAt`; scaled rect in `lockArena`; arena-edge walls in the renderer's `drawBand`. All reduce to today's behaviour at scale 1.
+- New VIPER state (`breakT`/`breakLeft`/`breakX`/`breakY`), a `smokes` effect (visual only), and a `tracer` flag on his bullets. Rendered as a fading cloud and a streak.
+- Tuning levers: `arenaScale`, `holdPx`, `break.*` (range/sec/speed/dur), `smoke.*`, `tracerLen`. Start **visible-but-fast** on the break; add brief concealment in the smoke if playtests show you can still chase him down.
