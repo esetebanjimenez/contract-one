@@ -108,7 +108,7 @@ export const BOSS = {
   slam: { bullets: 18, speed: 160, damage: 16, range: 140 },
   // design.md 16.15 (playtest 2): HAMMER spawns tanky Heavies (shield mobs) from this phase, so the player
   // must split focus between dodging his charge and the high-HP enemies closing in. HAMMER only.
-  shieldAdds: { fromPhase: 1 as 1 | 2 | 3, everySec: 5, count: 2, hpMul: 9 },
+  shieldAdds: { fromPhase: 1 as 1 | 2 | 3, everySec: 5, count: 2, hpMul: 6.75 },
   // design.md 16.15 (playtest 2): in phase 3 HAMMER chains this many extra re-aimed charges, so one sidestep
   // isn't enough; the punish window opens only after the whole chain. HAMMER only.
   multiCharge: { chainInPhase3: 2 },
