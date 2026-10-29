@@ -692,3 +692,40 @@
   color: #b8ad92;
   margin-bottom: calc(8px * var(--s));
 }
+
+/* Loading overlay (title + progress bar) shown before the menu, while the art loads. */
+.loading {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #0b0c10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  font-family: 'Silkscreen', monospace;
+  color: #c8b48a;
+}
+.loading .ltitle {
+  font-size: clamp(18px, 7vw, 34px);
+  letter-spacing: 2px;
+  text-align: center;
+}
+.loading .lbar {
+  width: min(70vw, 300px);
+  height: 10px;
+  background: #1a1d24;
+  border: 1px solid #45413a;
+}
+.loading .lfill {
+  height: 100%;
+  width: 0%;
+  background: #c8b48a;
+  transition: width 0.12s linear;
+}
+.loading .lsub {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #6b6354;
+}
