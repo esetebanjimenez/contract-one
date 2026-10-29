@@ -7,6 +7,7 @@ import { Renderer } from './render/renderer';
 import { choosePerk, createWorld, step, type World } from './sim/world';
 import { Hud } from './ui/hud';
 import { Menu } from './ui/menu';
+import { Loading } from './ui/loading';
 import { Controls } from './ui/input';
 import './ui/style.css';
 
@@ -16,6 +17,9 @@ export async function boot(first?: () => World): Promise<void> {
   const frame = document.createElement('div');
   frame.className = 'frame';
   host.appendChild(frame);
+
+  // Loading screen (title + progress bar) over everything while the art loads.
+  const loading = new Loading(host);
 
   const app = new Application();
   await app.init({ width: NATIVE_WIDTH, height: NATIVE_HEIGHT, background: '#2a2117', antialias: false, roundPixels: true });
@@ -49,8 +53,9 @@ export async function boot(first?: () => World): Promise<void> {
     return { x: (cx - r.left) / scale, y: (cy - r.top) / scale, h: viewH };
   });
 
-  await renderer.load();
+  await renderer.load((f) => loading.set(f));
   fit();
+  loading.done();
 
   // Idle world as a backdrop until a mode is chosen; the opaque menu overlay covers it.
   let world = first ? first() : createWorld(Date.now() >>> 0);

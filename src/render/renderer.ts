@@ -349,13 +349,16 @@ export class Renderer {
 
   constructor(private readonly app: Application) {}
 
-  async load(): Promise<void> {
+  async load(onProgress?: (frac: number) => void): Promise<void> {
     const base = import.meta.env.BASE_URL;
+    let done = 0;
     for (const id of ART) {
       const t = await Assets.load<Texture>(`${base}art/${id}.png`);
       t.source.scaleMode = 'nearest';
       this.tex[id] = t;
+      onProgress?.(++done / ART.length);
     }
+    onProgress?.(1);
     const enemyArt = new Set<ArtId>([
       ...Object.values(ENEMY_ART),
       ...Object.values(ENEMY_WALK).flatMap((a) => a.frames),
