@@ -1,0 +1,111 @@
+{
+ "size": 144,
+ "pivot": [
+  30,
+  86
+ ],
+ "frames": {
+  "warlordfinal_t1_idle_00": {
+   "muzzle": [
+    134,
+    83
+   ]
+  },
+  "warlordfinal_t1_walkA_00": {
+   "muzzle": [
+    134,
+    79
+   ]
+  },
+  "warlordfinal_t1_walkB_00": {
+   "muzzle": [
+    134,
+    89
+   ]
+  },
+  "warlordfinal_t1_windup_00": {
+   "muzzle": [
+    128,
+    68
+   ]
+  },
+  "warlordfinal_t1_aim_00": {
+   "muzzle": [
+    136,
+    83
+   ]
+  },
+  "warlordfinal_t1_phase2_00": {
+   "muzzle": [
+    134,
+    82
+   ]
+  },
+  "warlordfinal_t1_phase2_walkA_00": {
+   "muzzle": [
+    134,
+    78
+   ]
+  },
+  "warlordfinal_t1_phase2_walkB_00": {
+   "muzzle": [
+    134,
+    87
+   ]
+  },
+  "warlordfinal_t1_phase2_windup_00": {
+   "muzzle": [
+    128,
+    68
+   ]
+  },
+  "warlordfinal_t1_phase2_aim_00": {
+   "muzzle": [
+    136,
+    82
+   ]
+  },
+  "warlordfinal_t1_phase3_00": {
+   "muzzle": [
+    136,
+    78
+   ]
+  },
+  "warlordfinal_t1_phase3_walkA_00": {
+   "muzzle": [
+    136,
+    74
+   ]
+  },
+  "warlordfinal_t1_phase3_walkB_00": {
+   "muzzle": [
+    136,
+    84
+   ]
+  },
+  "warlordfinal_t1_phase3_windup_00": {
+   "muzzle": [
+    129,
+    65
+   ]
+  },
+  "warlordfinal_t1_phase3_aim_00": {
+   "muzzle": [
+    138,
+    78
+   ]
+  },
+  "warlordfinal_t1_phase2_throw_00": {
+   "muzzle": [
+    135,
+    80
+   ]
+  },
+  "warlordfinal_t1_phase3_throw_00": {
+   "muzzle": [
+    136,
+    76
+   ]
+  }
+ }
+}
