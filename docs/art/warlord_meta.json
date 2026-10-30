@@ -1,86 +1,86 @@
 {
  "size": 144,
  "pivot": [
-  30,
+  31,
   86
  ],
  "frames": {
   "warlordfinal_t1_idle_00": {
    "muzzle": [
-    134,
+    135,
     83
    ]
   },
   "warlordfinal_t1_walkA_00": {
    "muzzle": [
-    134,
+    135,
     79
    ]
   },
   "warlordfinal_t1_walkB_00": {
    "muzzle": [
-    134,
+    135,
     89
    ]
   },
   "warlordfinal_t1_windup_00": {
    "muzzle": [
-    128,
+    129,
     68
    ]
   },
   "warlordfinal_t1_aim_00": {
    "muzzle": [
-    136,
+    137,
     83
    ]
   },
   "warlordfinal_t1_phase2_00": {
    "muzzle": [
-    134,
+    135,
     82
    ]
   },
   "warlordfinal_t1_phase2_walkA_00": {
    "muzzle": [
-    134,
+    135,
     78
    ]
   },
   "warlordfinal_t1_phase2_walkB_00": {
    "muzzle": [
-    134,
+    135,
     87
    ]
   },
   "warlordfinal_t1_phase2_windup_00": {
    "muzzle": [
-    128,
+    129,
     68
    ]
   },
   "warlordfinal_t1_phase2_aim_00": {
    "muzzle": [
-    136,
+    137,
     82
    ]
   },
   "warlordfinal_t1_phase3_00": {
    "muzzle": [
     136,
-    78
+    80
    ]
   },
   "warlordfinal_t1_phase3_walkA_00": {
    "muzzle": [
     136,
-    74
+    76
    ]
   },
   "warlordfinal_t1_phase3_walkB_00": {
    "muzzle": [
     136,
-    84
+    85
    ]
   },
   "warlordfinal_t1_phase3_windup_00": {
@@ -92,19 +92,19 @@
   "warlordfinal_t1_phase3_aim_00": {
    "muzzle": [
     138,
-    78
+    80
    ]
   },
   "warlordfinal_t1_phase2_throw_00": {
    "muzzle": [
-    135,
+    136,
     80
    ]
   },
   "warlordfinal_t1_phase3_throw_00": {
    "muzzle": [
-    136,
-    76
+    137,
+    77
    ]
   }
  }
