@@ -39,11 +39,9 @@ export interface Boss {
   burstCd: number;
   fanCd: number;
   mineCd: number;
-  // LT. VIPER's smoke break (design.md 16.16 v2): armed by taking damage, fires VIPER.break.sec later.
+  // LT. VIPER's smoke break (design.md 16.16 v3): armed by taking damage, fires VIPER.break.sec later.
   breakT: number; // seconds until the break fires (-1 = idle, not armed)
-  breakLeft: number; // seconds left sprinting to a new vantage (0 = not breaking)
-  breakX: number; // sprint target
-  breakY: number;
+  breakLeft: number; // seconds left settling after the teleport, holding fire (0 = not breaking)
   hpSeen: number; // his HP at the last gunner tick, to detect a fresh hit that arms the break
   // THE WARLORD only: his next scheduled attack is a charge (else an aimed burst).
   nextCharge: boolean;
@@ -181,8 +179,6 @@ export function createBoss(h: BossHost, target = 0, maxHp = BOSSES[target].hp): 
     mineCd: 0,
     breakT: -1,
     breakLeft: 0,
-    breakX: 0,
-    breakY: 0,
     hpSeen: 0,
     nextCharge: true,
     throwT: -1,
@@ -370,30 +366,16 @@ function spawnArtillery(b: Boss, h: BossHost): void {
 }
 
 /**
- * design.md 16.16: VIPER holds at his snipe distance and picks at the player. When the player closes and
- * stays close his composure fills; at break.sec he drops smoke and sprints to a new vantage (no cornering).
+ * design.md 16.16: VIPER holds at his snipe distance and picks at the player. Taking damage arms a break;
+ * VIPER.break.sec later he drops smoke and teleports to a far corner (no cornering).
  */
 function gunnerWalk(b: Boss, h: BossHost, dx: number, dy: number, d: number, speed: number): void {
-  // Breaking: sprint fast to the far corner, facing the way he runs (firing is gated off in gunnerAttacks).
+  b.facing = Math.atan2(dy, dx); // aim at the player
+  // Settling after a teleport: stand at the new corner, holding fire (gated in gunnerAttacks).
   if (b.breakLeft > 0) {
-    const tx = b.breakX - b.x;
-    const ty = b.breakY - b.y;
-    const td = Math.hypot(tx, ty) || 1;
-    b.facing = Math.atan2(ty, tx);
-    const stepPx = VIPER.break.speed * DT;
-    if (td <= stepPx) {
-      b.x = b.breakX;
-      b.y = b.breakY;
-      b.breakLeft = 0;
-    } else {
-      b.x += (tx / td) * stepPx;
-      b.y += (ty / td) * stepPx;
-      b.breakLeft -= DT;
-    }
-    b.moving = true;
+    b.breakLeft -= DT;
     return;
   }
-  b.facing = Math.atan2(dy, dx); // aim at the player while holding
   // Break timer (design.md 16.16 v2): a fresh hit arms it; VIPER.break.sec later he smokes and bolts.
   if (b.hp < b.hpSeen && b.breakT < 0) b.breakT = VIPER.break.sec;
   b.hpSeen = b.hp;
@@ -415,10 +397,12 @@ function gunnerWalk(b: Boss, h: BossHost, dx: number, dy: number, d: number, spe
   }
 }
 
-/** Drop a smoke cloud and sprint to one of the three arena corners farthest from the player (design.md 16.16). */
+/**
+ * Drop a big smoke cloud and teleport (hidden by it) to one of the three arena corners farthest from the
+ * player, with a smoke puff at the arrival too (design.md 16.16). A short settle before he snipes again.
+ */
 function startBreak(b: Boss, h: BossHost): void {
-  b.breakLeft = VIPER.break.dur;
-  h.smokes.push({ x: b.x, y: b.y, age: 0 });
+  h.smokes.push({ x: b.x, y: b.y, age: 0 }); // smoke where he vanishes
   const p = h.player;
   const a = h.arena;
   const m = VIPER.break.marginPx;
@@ -432,13 +416,15 @@ function startBreak(b: Boss, h: BossHost): void {
     // Farthest first; the nearest corner (last) is dropped, and one of the three farthest is picked at random.
     corners.sort((c1, c2) => (c2[0] - p.x) ** 2 + (c2[1] - p.y) ** 2 - ((c1[0] - p.x) ** 2 + (c1[1] - p.y) ** 2));
     const pick = corners[Math.min(2, Math.floor(h.rng() * 3))];
-    b.breakX = pick[0];
-    b.breakY = pick[1];
+    b.x = pick[0];
+    b.y = pick[1];
   } else {
     const ang = h.rng() * Math.PI * 2;
-    b.breakX = p.x + Math.cos(ang) * 600;
-    b.breakY = p.y + Math.sin(ang) * 600;
+    b.x = p.x + Math.cos(ang) * 600;
+    b.y = p.y + Math.sin(ang) * 600;
   }
+  h.smokes.push({ x: b.x, y: b.y, age: 0 }); // smoke where he reappears
+  b.breakLeft = VIPER.break.settleSec;
 }
 
 /** The aimed burst in flight: the line tracks, locks, then the bullets go down it. */

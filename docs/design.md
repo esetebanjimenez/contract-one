@@ -711,7 +711,7 @@ Playtest of the §16.15 VIPER found the small-arena "flee-and-corner" design bro
 **VIPER's fight — hunt, close, break, re-hunt.**
 - **Snipe from range.** He holds at a snipe distance (`holdPx` 300) and picks at the player with a **single quick aimed shot** (tracks, locks, fires — dodgeable but harder than the old slow 3-round burst); most of the time he's off-screen.
 - **Tracer reveal** (the only locate tell — no arrow/minimap). Each sniper round leaves a bright fading streak (`VIPER.tracerLen`); you get shot from the dark, trace the line back, move that way.
-- **Smoke break** (`VIPER.break`), v2: the break is armed when he **takes damage**; `break.sec` (2 s) later he **drops a smoke cloud and sprints very fast** (`break.speed`) to one of the three arena corners **farthest from the player**, facing the way he runs and firing nothing until he arrives (`break.dur`). The smoke + his speed + the open space mean you lose him — no teleport, no cornering. His next tracer tells you where he went. (So: find him → a few shots → he bolts → re-hunt.)
+- **Smoke break** (`VIPER.break`), v3: the break is armed when he **takes damage**; `break.sec` (2 s) later he drops a **big smoke cloud** (`smoke.radiusPx`) and **teleports** — hidden by the smoke — to one of the three arena corners **farthest from the player** (a puff at the arrival too), holding fire for a short `settleSec`. He's gone from where you had him; his next tracer tells you where he went. (So: find him → a few shots → he vanishes → re-hunt.)
 
 So the loop is: **tracer → hunt → close → a few shots → smoke-break → re-hunt.** The big space is the challenge, and it makes his "keep your distance" fantasy finally work.
 

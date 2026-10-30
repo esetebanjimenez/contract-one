@@ -845,10 +845,13 @@ describe('LT. VIPER (design.md 16.11)', () => {
     expect(w.boss!.damageable).toBe(true);
     w.mines.push({ x: w.player.x + 999, y: w.player.y, age: 0, damage: 1 });
     w.boss!.hp = 1;
-    // VIPER now flees out of a stationary player's range (design.md 16.15), so chase him to land the shot.
+    // VIPER keeps his distance in the big arena (design.md 16.16); park the player on him to land the shot.
     for (let i = 0; i < 600 && w.targetsDown < 2; i++) {
-      const b = w.boss;
-      step(w, { mx: b ? Math.sign(b.x - w.player.x) : 0, my: b ? Math.sign(b.y - w.player.y) : 0 });
+      if (w.boss) {
+        w.player.x = w.boss.x;
+        w.player.y = w.boss.y;
+      }
+      step(w, { mx: 0, my: 0 });
     }
     expect(w.targetsDown).toBe(2);
     expect(w.mines.length).toBe(0);
@@ -1706,9 +1709,9 @@ describe('big arena & smoke break (design.md 16.16)', () => {
       h.time += DT;
       updateBoss(b, h);
     }
-    expect(h.smokes.length).toBeGreaterThan(0); // dropped a smoke cloud
-    expect(b.breakLeft).toBeGreaterThan(0); // sprinting away, not cornered
-    // The chosen vantage is a far corner, well away from the player.
-    expect(Math.hypot(b.breakX - h.player.x, b.breakY - h.player.y)).toBeGreaterThan(400);
+    expect(h.smokes.length).toBeGreaterThanOrEqual(2); // smoke where he vanished and where he reappears
+    expect(b.breakLeft).toBeGreaterThan(0); // settling after the teleport, not cornered
+    // He teleported to a far corner, well away from the player.
+    expect(Math.hypot(b.x - h.player.x, b.y - h.player.y)).toBeGreaterThan(400);
   });
 });

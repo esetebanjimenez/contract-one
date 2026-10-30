@@ -66,11 +66,11 @@ export const VIPER = {
   holdSlackPx: 15, // stands still within holdPx +/- this
   speed: 45,
   contactDamage: 25,
-  // design.md 16.16 (v2): the smoke break fires `sec` after he first takes damage — then he drops a smoke
-  // cloud and sprints (`speed`, very fast) to one of the three corners farthest from the player, for up to
-  // `dur`, facing the way he runs. No cornering: he always bolts far.
-  break: { sec: 2, speed: 800, dur: 3.5, marginPx: 40 },
-  smoke: { radiusPx: 64, fuseSec: 1.6 },
+  // design.md 16.16 (v3): the smoke break fires `sec` after he first takes damage — he drops a big smoke
+  // cloud and TELEPORTS (hidden by the smoke) to one of the three corners farthest from the player, then
+  // holds `settleSec` before sniping again. No cornering: he always reappears far.
+  break: { sec: 2, settleSec: 0.4, marginPx: 40 },
+  smoke: { radiusPx: 120, fuseSec: 1.8 },
   tracerLen: 70, // length of the fading tracer streak behind each sniper round (the reveal)
   // design.md 16.16 (v2): the aim line tracks, locks, then a single quick shot goes down it — dodgeable but
   // harder than the old slow 3-round burst.
