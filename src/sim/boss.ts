@@ -272,9 +272,13 @@ function endCharge(b: Boss, h: BossHost): void {
 
 function shoot(b: Boss, h: BossHost, angle: number, speed: number, damage: number, range: number, tracer = false): void {
   if (h.enemyBullets.length >= CAPS.enemyBullets) return;
+  // Fired from the drawn muzzle (no unseen round inside his rifle), turned with the sprite.
+  const m = BOSSES[b.target].muzzle ?? [0, 0];
+  const c = Math.cos(b.facing);
+  const s = Math.sin(b.facing);
   h.enemyBullets.push({
-    x: b.x,
-    y: b.y,
+    x: b.x + m[0] * c - m[1] * s,
+    y: b.y + m[0] * s + m[1] * c,
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
     rangeLeft: range,

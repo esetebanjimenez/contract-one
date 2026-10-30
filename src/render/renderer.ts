@@ -14,6 +14,7 @@ import { BONE_WHITE, innerWhite, outlined, silhouette } from './bake';
 import { bossFlashAlpha } from './boss-flash';
 import { smokeAlpha, smokeScale } from './smoke';
 import { CRATER_LOOK, HAMMER_CHARGE_FRAME_MS, craterAlpha, hammerRotation } from './hammer';
+import { muzzleAt, streakFromMuzzle, type Muzzle } from './muzzle';
 import { DamageNumbers } from './damage-numbers';
 
 const ART = [
@@ -235,8 +236,8 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     open: 'hammer_t1_open_00',
   },
   gunner: {
-    size: 96,
-    pivot: { x: 30, y: 48 },
+    size: 148,
+    pivot: { x: 36, y: 72 },
     idle: 'viper_t1_idle_00',
     walk: ['viper_t1_walkA_00', 'viper_t1_idle_00', 'viper_t1_walkB_00', 'viper_t1_idle_00'],
     windup: null,
@@ -252,8 +253,8 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     open: null,
   },
   warlord: {
-    size: 128,
-    pivot: { x: 52, y: 64 },
+    size: 144,
+    pivot: { x: 31, y: 86 },
     idle: 'warlordfinal_t1_idle_00',
     walk: ['warlordfinal_t1_walkA_00', 'warlordfinal_t1_idle_00', 'warlordfinal_t1_walkB_00', 'warlordfinal_t1_idle_00'],
     windup: 'warlordfinal_t1_windup_00',
@@ -348,6 +349,8 @@ export class Renderer {
   private pickups!: Pool;
   private enemies!: Pool;
   private enemyBullets!: Pool;
+  /** The boss's muzzle this frame (overhead art: the gun reaches past his body), for the aim line and tracer. */
+  private muzzle: Muzzle | null = null;
   private bullets!: Pool;
   private blasts!: Pool;
   private mines!: Pool;
@@ -515,6 +518,7 @@ export class Renderer {
     const fl = this.warlordFlash;
     s.visible = !!b && b.hp > 0;
     fl.visible = false;
+    this.muzzle = null;
     if (!b || b.hp <= 0) return;
     const set = BOSS_ART[BOSSES[b.target].style];
     let art: ArtId;
@@ -557,13 +561,14 @@ export class Renderer {
       fl.anchor.set(set.pivot.x / set.size, set.pivot.y / set.size);
     }
     const r = bossRadius(b);
+    this.muzzle = muzzleAt(art, s.x, s.y, s.rotation);
     if (b.aimT >= 0) {
       // The aim line (Artist, PR #23): 1 px #FF4A1C, half alpha while it tracks, full alpha once locked.
       const locked = b.aimT >= VIPER.burst.trackSec;
       const len = 320;
       this.fx
         // Pixel centres (+0.5): a 1 px line on whole-pixel edges falls between pixels and vanishes without antialiasing.
-        .moveTo(Math.round(b.x + b.aimX * r) + 0.5, Math.round(b.y + b.aimY * r) + 0.5)
+        .moveTo(Math.round(this.muzzle?.x ?? b.x + b.aimX * r) + 0.5, Math.round(this.muzzle?.y ?? b.y + b.aimY * r) + 0.5)
         .lineTo(Math.round(b.x + b.aimX * len) + 0.5, Math.round(b.y + b.aimY * len) + 0.5)
         .stroke({ color: TELEGRAPH_COLOR, width: 1, alpha: locked ? 1 : 0.5 });
     }
@@ -628,7 +633,9 @@ export class Renderer {
     for (const b of w.enemyBullets) {
       if (!b.tracer) continue;
       const sp = Math.hypot(b.vx, b.vy) || 1;
-      const len = VIPER.tracerLen;
+      // Sim rounds leave his body centre; the streak (and the round, below) starts at the rifle's muzzle.
+      const len = this.muzzle ? streakFromMuzzle(b.x, b.y, b.vx, b.vy, this.muzzle, VIPER.tracerLen) : VIPER.tracerLen;
+      if (len <= 0) continue;
       const x0 = Math.round(b.x);
       const y0 = Math.round(b.y);
       const x1 = Math.round(b.x - (b.vx / sp) * len);
@@ -774,7 +781,12 @@ export class Renderer {
     this.drawSmokes(w);
     this.drawTracers(w);
 
-    w.enemyBullets.forEach((b, i) => this.enemyBullets.get(i, this.tex.bullet_enemy_00).position.set(Math.round(b.x), Math.round(b.y)));
+    const m = this.muzzle;
+    w.enemyBullets.forEach((b, i) => {
+      const sp = this.enemyBullets.get(i, this.tex.bullet_enemy_00);
+      sp.position.set(Math.round(b.x), Math.round(b.y));
+      sp.visible = !(b.tracer && m && streakFromMuzzle(b.x, b.y, b.vx, b.vy, m, 1) < 0); // still inside VIPER's rifle
+    });
     this.enemyBullets.hideFrom(w.enemyBullets.length);
     w.bullets.forEach((b, i) => this.bullets.get(i, this.tex.bullet_player_00).position.set(Math.round(b.x), Math.round(b.y)));
     this.bullets.hideFrom(w.bullets.length);
