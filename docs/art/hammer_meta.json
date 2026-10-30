@@ -1,0 +1,22 @@
+{
+ "size": 132,
+ "pivot": [
+  30,
+  65
+ ],
+ "frames": {
+  "hammer_t1_idle_00": {},
+  "hammer_t1_walkA_00": {},
+  "hammer_t1_walkB_00": {},
+  "hammer_t1_windup_00": {},
+  "hammer_t1_chargeA_00": {},
+  "hammer_t1_chargeB_00": {},
+  "hammer_t1_open_00": {},
+  "hammer_t1_phase2_idle_00": {},
+  "hammer_t1_phase2_walkA_00": {},
+  "hammer_t1_phase2_walkB_00": {},
+  "hammer_t1_phase3_idle_00": {},
+  "hammer_t1_phase3_walkA_00": {},
+  "hammer_t1_phase3_walkB_00": {}
+ }
+}

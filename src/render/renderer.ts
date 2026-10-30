@@ -7,12 +7,13 @@ import { NATIVE_HEIGHT, NATIVE_WIDTH } from '../data/display';
 import { RUN } from '../data/run';
 import { ELITE, GRUNT_WEAPONS, gruntWeapon, type GruntWeapon } from '../data/enemies';
 import { MERC_ART, RIFLEMAN_ART } from '../data/player';
-import { bossRadius, enragedFor, mineArmed } from '../sim/boss';
+import { bossRadius, bossVulnerable, enragedFor, mineArmed } from '../sim/boss';
 import { cameraAt, type Enemy, type World } from '../sim/world';
 import type { Controls } from '../ui/input';
 import { BONE_WHITE, innerWhite, outlined, silhouette } from './bake';
 import { bossFlashAlpha } from './boss-flash';
 import { smokeAlpha, smokeScale } from './smoke';
+import { CRATER_LOOK, HAMMER_CHARGE_FRAME_MS, craterAlpha, hammerRotation } from './hammer';
 import { DamageNumbers } from './damage-numbers';
 
 const ART = [
@@ -43,12 +44,19 @@ const ART = [
   'bullet_player_00',
   'bullet_enemy_00',
   'scrap_00',
-  'warlord_t1_idle_00',
-  'warlord_t1_walkA_00',
-  'warlord_t1_walkB_00',
-  'warlord_t1_windup_00',
-  'warlord_t1_phase2_00',
-  'warlord_t1_phase3_00',
+  'hammer_t1_idle_00',
+  'hammer_t1_walkA_00',
+  'hammer_t1_walkB_00',
+  'hammer_t1_windup_00',
+  'hammer_t1_chargeA_00',
+  'hammer_t1_chargeB_00',
+  'hammer_t1_open_00',
+  'hammer_t1_phase2_idle_00',
+  'hammer_t1_phase2_walkA_00',
+  'hammer_t1_phase2_walkB_00',
+  'hammer_t1_phase3_idle_00',
+  'hammer_t1_phase3_walkA_00',
+  'hammer_t1_phase3_walkB_00',
   'viper_t1_idle_00',
   'viper_t1_walkA_00',
   'viper_t1_walkB_00',
@@ -121,6 +129,7 @@ const ART = [
   'warlordfinal_t1_phase3_throw_00',
   'fx/smoke_puff_00',
   'fx/smoke_puff_01',
+  'fx/hammer_slam_crack_00',
 ] as const;
 type ArtId = (typeof ART)[number];
 
@@ -180,8 +189,8 @@ export function lungeFrame(weapon: GruntWeapon, t: number): ArtId {
 }
 
 /**
- * Each target's sprite set, drawn at native size and facing right (Artist, PR #23). LT. HAMMER keeps the M3
- * warlord_t1 frames. Walks go A-idle-B-idle at 180 ms. aim shows while the aim line is up, fire during a burst.
+ * Each target's sprite set, drawn at native size and facing right (Artist, PR #23). LT. HAMMER is the bomb-suit
+ * breacher (hammer_t1, art/hammer-redesign). Walks go A-idle-B-idle at 180 ms. aim shows while the aim line is up, fire during a burst.
  */
 interface BossArt {
   size: number;
@@ -200,22 +209,30 @@ interface BossArt {
   phaseAim: Partial<Record<2 | 3, ArtId>>;
   /** ARTILLERY CALL throw pose per phase (design.md 16.11, the Warlord only). */
   phaseThrow: Partial<Record<2 | 3, ArtId>>;
+  /** HAMMER only (design.md 16.15): his charge run, and the open pose (visor up) while bossVulnerable(). */
+  charge: ArtId[];
+  open: ArtId | null;
 }
 const BOSS_ART: Record<Target['style'], BossArt> = {
   charger: {
-    size: 96,
-    pivot: { x: 27, y: 44 },
-    idle: 'warlord_t1_idle_00',
-    walk: ['warlord_t1_walkA_00', 'warlord_t1_idle_00', 'warlord_t1_walkB_00', 'warlord_t1_idle_00'],
-    windup: 'warlord_t1_windup_00',
+    size: 132,
+    pivot: { x: 30, y: 65 },
+    idle: 'hammer_t1_idle_00',
+    walk: ['hammer_t1_walkA_00', 'hammer_t1_idle_00', 'hammer_t1_walkB_00', 'hammer_t1_idle_00'],
+    windup: 'hammer_t1_windup_00',
     aim: null,
     fire: null,
-    phase2: 'warlord_t1_phase2_00',
-    phase3: 'warlord_t1_phase3_00',
-    phaseWalk: {},
+    phase2: 'hammer_t1_phase2_idle_00',
+    phase3: 'hammer_t1_phase3_idle_00',
+    phaseWalk: {
+      2: ['hammer_t1_phase2_walkA_00', 'hammer_t1_phase2_idle_00', 'hammer_t1_phase2_walkB_00', 'hammer_t1_phase2_idle_00'],
+      3: ['hammer_t1_phase3_walkA_00', 'hammer_t1_phase3_idle_00', 'hammer_t1_phase3_walkB_00', 'hammer_t1_phase3_idle_00'],
+    },
     phaseWindup: {},
     phaseAim: {},
     phaseThrow: {},
+    charge: ['hammer_t1_chargeA_00', 'hammer_t1_chargeB_00'],
+    open: 'hammer_t1_open_00',
   },
   gunner: {
     size: 96,
@@ -231,6 +248,8 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseWindup: {},
     phaseAim: {},
     phaseThrow: {},
+    charge: [],
+    open: null,
   },
   warlord: {
     size: 128,
@@ -249,6 +268,8 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseWindup: { 2: 'warlordfinal_t1_phase2_windup_00', 3: 'warlordfinal_t1_phase3_windup_00' },
     phaseAim: { 2: 'warlordfinal_t1_phase2_aim_00', 3: 'warlordfinal_t1_phase3_aim_00' },
     phaseThrow: { 2: 'warlordfinal_t1_phase2_throw_00', 3: 'warlordfinal_t1_phase3_throw_00' },
+    charge: [],
+    open: null,
   },
 };
 const bossFrames = (a: BossArt): ArtId[] =>
@@ -265,6 +286,8 @@ const bossFrames = (a: BossArt): ArtId[] =>
     ...Object.values(a.phaseWindup),
     ...Object.values(a.phaseAim),
     ...Object.values(a.phaseThrow),
+    ...a.charge,
+    a.open,
   ].filter((x): x is ArtId => x !== null);
 const WARLORD_FRAME_MS = 180;
 const TELEGRAPH_COLOR = 0xff4a1c;
@@ -331,6 +354,10 @@ export class Renderer {
   private artilleryRings!: Pool;
   private artilleryShadows!: Pool;
   private smokes!: Pool;
+  private craterPool!: Pool;
+  /** HAMMER's slam cracks (render-only): where each charge stopped and when. */
+  private craters: { x: number; y: number; at: number }[] = [];
+  private lastBossState = '';
   private artilleryGrenades!: Pool;
   private crates!: Pool;
   private crateShadows!: Pool;
@@ -387,6 +414,7 @@ export class Renderer {
     this.bullets = new Pool(layers[4]);
     this.blasts = new Pool(layers[5]);
     this.smokes = new Pool(layers[5]); // above VIPER so the cloud hides his teleport, under the merc
+    this.craterPool = new Pool(layers[0]); // HAMMER's slam cracks, on the sand under the slam ring and the units
     this.mines = new Pool(layers[0]); // on the sand, under everyone
     this.artilleryRings = new Pool(layers[0]); // ARTILLERY CALL circles sit on the sand, under the units
     this.artilleryShadows = new Pool(layers[0]);
@@ -396,9 +424,9 @@ export class Renderer {
     this.merc.anchor.set(MERC_ART.bodyCenter.x / MERC_ART.size.w, MERC_ART.bodyCenter.y / MERC_ART.size.h);
     // Soft shadow under the merc so the coyote helmet separates from the sand (Artist, M2).
     this.shadow.ellipse(0, 0, MERC_ART.shadow.rx, MERC_ART.shadow.ry).fill({ color: 0x000000, alpha: MERC_ART.shadow.alpha });
-    this.warlord = new Sprite(this.tex.warlord_t1_idle_00);
+    this.warlord = new Sprite(this.tex.hammer_t1_idle_00);
     this.warlord.visible = false;
-    this.warlordFlash = new Sprite(this.tex.warlord_t1_idle_00);
+    this.warlordFlash = new Sprite(this.tex.hammer_t1_idle_00);
     this.warlordFlash.visible = false;
     layers[1].addChild(this.warlord, this.warlordFlash);
     layers[2].addChild(this.shadow, this.merc);
@@ -481,6 +509,7 @@ export class Renderer {
 
   private drawWarlord(w: World): void {
     this.drawMines(w);
+    this.drawCraters(w);
     const b = w.boss;
     const s = this.warlord;
     const fl = this.warlordFlash;
@@ -495,6 +524,10 @@ export class Renderer {
     if (b.throwT >= 0 && ph && set.phaseThrow[ph])
       art = set.phaseThrow[ph]!; // ARTILLERY CALL throw pose
     else if (b.state === 'telegraph' && set.windup) art = (ph && set.phaseWindup[ph]) || set.windup;
+    else if (b.state === 'charge' && set.charge.length)
+      art = set.charge[Math.floor((w.time * 1000) / HAMMER_CHARGE_FRAME_MS) % set.charge.length];
+    else if (set.open && bossVulnerable(b) && b.state !== 'stagger')
+      art = set.open; // visor up: hit him now
     else if (b.burstLeft > 0 && set.fire) art = (ph && set.phaseAim[ph] && set.fire === set.aim ? set.phaseAim[ph] : null) || set.fire;
     else if (b.aimT >= 0 && set.aim) art = (ph && set.phaseAim[ph]) || set.aim;
     else if (b.moving && b.state !== 'stagger') {
@@ -510,7 +543,8 @@ export class Renderer {
     const tex = stagger ? this.flashTex[art] : pulse ? this.enrageTex[art] : this.tex[art];
     if (s.texture !== tex) s.texture = tex;
     s.position.set(Math.round(b.x), Math.round(b.y));
-    s.rotation = b.facing;
+    // Every boss is drawn from overhead facing right, so he simply rotates (HAMMER holds his charge facing while open).
+    s.rotation = set.open ? hammerRotation(b.facing, Math.atan2(b.dirY, b.dirX), bossVulnerable(b)) : b.facing;
     s.anchor.set(set.pivot.x / set.size, set.pivot.y / set.size);
     const a = stagger || b.hitAt < 0 ? 0 : bossFlashAlpha(w.time - b.hitAt);
     if (a > 0) {
@@ -551,6 +585,30 @@ export class Renderer {
    * ARTILLERY CALL circles (design.md 16.11): the ring sits on the sand, a red-orange fill closes inward
    * over 1.5 s, and a grenade arcs in from the Warlord over the last of it. The fill draws into this.fx.
    */
+  /**
+   * LT. HAMMER's slam cracks (design.md 16.15, Artist): a 48 px decal dropped where each charge stops (the slam point,
+   * chained phase-3 charges included), held then faded by craterAlpha. Render-only, so the sim stays untouched.
+   */
+  private drawCraters(w: World): void {
+    const b = w.boss;
+    const st = b && b.hp > 0 && BOSSES[b.target].style === 'charger' ? b.state : '';
+    if (!st) this.craters.length = 0;
+    else if (this.lastBossState === 'charge' && st !== 'charge') {
+      this.craters.push({ x: b!.x, y: b!.y, at: w.time });
+      if (this.craters.length > CRATER_LOOK.max) this.craters.shift();
+    }
+    this.lastBossState = st;
+    let n = 0;
+    for (const c of this.craters) {
+      const a = craterAlpha(w.time - c.at);
+      if (a <= 0) continue;
+      const sp = this.craterPool.get(n++, this.tex['fx/hammer_slam_crack_00']);
+      sp.position.set(Math.round(c.x), Math.round(c.y));
+      sp.alpha = a;
+    }
+    this.craterPool.hideFrom(n);
+  }
+
   /** LT. VIPER's smoke puffs (design.md 16.16, Artist): near-opaque cover for his teleport, then a fade. */
   private drawSmokes(w: World): void {
     let n = 0;
