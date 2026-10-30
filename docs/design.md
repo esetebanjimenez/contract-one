@@ -499,13 +499,13 @@ Esteban's win at 5:52 (level 22, 23,594 boss damage, about a 52 s fight) showed 
 - Attacks are reused from Lieutenant 1 and 2, except ARTILLERY CALL below, which is his own.
 
 **ARTILLERY CALL (the Warlord only; Esteban, 2026-10-25).** Makes standing still punishable so the fight isn't solved by circling.
-- **Phase 2:** every 7 s. **Phase 3:** every 6 s. Not in phase 1.
-- He stops and plays a throw pose (raised arm) for 0.4 s, then 3 target circles appear at once (5 in phase 3): one centred on the player's position at that moment, the rest at random spots 80–140 px from the player, inside the arena walls. Circles never overlap each other or a mine.
-- Each circle is 36 px across: a red-orange `#FF4A1C` ring that fills inward over 1.5 s. In the last 0.4 s a grenade sprite arcs in from the Warlord; when the fill completes it explodes over the full circle.
+- **Phase 2:** every 5 s. **Phase 3:** every 3.5 s. Not in phase 1. (Raised from 7 s and 6 s by §16.15's denser survival window; live in `BOSS.artillery`.)
+- He stops and plays a throw pose (raised arm) for 0.4 s, then 5 target circles appear at once (8 in phase 3): one centred on the player's position at that moment, the rest at random spots 80–200 px from the player, inside the arena walls. Circles never overlap each other or a mine; a spot that can't be placed in 40 tries is skipped, which keeps a walkable gap (§16.15 fairness rule).
+- Each circle is 44 px across: a red-orange `#FF4A1C` ring that fills inward over 1.5 s. In the last 0.4 s a grenade sprite arcs in from the Warlord; when the fill completes it explodes over the full circle.
 - **Damage:** 30 per circle (20 base × his ×1.5), once per circle; standing in two overlapping blasts can't happen since circles don't overlap. Ceramic Plates applies.
 - **With the charge:** he never charges while throwing. A throw pushes his next charge back by 1.0 s, and the ARTILLERY CALL timer pauses while a charge (telegraph + dash) runs. Rings, bursts, fan, mines and reinforcements keep their own timers.
 - **Art (Artist, Esteban okays):** throw pose for phases 2 and 3, the target ring, and a small thrown grenade. Explosion reuses the mine blast.
-- **Tuning levers, in order:** circle count, interval, damage. Warlord fight stays inside 60–120 s (§16.11).
+- **Tuning levers, in order:** circle count, interval, damage. Fight length is playtest-tuned with fixed HP and a 3:00 anti-stall enrage (§16.15).
 
 **Between fights**
 - **On a lieutenant kill:** 0.5 s slow-mo, a "LIEUTENANT DOWN" banner for 2 s, then the hazard tape fades out over 0.5 s, the camera unlocks and waves resume. There are no spawns within 200 px of the player for the first 3 s.
@@ -529,7 +529,7 @@ Esteban's win at 5:52 (level 22, 23,594 boss damage, about a 52 s fight) showed 
 **Sim targets (kite-smart; Esteban's runs come first)**
 - Reaches Lieutenant 1 in 80–95% of runs, kills him in 70–85% of fights (Esteban's run says he's the opener, not a wall).
 - Kills Lieutenant 2 in 55–75% of fights reached, and the Warlord in 40–60% of fights reached.
-- Fight length: Lieutenant 1 **40–90 s** (the opener; Esteban's kill took about 52 s), Lieutenant 2 and the Warlord 60–120 s. Enrage in under 10% of each fight.
+- Fight length: Lieutenant 1 **40–90 s** (the opener; Esteban's kill took about 52 s), Lieutenant 2 and the Warlord 60–120 s. Enrage in under 10% of each fight. **Superseded by §16.15:** boss HP is fixed (HAMMER 7k, VIPER 13k, the Warlord 45k), enrage is a 3:00 anti-stall net, and fight length is judged in Esteban's playtests, with the sim as a regression guard only.
 - Report the level and boss HP at each spawn, plus contract completion rate; no target yet.
 - `tools/sim-report.ts` gets these targets in the same PR.
 
@@ -588,7 +588,7 @@ Esteban's full-contract run (18:28, level 66, 2/3 targets, the Warlord at 1%) ma
 **Boss HP** still follows sheet DPS at spawn (§16.5), so the bosses scale down with the smaller builds on their own.
 
 **Targets (Esteban's next full run comes first):**
-- The late game is no longer trivial: Lieutenant 2 and the Warlord fights are inside 60–120 s and the player has to move with intent, not just circle.
+- The late game is no longer trivial: Lieutenant 2 and the Warlord fights are inside 60–120 s and the player has to move with intent, not just circle. (Fight-length target superseded by §16.15.)
 - Sim: report crates opened per run and the crate perks owned at each target. Kite-smart reaching the Warlord should have opened 5–8 crates.
 - If it's still trivial, the next lever is the Scrap needed per level after 5:00 (level 66 at 18:28 is still a lot of picks), then the gap between elites (2:00). **Superseded by §16.13:** it stayed trivial between the bosses, but slowing level-ups would kill progression, so we scale the waves to the player instead.
 
