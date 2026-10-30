@@ -8,6 +8,8 @@ export interface Target {
   damageScale: number; // charge, bullet and mine damage (contact damage is set per attack style)
   final: boolean; // killing him ends the contract
   style: 'charger' | 'gunner' | 'warlord'; // which attack set he fights with
+  /** His rounds leave the gun's muzzle, this far ahead of (x) and beside (y) his body pivot at facing 0 (Artist's overhead art, docs/art/*_meta.json). */
+  muzzle?: [number, number];
   radius: number; // body and hit radius, px (scales with his sprite: 30 for 96x96)
   arenaScale?: number; // design.md 16.16: arena size vs the screen (default 1 = frozen cam; >1 = a big arena the camera follows)
 }
@@ -18,8 +20,18 @@ export interface Target {
 export const BOSSES: Target[] = [
   { name: 'LT. HAMMER', atSec: 300, hp: 7000, damageScale: 1, final: false, style: 'charger', radius: 30 },
   // design.md 16.16: VIPER fights in a big arena — a sniper you hunt across open ground (camera follows).
-  { name: 'LT. VIPER', atSec: 540, hp: 13000, damageScale: 1.25, final: false, style: 'gunner', radius: 16, arenaScale: 2.6 },
-  { name: 'THE WARLORD', atSec: 780, hp: 45000, damageScale: 1.5, final: true, style: 'warlord', radius: 40 }, // 128x128
+  {
+    name: 'LT. VIPER',
+    atSec: 540,
+    hp: 13000,
+    damageScale: 1.25,
+    final: false,
+    style: 'gunner',
+    radius: 16,
+    arenaScale: 2.6,
+    muzzle: [93, -5],
+  },
+  { name: 'THE WARLORD', atSec: 780, hp: 45000, damageScale: 1.5, final: true, style: 'warlord', radius: 40, muzzle: [106, -3] }, // 128x128
 ];
 
 /**

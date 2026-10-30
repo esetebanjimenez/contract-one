@@ -25,3 +25,11 @@ describe('boss muzzle points (art/bosses-topdown)', () => {
     expect(streakFromMuzzle(-300, 0, -5, 0, m, 30)).toBe(30); // a round fired before he turned keeps its streak
   });
 });
+
+describe('boss rounds leave the drawn muzzle (Designer: no unseen bullets)', () => {
+  it('matches the fire and aim frames in the art meta', async () => {
+    const { BOSSES } = await import('../src/data/boss');
+    expect(BOSSES.find((t) => t.style === 'gunner')!.muzzle).toEqual(BOSS_MUZZLE.viper_t1_fire_00);
+    expect(BOSSES.find((t) => t.style === 'warlord')!.muzzle).toEqual(BOSS_MUZZLE.warlordfinal_t1_aim_00);
+  });
+});
