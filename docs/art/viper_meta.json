@@ -1,0 +1,51 @@
+{
+ "size": 148,
+ "pivot": [
+  36,
+  72
+ ],
+ "frames": {
+  "viper_t1_idle_00": {
+   "muzzle": [
+    120,
+    69
+   ]
+  },
+  "viper_t1_walkA_00": {
+   "muzzle": [
+    120,
+    65
+   ]
+  },
+  "viper_t1_walkB_00": {
+   "muzzle": [
+    120,
+    74
+   ]
+  },
+  "viper_t1_aim_00": {
+   "muzzle": [
+    130,
+    67
+   ]
+  },
+  "viper_t1_fire_00": {
+   "muzzle": [
+    129,
+    67
+   ]
+  },
+  "viper_t1_phase2_00": {
+   "muzzle": [
+    130,
+    66
+   ]
+  },
+  "viper_t1_phase3_00": {
+   "muzzle": [
+    121,
+    65
+   ]
+  }
+ }
+}
