@@ -212,7 +212,7 @@ interface BossArt {
   /** HAMMER only (design.md 16.15): his charge run, and the open pose (visor up) while bossVulnerable(). */
   charge: ArtId[];
   open: ArtId | null;
-  /** Flip the sprite instead of rotating it upside down when he faces left. */
+  /** Flip the sprite instead of rotating it upside down when he faces left, tilting at most 60 degrees (Esteban). */
   mirrorLeft: boolean;
 }
 const BOSS_ART: Record<Target['style'], BossArt> = {
@@ -253,7 +253,7 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseThrow: {},
     charge: [],
     open: null,
-    mirrorLeft: false,
+    mirrorLeft: true,
   },
   warlord: {
     size: 128,
@@ -274,7 +274,7 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseThrow: { 2: 'warlordfinal_t1_phase2_throw_00', 3: 'warlordfinal_t1_phase3_throw_00' },
     charge: [],
     open: null,
-    mirrorLeft: false,
+    mirrorLeft: true,
   },
 };
 const bossFrames = (a: BossArt): ArtId[] =>
