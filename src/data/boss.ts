@@ -66,13 +66,15 @@ export const VIPER = {
   holdSlackPx: 15, // stands still within holdPx +/- this
   speed: 45,
   contactDamage: 25,
-  // design.md 16.16: the smoke break. While the player is within `range`, a composure timer fills; at `sec`
-  // he drops a smoke cloud and sprints (`speed`) to a far vantage, for up to `dur`. `tries` candidate spots.
-  break: { range: 130, sec: 1.2, speed: 280, dur: 1.4, tries: 10, marginPx: 40 },
+  // design.md 16.16 (v2): the smoke break fires `sec` after he first takes damage — then he drops a smoke
+  // cloud and sprints (`speed`, very fast) to one of the three corners farthest from the player, for up to
+  // `dur`, facing the way he runs. No cornering: he always bolts far.
+  break: { sec: 2, speed: 800, dur: 3.5, marginPx: 40 },
   smoke: { radiusPx: 64, fuseSec: 1.6 },
-  tracerLen: 60, // length of the fading tracer streak behind each sniper round (the reveal)
-  // Phase 1+: the aim line tracks, locks, then the burst fires down it.
-  burst: { firstAfterSec: 1, everySec: 2.5, trackSec: 0.6, lockSec: 0.2, bullets: 3, shotGapSec: 0.08, speed: 160, damage: 12, range: 700 },
+  tracerLen: 70, // length of the fading tracer streak behind each sniper round (the reveal)
+  // design.md 16.16 (v2): the aim line tracks, locks, then a single quick shot goes down it — dodgeable but
+  // harder than the old slow 3-round burst.
+  burst: { firstAfterSec: 1, everySec: 2, trackSec: 0.6, lockSec: 0.2, bullets: 1, shotGapSec: 0.08, speed: 340, damage: 14, range: 900 },
   // Phase 2+: a fan toward the player, alternating with the burst (never fired while a burst is aiming or firing).
   fan: { everySec: 4, firstAfterSec: 2, bullets: 7, spreadDeg: 60, speed: 100, damage: 12, range: 700 },
   // design.md 16.15 (playtest 2): a mine trail laid midway between him and the player (not just behind him),
