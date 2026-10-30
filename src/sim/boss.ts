@@ -614,6 +614,12 @@ export function updateBoss(b: Boss, h: BossHost): void {
         gunnerWalk(b, h, dx, dy, d, speed);
         break;
       }
+      // design.md 16.15: the slam plants him. He stands on the spot for the whole open window (sledge head in the
+      // sand, no slide); his charge timer keeps counting so the cadence is unchanged.
+      if (bossVulnerable(b)) {
+        b.chargeCd -= DT;
+        break;
+      }
       // ARTILLERY CALL (design.md 16.11): the throw pose, then the circles. He stops and never charges
       // while throwing; its timer counts only in walk, so it pauses through a charge (telegraph + dash).
       if (warlord && b.throwT >= 0) {

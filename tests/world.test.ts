@@ -1558,6 +1558,29 @@ describe('bosses are skill gates (design.md 16.15)', () => {
     expect(bossDamageMul(b)).toBe(1);
   });
 
+  it('plants HAMMER on the spot for his whole open window (Esteban: no slide)', () => {
+    const h = host();
+    const b = createBoss(h, 0);
+    b.damageable = true;
+    b.state = 'charge';
+    b.chargeLeft = 1;
+    b.dirX = 0;
+    b.dirY = 1;
+    updateBoss(b, h);
+    const x = b.x;
+    const y = b.y;
+    while (b.vulnT > 0) {
+      updateBoss(b, h);
+      if (b.vulnT > 0) {
+        expect(b.x).toBe(x);
+        expect(b.y).toBe(y);
+        expect(b.moving).toBe(false);
+      }
+    }
+    updateBoss(b, h);
+    expect(Math.hypot(b.x - x, b.y - y)).toBeGreaterThan(0); // walking again once guarded
+  });
+
   it('fires a slam shockwave ring when a HAMMER charge ends (playtest 2, design.md 16.15)', () => {
     const h = host();
     const b = createBoss(h, 0);
