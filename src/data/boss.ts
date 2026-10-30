@@ -68,8 +68,9 @@ export const VIPER = {
   contactDamage: 25,
   // design.md 16.16 (v3): the smoke break fires `sec` after he first takes damage — he drops a big smoke
   // cloud and TELEPORTS (hidden by the smoke) to one of the three corners farthest from the player, then
-  // holds `settleSec` before sniping again. No cornering: he always reappears far.
-  break: { sec: 2, settleSec: 0.4, marginPx: 40 },
+  // holds `settleSec` before sniping again. No cornering: he always reappears far. He's swallowed by the
+  // departure cloud for `vanishSec` first (Esteban, 2026-10-30): no fire, still takes hits.
+  break: { sec: 2, vanishSec: 0.3, settleSec: 0.4, marginPx: 40 },
   smoke: { radiusPx: 120, fuseSec: 1.8 },
   tracerLen: 70, // length of the fading tracer streak behind each sniper round (the reveal)
   // design.md 16.16 (v2): the aim line tracks, locks, then a single quick shot goes down it — dodgeable but
