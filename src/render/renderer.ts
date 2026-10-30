@@ -13,7 +13,7 @@ import type { Controls } from '../ui/input';
 import { BONE_WHITE, innerWhite, outlined, silhouette } from './bake';
 import { bossFlashAlpha } from './boss-flash';
 import { smokeAlpha, smokeScale } from './smoke';
-import { CRATER_LOOK, HAMMER_CHARGE_FRAME_MS, craterAlpha } from './hammer';
+import { CRATER_LOOK, HAMMER_CHARGE_FRAME_MS, craterAlpha, hammerPose } from './hammer';
 import { DamageNumbers } from './damage-numbers';
 
 const ART = [
@@ -548,10 +548,14 @@ export class Renderer {
     const tex = stagger ? this.flashTex[art] : pulse ? this.enrageTex[art] : this.tex[art];
     if (s.texture !== tex) s.texture = tex;
     s.position.set(Math.round(b.x), Math.round(b.y));
-    // HAMMER mirrors when he faces left instead of rotating past 90 degrees, which turned him upside down (Esteban).
-    const mirror = set.mirrorLeft && Math.cos(b.facing) < 0;
-    s.rotation = mirror ? b.facing - Math.PI : b.facing;
-    s.scale.x = mirror ? -1 : 1;
+    if (set.mirrorLeft) {
+      const m = hammerPose(b.facing, Math.atan2(b.dirY, b.dirX), bossVulnerable(b));
+      s.rotation = m.rotation;
+      s.scale.x = m.mirror ? -1 : 1;
+    } else {
+      s.rotation = b.facing;
+      s.scale.x = 1;
+    }
     s.anchor.set(set.pivot.x / set.size, set.pivot.y / set.size);
     const a = stagger || b.hitAt < 0 ? 0 : bossFlashAlpha(w.time - b.hitAt);
     if (a > 0) {
