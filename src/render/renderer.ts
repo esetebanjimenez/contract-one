@@ -13,7 +13,7 @@ import type { Controls } from '../ui/input';
 import { BONE_WHITE, innerWhite, outlined, silhouette } from './bake';
 import { bossFlashAlpha } from './boss-flash';
 import { smokeAlpha, smokeScale } from './smoke';
-import { CRATER_LOOK, HAMMER_CHARGE_FRAME_MS, craterAlpha, hammerPose } from './hammer';
+import { CRATER_LOOK, HAMMER_CHARGE_FRAME_MS, craterAlpha, hammerRotation } from './hammer';
 import { DamageNumbers } from './damage-numbers';
 
 const ART = [
@@ -212,13 +212,11 @@ interface BossArt {
   /** HAMMER only (design.md 16.15): his charge run, and the open pose (visor up) while bossVulnerable(). */
   charge: ArtId[];
   open: ArtId | null;
-  /** Flip the sprite instead of rotating it upside down when he faces left. */
-  mirrorLeft: boolean;
 }
 const BOSS_ART: Record<Target['style'], BossArt> = {
   charger: {
-    size: 96,
-    pivot: { x: 40, y: 45 },
+    size: 132,
+    pivot: { x: 30, y: 65 },
     idle: 'hammer_t1_idle_00',
     walk: ['hammer_t1_walkA_00', 'hammer_t1_idle_00', 'hammer_t1_walkB_00', 'hammer_t1_idle_00'],
     windup: 'hammer_t1_windup_00',
@@ -235,7 +233,6 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseThrow: {},
     charge: ['hammer_t1_chargeA_00', 'hammer_t1_chargeB_00'],
     open: 'hammer_t1_open_00',
-    mirrorLeft: true,
   },
   gunner: {
     size: 96,
@@ -253,7 +250,6 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseThrow: {},
     charge: [],
     open: null,
-    mirrorLeft: false,
   },
   warlord: {
     size: 128,
@@ -274,7 +270,6 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseThrow: { 2: 'warlordfinal_t1_phase2_throw_00', 3: 'warlordfinal_t1_phase3_throw_00' },
     charge: [],
     open: null,
-    mirrorLeft: false,
   },
 };
 const bossFrames = (a: BossArt): ArtId[] =>
@@ -548,14 +543,8 @@ export class Renderer {
     const tex = stagger ? this.flashTex[art] : pulse ? this.enrageTex[art] : this.tex[art];
     if (s.texture !== tex) s.texture = tex;
     s.position.set(Math.round(b.x), Math.round(b.y));
-    if (set.mirrorLeft) {
-      const m = hammerPose(b.facing, Math.atan2(b.dirY, b.dirX), bossVulnerable(b));
-      s.rotation = m.rotation;
-      s.scale.x = m.mirror ? -1 : 1;
-    } else {
-      s.rotation = b.facing;
-      s.scale.x = 1;
-    }
+    // Every boss is drawn from overhead facing right, so he simply rotates (HAMMER holds his charge facing while open).
+    s.rotation = set.open ? hammerRotation(b.facing, Math.atan2(b.dirY, b.dirX), bossVulnerable(b)) : b.facing;
     s.anchor.set(set.pivot.x / set.size, set.pivot.y / set.size);
     const a = stagger || b.hitAt < 0 ? 0 : bossFlashAlpha(w.time - b.hitAt);
     if (a > 0) {
@@ -565,7 +554,6 @@ export class Renderer {
       fl.alpha = a;
       fl.position.copyFrom(s.position);
       fl.rotation = s.rotation;
-      fl.scale.x = s.scale.x;
       fl.anchor.set(set.pivot.x / set.size, set.pivot.y / set.size);
     }
     const r = bossRadius(b);

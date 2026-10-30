@@ -15,24 +15,9 @@ export function craterAlpha(age: number): number {
 }
 
 /**
- * He tilts at most this far from horizontal (Artist: three-quarter view lit from the top-left). Facing down he can
- * lean 60 degrees; facing up only 15 (Producer's ruling), since past that his head sits below his body.
+ * HAMMER's sprite rotation (Esteban, PR #59: drawn from overhead, so he rotates freely like the mobs). Through the open
+ * window he keeps the facing of the charge he just finished (the sim already holds it through the windup and the charge).
  */
-export const HAMMER_MAX_TILT = Math.PI / 3;
-export const HAMMER_MAX_TILT_UP = Math.PI / 12;
-
-/**
- * HAMMER's sprite transform (Esteban, PR #59). Facing left he is mirrored around his (40,45) pivot instead of being
- * rotated upside down, and tilted no more than HAMMER_MAX_TILT down or HAMMER_MAX_TILT_UP up. Through the open window he keeps the facing of the
- * charge he just finished (the sim already holds it through the windup and the charge).
- */
-export function hammerPose(facing: number, chargeDir: number, open: boolean): { mirror: boolean; rotation: number } {
-  const f = open ? chargeDir : facing;
-  const mirror = Math.cos(f) < 0;
-  let t = f - (mirror ? Math.PI : 0);
-  t = Math.atan2(Math.sin(t), Math.cos(t)); // into (-pi, pi]
-  // Facing up is a negative tilt unmirrored and a positive one mirrored.
-  const lo = mirror ? -HAMMER_MAX_TILT : -HAMMER_MAX_TILT_UP;
-  const hi = mirror ? HAMMER_MAX_TILT_UP : HAMMER_MAX_TILT;
-  return { mirror, rotation: Math.max(lo, Math.min(hi, t)) };
+export function hammerRotation(facing: number, chargeDir: number, open: boolean): number {
+  return open ? chargeDir : facing;
 }

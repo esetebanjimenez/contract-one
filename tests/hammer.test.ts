@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CRATER_LOOK, HAMMER_MAX_TILT, HAMMER_MAX_TILT_UP, craterAlpha, hammerPose } from '../src/render/hammer';
+import { CRATER_LOOK, craterAlpha, hammerRotation } from '../src/render/hammer';
 
 describe("HAMMER's slam crack decal (design.md 16.15)", () => {
   it('stays full where he hit, then fades out', () => {
@@ -12,19 +12,11 @@ describe("HAMMER's slam crack decal (design.md 16.15)", () => {
 });
 
 describe("HAMMER's facing (PR #59)", () => {
-  it('mirrors instead of rotating upside down when he faces left', () => {
-    expect(hammerPose(Math.PI, 0, false)).toEqual({ mirror: true, rotation: 0 });
-    expect(hammerPose(0, 0, false)).toEqual({ mirror: false, rotation: 0 });
-    expect(hammerPose(Math.PI - 0.3, 0, false).rotation).toBeCloseTo(-0.3);
-  });
-  it('leans at most 60 degrees facing down and 15 facing up', () => {
-    expect(hammerPose(Math.PI / 2, 0, false).rotation).toBeCloseTo(HAMMER_MAX_TILT); // down, unmirrored
-    expect(hammerPose(Math.PI / 2 + 0.01, 0, false)).toEqual({ mirror: true, rotation: -HAMMER_MAX_TILT }); // down-left
-    expect(hammerPose(-Math.PI / 2, 0, false).rotation).toBeCloseTo(-HAMMER_MAX_TILT_UP); // up, unmirrored
-    expect(hammerPose(-Math.PI / 2 - 0.01, 0, false)).toEqual({ mirror: true, rotation: HAMMER_MAX_TILT_UP }); // up-left
+  it('rotates freely to face the player', () => {
+    expect(hammerRotation(Math.PI, 0, false)).toBe(Math.PI);
+    expect(hammerRotation(-Math.PI / 2, 0, false)).toBe(-Math.PI / 2);
   });
   it('keeps the charge facing through the open window', () => {
-    expect(hammerPose(0, Math.PI, true).mirror).toBe(true);
-    expect(hammerPose(Math.PI, 0, true).mirror).toBe(false);
+    expect(hammerRotation(0, Math.PI, true)).toBe(Math.PI);
   });
 });
