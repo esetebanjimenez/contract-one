@@ -1677,12 +1677,12 @@ describe('big arena & smoke break (design.md 16.16)', () => {
     expect(cameraAt(wh, wh.viewH).x).toBe(h0.x); // frozen, as before
   });
 
-  it('drops smoke and sprints to a new vantage when the player stays close', () => {
+  it('arms the break on taking damage, then smokes and sprints to a far corner', () => {
     const h = {
       time: 0,
       level: 10,
       stats: { damage: 10, fireRate: 5, projectiles: 1, crit: 0 },
-      player: { x: 20, y: 0 },
+      player: { x: 120, y: 0 },
       rng: createRng(42),
       enemyBullets: [] as BossHost['enemyBullets'],
       arena: { x0: -600, y0: -600, x1: 600, y1: 600 } as BossHost['arena'],
@@ -1699,15 +1699,16 @@ describe('big arena & smoke break (design.md 16.16)', () => {
     b.state = 'walk';
     b.damageable = true;
     b.arrivedAt = 0;
-    for (let i = 0; i < Math.round((VIPER.break.sec + 0.5) / DT) && b.breakLeft <= 0; i++) {
+    h.time += DT;
+    updateBoss(b, h); // settle hpSeen
+    b.hp -= 500; // a fresh hit arms the break
+    for (let i = 0; i < Math.round((VIPER.break.sec + 0.3) / DT) && b.breakLeft <= 0; i++) {
       h.time += DT;
       updateBoss(b, h);
-      if (b.breakLeft <= 0) {
-        h.player.x = b.x + 20; // keep the player on him until he breaks
-        h.player.y = b.y;
-      }
     }
     expect(h.smokes.length).toBeGreaterThan(0); // dropped a smoke cloud
-    expect(b.breakLeft).toBeGreaterThan(0); // sprinting to a new vantage, not cornered
+    expect(b.breakLeft).toBeGreaterThan(0); // sprinting away, not cornered
+    // The chosen vantage is a far corner, well away from the player.
+    expect(Math.hypot(b.breakX - h.player.x, b.breakY - h.player.y)).toBeGreaterThan(400);
   });
 });

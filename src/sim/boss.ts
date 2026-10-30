@@ -39,11 +39,12 @@ export interface Boss {
   burstCd: number;
   fanCd: number;
   mineCd: number;
-  // LT. VIPER's smoke break (design.md 16.16).
-  breakT: number; // composure filled while the player is close (-> a break at VIPER.break.sec)
+  // LT. VIPER's smoke break (design.md 16.16 v2): armed by taking damage, fires VIPER.break.sec later.
+  breakT: number; // seconds until the break fires (-1 = idle, not armed)
   breakLeft: number; // seconds left sprinting to a new vantage (0 = not breaking)
   breakX: number; // sprint target
   breakY: number;
+  hpSeen: number; // his HP at the last gunner tick, to detect a fresh hit that arms the break
   // THE WARLORD only: his next scheduled attack is a charge (else an aimed burst).
   nextCharge: boolean;
   // THE WARLORD only: ARTILLERY CALL (design.md 16.11). throwT counts the throw pose (-1 when not throwing).
@@ -178,10 +179,11 @@ export function createBoss(h: BossHost, target = 0, maxHp = BOSSES[target].hp): 
     burstCd: VIPER.burst.firstAfterSec,
     fanCd: VIPER.fan.firstAfterSec,
     mineCd: 0,
-    breakT: 0,
+    breakT: -1,
     breakLeft: 0,
     breakX: 0,
     breakY: 0,
+    hpSeen: 0,
     nextCharge: true,
     throwT: -1,
     artilleryCd: WARLORD.artillery.everySec[2],
@@ -372,12 +374,12 @@ function spawnArtillery(b: Boss, h: BossHost): void {
  * stays close his composure fills; at break.sec he drops smoke and sprints to a new vantage (no cornering).
  */
 function gunnerWalk(b: Boss, h: BossHost, dx: number, dy: number, d: number, speed: number): void {
-  b.facing = Math.atan2(dy, dx);
-  // Breaking: sprint to the new vantage (firing is gated off in gunnerAttacks).
+  // Breaking: sprint fast to the far corner, facing the way he runs (firing is gated off in gunnerAttacks).
   if (b.breakLeft > 0) {
     const tx = b.breakX - b.x;
     const ty = b.breakY - b.y;
     const td = Math.hypot(tx, ty) || 1;
+    b.facing = Math.atan2(ty, tx);
     const stepPx = VIPER.break.speed * DT;
     if (td <= stepPx) {
       b.x = b.breakX;
@@ -391,15 +393,17 @@ function gunnerWalk(b: Boss, h: BossHost, dx: number, dy: number, d: number, spe
     b.moving = true;
     return;
   }
-  // Composure fills while the player is close, decays as he backs off; a full bar triggers the break.
-  if (d <= VIPER.break.range) {
-    b.breakT += DT;
-    if (b.breakT >= VIPER.break.sec) {
+  b.facing = Math.atan2(dy, dx); // aim at the player while holding
+  // Break timer (design.md 16.16 v2): a fresh hit arms it; VIPER.break.sec later he smokes and bolts.
+  if (b.hp < b.hpSeen && b.breakT < 0) b.breakT = VIPER.break.sec;
+  b.hpSeen = b.hp;
+  if (b.breakT >= 0) {
+    b.breakT -= DT;
+    if (b.breakT <= 0) {
+      b.breakT = -1;
       startBreak(b, h);
       return;
     }
-  } else {
-    b.breakT = Math.max(0, b.breakT - DT);
   }
   // Otherwise drift to keep his snipe distance (never flee into a wall).
   const off = d - VIPER.holdPx;
@@ -411,37 +415,30 @@ function gunnerWalk(b: Boss, h: BossHost, dx: number, dy: number, d: number, spe
   }
 }
 
-/** Drop a smoke cloud and pick the vantage (farthest of a few candidates from the player) to sprint to. */
+/** Drop a smoke cloud and sprint to one of the three arena corners farthest from the player (design.md 16.16). */
 function startBreak(b: Boss, h: BossHost): void {
-  b.breakT = 0;
   b.breakLeft = VIPER.break.dur;
   h.smokes.push({ x: b.x, y: b.y, age: 0 });
   const p = h.player;
   const a = h.arena;
   const m = VIPER.break.marginPx;
-  let bestX = b.x;
-  let bestY = b.y;
-  let bestD = -1;
-  for (let i = 0; i < VIPER.break.tries; i++) {
-    let x: number;
-    let y: number;
-    if (a) {
-      x = a.x0 + m + h.rng() * Math.max(1, a.x1 - a.x0 - 2 * m);
-      y = a.y0 + m + h.rng() * Math.max(1, a.y1 - a.y0 - 2 * m);
-    } else {
-      const ang = h.rng() * Math.PI * 2;
-      x = p.x + Math.cos(ang) * 400;
-      y = p.y + Math.sin(ang) * 400;
-    }
-    const dd = (x - p.x) ** 2 + (y - p.y) ** 2;
-    if (dd > bestD) {
-      bestD = dd;
-      bestX = x;
-      bestY = y;
-    }
+  if (a) {
+    const corners = [
+      [a.x0 + m, a.y0 + m],
+      [a.x1 - m, a.y0 + m],
+      [a.x0 + m, a.y1 - m],
+      [a.x1 - m, a.y1 - m],
+    ];
+    // Farthest first; the nearest corner (last) is dropped, and one of the three farthest is picked at random.
+    corners.sort((c1, c2) => (c2[0] - p.x) ** 2 + (c2[1] - p.y) ** 2 - ((c1[0] - p.x) ** 2 + (c1[1] - p.y) ** 2));
+    const pick = corners[Math.min(2, Math.floor(h.rng() * 3))];
+    b.breakX = pick[0];
+    b.breakY = pick[1];
+  } else {
+    const ang = h.rng() * Math.PI * 2;
+    b.breakX = p.x + Math.cos(ang) * 600;
+    b.breakY = p.y + Math.sin(ang) * 600;
   }
-  b.breakX = bestX;
-  b.breakY = bestY;
 }
 
 /** The aimed burst in flight: the line tracks, locks, then the bullets go down it. */
