@@ -42,6 +42,7 @@ export interface Boss {
   // LT. VIPER's smoke break (design.md 16.16 v3): armed by taking damage, fires VIPER.break.sec later.
   breakT: number; // seconds until the break fires (-1 = idle, not armed)
   breakLeft: number; // seconds left settling after the teleport, holding fire (0 = not breaking)
+  vanishLeft: number; // seconds left inside the departure cloud before the teleport, holding fire (0 = not vanishing)
   hpSeen: number; // his HP at the last gunner tick, to detect a fresh hit that arms the break
   // THE WARLORD only: his next scheduled attack is a charge (else an aimed burst).
   nextCharge: boolean;
@@ -63,6 +64,8 @@ export interface Smoke {
   x: number;
   y: number;
   age: number;
+  /** Which puff the Artist drew (Esteban okayed both): 0 where he vanishes, 1 where he reappears. */
+  variant: 0 | 1;
 }
 
 /** THE WARLORD's ARTILLERY CALL circle (design.md 16.11): fills inward over fillSec, then explodes once. */
@@ -179,6 +182,7 @@ export function createBoss(h: BossHost, target = 0, maxHp = BOSSES[target].hp): 
     mineCd: 0,
     breakT: -1,
     breakLeft: 0,
+    vanishLeft: 0,
     hpSeen: 0,
     nextCharge: true,
     throwT: -1,
@@ -376,6 +380,16 @@ function gunnerWalk(b: Boss, h: BossHost, dx: number, dy: number, d: number, spe
     b.breakLeft -= DT;
     return;
   }
+  // Swallowed by the departure cloud: stand still, then jump. Hits in the smoke count but don't re-arm a break.
+  if (b.vanishLeft > 0) {
+    b.hpSeen = b.hp;
+    b.vanishLeft -= DT;
+    if (b.vanishLeft <= 0) {
+      b.vanishLeft = 0;
+      teleport(b, h);
+    }
+    return;
+  }
   // Break timer (design.md 16.16 v2): a fresh hit arms it; VIPER.break.sec later he smokes and bolts.
   if (b.hp < b.hpSeen && b.breakT < 0) b.breakT = VIPER.break.sec;
   b.hpSeen = b.hp;
@@ -397,12 +411,18 @@ function gunnerWalk(b: Boss, h: BossHost, dx: number, dy: number, d: number, spe
   }
 }
 
-/**
- * Drop a big smoke cloud and teleport (hidden by it) to one of the three arena corners farthest from the
- * player, with a smoke puff at the arrival too (design.md 16.16). A short settle before he snipes again.
- */
+/** Drop a big smoke cloud on him; he stays swallowed by it for VIPER.break.vanishSec, then teleports (design.md 16.16). */
 function startBreak(b: Boss, h: BossHost): void {
-  h.smokes.push({ x: b.x, y: b.y, age: 0 }); // smoke where he vanishes
+  h.smokes.push({ x: b.x, y: b.y, age: 0, variant: 0 }); // smoke where he vanishes
+  b.vanishLeft = VIPER.break.vanishSec;
+  if (b.vanishLeft <= 0) teleport(b, h);
+}
+
+/**
+ * Teleport (hidden by the smoke) to one of the three arena corners farthest from the player, with a smoke
+ * puff at the arrival too (design.md 16.16). A short settle before he snipes again.
+ */
+function teleport(b: Boss, h: BossHost): void {
   const p = h.player;
   const a = h.arena;
   const m = VIPER.break.marginPx;
@@ -423,7 +443,7 @@ function startBreak(b: Boss, h: BossHost): void {
     b.x = p.x + Math.cos(ang) * 600;
     b.y = p.y + Math.sin(ang) * 600;
   }
-  h.smokes.push({ x: b.x, y: b.y, age: 0 }); // smoke where he reappears
+  h.smokes.push({ x: b.x, y: b.y, age: 0, variant: 1 }); // smoke where he reappears
   b.breakLeft = VIPER.break.settleSec;
 }
 
@@ -468,7 +488,7 @@ function tickFan(b: Boss, h: BossHost, dx: number, dy: number): void {
 
 /** LT. VIPER's attacks by phase (design.md 16.11). */
 function gunnerAttacks(b: Boss, h: BossHost, dx: number, dy: number, d: number): void {
-  if (b.breakLeft > 0) return; // no aiming/firing/mines while sprinting to a new vantage (design.md 16.16)
+  if (b.breakLeft > 0 || b.vanishLeft > 0) return; // no aiming/firing/mines while breaking to a new vantage (design.md 16.16)
   if (b.aimT < 0 && b.burstLeft === 0) {
     b.burstCd -= DT;
     if (b.burstCd <= 0) b.aimT = 0;

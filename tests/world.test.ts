@@ -1705,11 +1705,27 @@ describe('big arena & smoke break (design.md 16.16)', () => {
     h.time += DT;
     updateBoss(b, h); // settle hpSeen
     b.hp -= 500; // a fresh hit arms the break
-    for (let i = 0; i < Math.round((VIPER.break.sec + 0.3) / DT) && b.breakLeft <= 0; i++) {
+    for (let i = 0; i < Math.round((VIPER.break.sec + 0.1) / DT) && b.vanishLeft <= 0; i++) {
       h.time += DT;
       updateBoss(b, h);
     }
-    expect(h.smokes.length).toBeGreaterThanOrEqual(2); // smoke where he vanished and where he reappears
+    // Swallowed by the departure cloud first: still where he was, holding fire, for vanishSec.
+    expect(b.vanishLeft).toBeGreaterThan(0);
+    expect(h.smokes.length).toBe(1);
+    const at = [b.x, b.y];
+    expect([h.smokes[0].x, h.smokes[0].y]).toEqual(at); // the cloud is on him
+    const shots = h.enemyBullets.length;
+    for (let i = 0; i < Math.round(VIPER.break.vanishSec / DT) - 2; i++) {
+      h.time += DT;
+      updateBoss(b, h);
+      expect([b.x, b.y]).toEqual(at);
+    }
+    expect(h.enemyBullets.length).toBe(shots);
+    for (let i = 0; i < 10 && b.breakLeft <= 0; i++) {
+      h.time += DT;
+      updateBoss(b, h);
+    }
+    expect(h.smokes.length).toBe(2); // smoke where he vanished and where he reappears
     expect(b.breakLeft).toBeGreaterThan(0); // settling after the teleport, not cornered
     // He teleported to a far corner, well away from the player.
     expect(Math.hypot(b.x - h.player.x, b.y - h.player.y)).toBeGreaterThan(400);
