@@ -212,6 +212,8 @@ interface BossArt {
   /** HAMMER only (design.md 16.15): his charge run, and the open pose (visor up) while bossVulnerable(). */
   charge: ArtId[];
   open: ArtId | null;
+  /** Flip the sprite instead of rotating it upside down when he faces left. */
+  mirrorLeft: boolean;
 }
 const BOSS_ART: Record<Target['style'], BossArt> = {
   charger: {
@@ -233,6 +235,7 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseThrow: {},
     charge: ['hammer_t1_chargeA_00', 'hammer_t1_chargeB_00'],
     open: 'hammer_t1_open_00',
+    mirrorLeft: true,
   },
   gunner: {
     size: 96,
@@ -250,6 +253,7 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseThrow: {},
     charge: [],
     open: null,
+    mirrorLeft: false,
   },
   warlord: {
     size: 128,
@@ -270,6 +274,7 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseThrow: { 2: 'warlordfinal_t1_phase2_throw_00', 3: 'warlordfinal_t1_phase3_throw_00' },
     charge: [],
     open: null,
+    mirrorLeft: false,
   },
 };
 const bossFrames = (a: BossArt): ArtId[] =>
@@ -543,7 +548,10 @@ export class Renderer {
     const tex = stagger ? this.flashTex[art] : pulse ? this.enrageTex[art] : this.tex[art];
     if (s.texture !== tex) s.texture = tex;
     s.position.set(Math.round(b.x), Math.round(b.y));
-    s.rotation = b.facing;
+    // HAMMER mirrors when he faces left instead of rotating past 90 degrees, which turned him upside down (Esteban).
+    const mirror = set.mirrorLeft && Math.cos(b.facing) < 0;
+    s.rotation = mirror ? b.facing - Math.PI : b.facing;
+    s.scale.x = mirror ? -1 : 1;
     s.anchor.set(set.pivot.x / set.size, set.pivot.y / set.size);
     const a = stagger || b.hitAt < 0 ? 0 : bossFlashAlpha(w.time - b.hitAt);
     if (a > 0) {
@@ -553,6 +561,7 @@ export class Renderer {
       fl.alpha = a;
       fl.position.copyFrom(s.position);
       fl.rotation = s.rotation;
+      fl.scale.x = s.scale.x;
       fl.anchor.set(set.pivot.x / set.size, set.pivot.y / set.size);
     }
     const r = bossRadius(b);
