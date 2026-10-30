@@ -12,6 +12,7 @@ import { cameraAt, type Enemy, type World } from '../sim/world';
 import type { Controls } from '../ui/input';
 import { BONE_WHITE, innerWhite, outlined, silhouette } from './bake';
 import { bossFlashAlpha } from './boss-flash';
+import { smokeAlpha, smokeScale } from './smoke';
 import { DamageNumbers } from './damage-numbers';
 
 const ART = [
@@ -118,6 +119,8 @@ const ART = [
   'fx/enemy_grenade_shadow_00',
   'warlordfinal_t1_phase2_throw_00',
   'warlordfinal_t1_phase3_throw_00',
+  'fx/smoke_puff_00',
+  'fx/smoke_puff_01',
 ] as const;
 type ArtId = (typeof ART)[number];
 
@@ -327,6 +330,7 @@ export class Renderer {
   private mines!: Pool;
   private artilleryRings!: Pool;
   private artilleryShadows!: Pool;
+  private smokes!: Pool;
   private artilleryGrenades!: Pool;
   private crates!: Pool;
   private crateShadows!: Pool;
@@ -382,6 +386,7 @@ export class Renderer {
     this.enemyBullets = new Pool(layers[3]);
     this.bullets = new Pool(layers[4]);
     this.blasts = new Pool(layers[5]);
+    this.smokes = new Pool(layers[5]); // above VIPER so the cloud hides his teleport, under the merc
     this.mines = new Pool(layers[0]); // on the sand, under everyone
     this.artilleryRings = new Pool(layers[0]); // ARTILLERY CALL circles sit on the sand, under the units
     this.artilleryShadows = new Pool(layers[0]);
@@ -546,18 +551,18 @@ export class Renderer {
    * ARTILLERY CALL circles (design.md 16.11): the ring sits on the sand, a red-orange fill closes inward
    * over 1.5 s, and a grenade arcs in from the Warlord over the last of it. The fill draws into this.fx.
    */
-  /** LT. VIPER's smoke clouds (design.md 16.16): a translucent grey puff that grows and fades. */
+  /** LT. VIPER's smoke puffs (design.md 16.16, Artist): near-opaque cover for his teleport, then a fade. */
   private drawSmokes(w: World): void {
+    let n = 0;
     for (const s of w.smokes) {
-      const k = Math.min(1, s.age / VIPER.smoke.fuseSec);
-      const r = VIPER.smoke.radiusPx * (0.6 + 0.4 * k);
-      const a = 0.55 * (1 - k);
+      const a = smokeAlpha(s.age, VIPER.smoke.fuseSec);
       if (a <= 0) continue;
-      const x = Math.round(s.x);
-      const y = Math.round(s.y);
-      this.fx.circle(x, y, r).fill({ color: 0x8b8f96, alpha: a });
-      this.fx.circle(x, y, r * 0.6).fill({ color: 0xaab0b6, alpha: a * 0.8 });
+      const sp = this.smokes.get(n++, this.tex[s.variant ? 'fx/smoke_puff_01' : 'fx/smoke_puff_00']);
+      sp.position.set(Math.round(s.x), Math.round(s.y));
+      sp.scale.set(smokeScale(s.age, VIPER.smoke.fuseSec));
+      sp.alpha = a;
     }
+    this.smokes.hideFrom(n);
   }
 
   /** LT. VIPER's tracer streaks (design.md 16.16): a bright line trailing each sniper round — the reveal. */

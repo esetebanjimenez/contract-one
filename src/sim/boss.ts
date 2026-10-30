@@ -63,6 +63,8 @@ export interface Smoke {
   x: number;
   y: number;
   age: number;
+  /** Which puff the Artist drew (Esteban okayed both): 0 where he vanishes, 1 where he reappears. */
+  variant: 0 | 1;
 }
 
 /** THE WARLORD's ARTILLERY CALL circle (design.md 16.11): fills inward over fillSec, then explodes once. */
@@ -402,7 +404,7 @@ function gunnerWalk(b: Boss, h: BossHost, dx: number, dy: number, d: number, spe
  * player, with a smoke puff at the arrival too (design.md 16.16). A short settle before he snipes again.
  */
 function startBreak(b: Boss, h: BossHost): void {
-  h.smokes.push({ x: b.x, y: b.y, age: 0 }); // smoke where he vanishes
+  h.smokes.push({ x: b.x, y: b.y, age: 0, variant: 0 }); // smoke where he vanishes
   const p = h.player;
   const a = h.arena;
   const m = VIPER.break.marginPx;
@@ -423,7 +425,7 @@ function startBreak(b: Boss, h: BossHost): void {
     b.x = p.x + Math.cos(ang) * 600;
     b.y = p.y + Math.sin(ang) * 600;
   }
-  h.smokes.push({ x: b.x, y: b.y, age: 0 }); // smoke where he reappears
+  h.smokes.push({ x: b.x, y: b.y, age: 0, variant: 1 }); // smoke where he reappears
   b.breakLeft = VIPER.break.settleSec;
 }
 
