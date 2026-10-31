@@ -501,30 +501,27 @@ function gunnerAttacks(b: Boss, h: BossHost, dx: number, dy: number, d: number):
   if (b.phase >= 2) tickFan(b, h, dx, dy);
   // design.md 16.15: the mine trail runs from phase 1, so the player can't walk a straight line at him.
   const M = VIPER.mines;
+  // Phase 3: a faster, longer mine trail instead of Runner adds (Esteban's run, 2026-10-31).
+  const every = b.phase === 3 ? VIPER.phase3Mines.everySec : M.everySec;
+  const count = b.phase === 3 ? VIPER.phase3Mines.count : M.count;
+  if (b.phase === 3) b.mineCd = Math.min(b.mineCd, every); // a long phase 1/2 wait doesn't carry into phase 3
   b.mineCd -= DT;
   if (b.mineCd <= 0) {
-    b.mineCd += M.everySec;
+    b.mineCd += every;
     // design.md 16.15: a row of mines laid midway between him and the player, across the approach lane, so
     // the player walks through the minefield to reach him.
     const fx = dx / d;
     const fy = dy / d;
     const midX = b.x + dx * 0.5;
     const midY = b.y + dy * 0.5;
-    for (let i = 0; i < M.count; i++) {
-      const o = (i - (M.count - 1) / 2) * M.spacingPx;
+    for (let i = 0; i < count; i++) {
+      const o = (i - (count - 1) / 2) * M.spacingPx;
       h.mines.push({
         x: midX - fy * o,
         y: midY + fx * o,
         age: 0,
         damage: M.damage * BOSSES[b.target].damageScale,
       });
-    }
-  }
-  if (b.phase === 3) {
-    b.addsCd -= DT;
-    if (b.addsCd <= 0) {
-      b.addsCd += VIPER.adds.everySec;
-      h.spawnAddsRing(VIPER.adds.count, 'runner');
     }
   }
 }

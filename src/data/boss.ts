@@ -87,14 +87,15 @@ export const VIPER = {
   tracerLen: 70, // length of the fading tracer streak behind each sniper round (the reveal)
   // design.md 16.16 (v2): the aim line tracks, locks, then a single quick shot goes down it — dodgeable but
   // harder than the old slow 3-round burst.
-  burst: { firstAfterSec: 1, everySec: 2, trackSec: 0.6, lockSec: 0.2, bullets: 1, shotGapSec: 0.08, speed: 340, damage: 14, range: 900 },
+  burst: { firstAfterSec: 1, everySec: 2, trackSec: 0.6, lockSec: 0.2, bullets: 1, shotGapSec: 0.08, speed: 480, damage: 14, range: 900 },
   // Phase 2+: a fan toward the player, alternating with the burst (never fired while a burst is aiming or firing).
-  fan: { everySec: 4, firstAfterSec: 2, bullets: 7, spreadDeg: 60, speed: 100, damage: 12, range: 700 },
+  fan: { everySec: 4, firstAfterSec: 2, bullets: 7, spreadDeg: 60, speed: 140, damage: 12, range: 700 },
   // design.md 16.15 (playtest 2): a mine trail laid midway between him and the player (not just behind him),
   // from phase 1, so the player walks through the minefield to reach him. Mines sit wider apart than the
   // trigger, so stepping on one sets off only that one. Phase 3 also brings Runners from the edges, no Scrap.
   mines: { everySec: 6, count: 3, spacingPx: 36, armSec: 1, triggerPx: 30, radiusPx: 30, damage: 25, fuseSec: 10 },
-  adds: { count: 8, everySec: 8 },
+  // Esteban's run (2026-10-31): phase 3 Runners were scattered and unchallenging, so instead his mine trail speeds up.
+  phase3Mines: { everySec: 2, count: 4 },
 };
 
 /** On a lieutenant kill (design.md 16.11). The slow-mo is real seconds (UI); the rest is run time. */
