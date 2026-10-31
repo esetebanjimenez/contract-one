@@ -315,6 +315,11 @@ const bossFrames = (a: BossArt): ArtId[] =>
   ].filter((x): x is ArtId => x !== null);
 const WARLORD_FRAME_MS = 180;
 const TELEGRAPH_COLOR = 0xff4a1c;
+/** VIPER's sniper tracer (Artist, 2026-10-31): red-orange edge, hot-white core, fading over the last 40%. */
+const TRACER_EDGE = 0xe82a10;
+const TRACER_CORE = 0xfff6dc;
+const TRACER_FADE = 0.4;
+const TRACER_SEGMENTS = 10;
 /** Enrage tell: red-orange outline pulsing every 0.5 s (Artist, M3). */
 const ENRAGE_OUTLINE = '#FF4A1C';
 const ENRAGE_PULSE_SEC = 0.5;
@@ -660,11 +665,21 @@ export class Renderer {
       // Sim rounds leave his body centre; the streak (and the round, below) starts at the rifle's muzzle.
       const len = this.muzzle ? streakFromMuzzle(b.x, b.y, b.vx, b.vy, this.muzzle, VIPER.tracerLen) : VIPER.tracerLen;
       if (len <= 0) continue;
-      const x0 = Math.round(b.x);
-      const y0 = Math.round(b.y);
-      const x1 = Math.round(b.x - (b.vx / sp) * len);
-      const y1 = Math.round(b.y - (b.vy / sp) * len);
-      this.fx.moveTo(x0, y0).lineTo(x1, y1).stroke({ color: 0xffd23c, width: 2, alpha: 0.85 });
+      const ux = b.vx / sp;
+      const uy = b.vy / sp;
+      // Artist (2026-10-31): a red-orange edge with a hot-white core, solid near the round and fading over the
+      // tail, so it reads on sand at 480 px/s. Drawn as short segments with stepped alpha.
+      for (let i = 0; i < TRACER_SEGMENTS; i++) {
+        const t0 = i / TRACER_SEGMENTS;
+        const t1 = (i + 1) / TRACER_SEGMENTS;
+        const fade = t0 < 1 - TRACER_FADE ? 1 : 1 - (t0 - (1 - TRACER_FADE)) / TRACER_FADE;
+        const x0 = Math.round(b.x - ux * len * t0);
+        const y0 = Math.round(b.y - uy * len * t0);
+        const x1 = Math.round(b.x - ux * len * t1);
+        const y1 = Math.round(b.y - uy * len * t1);
+        this.fx.moveTo(x0, y0).lineTo(x1, y1).stroke({ color: TRACER_EDGE, width: 3, alpha: fade });
+        this.fx.moveTo(x0, y0).lineTo(x1, y1).stroke({ color: TRACER_CORE, width: 1, alpha: fade });
+      }
     }
   }
 
