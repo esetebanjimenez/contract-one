@@ -58,6 +58,14 @@ const ART = [
   'hammer_t1_phase3_idle_00',
   'hammer_t1_phase3_walkA_00',
   'hammer_t1_phase3_walkB_00',
+  'hammer_t1_phase2_windup_00',
+  'hammer_t1_phase2_chargeA_00',
+  'hammer_t1_phase2_chargeB_00',
+  'hammer_t1_phase2_open_00',
+  'hammer_t1_phase3_windup_00',
+  'hammer_t1_phase3_chargeA_00',
+  'hammer_t1_phase3_chargeB_00',
+  'hammer_t1_phase3_open_00',
   'viper_t1_idle_00',
   'viper_t1_walkA_00',
   'viper_t1_walkB_00',
@@ -213,6 +221,9 @@ interface BossArt {
   /** HAMMER only (design.md 16.15): his charge run, and the open pose (visor up) while bossVulnerable(). */
   charge: ArtId[];
   open: ArtId | null;
+  /** HAMMER's charge run and open pose for the phase 2 and 3 looks; a phase without one falls back to phase 1. */
+  phaseCharge: Partial<Record<2 | 3, ArtId[]>>;
+  phaseOpen: Partial<Record<2 | 3, ArtId>>;
 }
 const BOSS_ART: Record<Target['style'], BossArt> = {
   charger: {
@@ -229,11 +240,16 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
       2: ['hammer_t1_phase2_walkA_00', 'hammer_t1_phase2_idle_00', 'hammer_t1_phase2_walkB_00', 'hammer_t1_phase2_idle_00'],
       3: ['hammer_t1_phase3_walkA_00', 'hammer_t1_phase3_idle_00', 'hammer_t1_phase3_walkB_00', 'hammer_t1_phase3_idle_00'],
     },
-    phaseWindup: {},
+    phaseWindup: { 2: 'hammer_t1_phase2_windup_00', 3: 'hammer_t1_phase3_windup_00' },
     phaseAim: {},
     phaseThrow: {},
     charge: ['hammer_t1_chargeA_00', 'hammer_t1_chargeB_00'],
     open: 'hammer_t1_open_00',
+    phaseCharge: {
+      2: ['hammer_t1_phase2_chargeA_00', 'hammer_t1_phase2_chargeB_00'],
+      3: ['hammer_t1_phase3_chargeA_00', 'hammer_t1_phase3_chargeB_00'],
+    },
+    phaseOpen: { 2: 'hammer_t1_phase2_open_00', 3: 'hammer_t1_phase3_open_00' },
   },
   gunner: {
     size: 148,
@@ -251,6 +267,8 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseThrow: {},
     charge: [],
     open: null,
+    phaseCharge: {},
+    phaseOpen: {},
   },
   warlord: {
     size: 144,
@@ -271,6 +289,8 @@ const BOSS_ART: Record<Target['style'], BossArt> = {
     phaseThrow: { 2: 'warlordfinal_t1_phase2_throw_00', 3: 'warlordfinal_t1_phase3_throw_00' },
     charge: [],
     open: null,
+    phaseCharge: {},
+    phaseOpen: {},
   },
 };
 const bossFrames = (a: BossArt): ArtId[] =>
@@ -289,6 +309,9 @@ const bossFrames = (a: BossArt): ArtId[] =>
     ...Object.values(a.phaseThrow),
     ...a.charge,
     a.open,
+    ...(a.phaseCharge[2] ?? []),
+    ...(a.phaseCharge[3] ?? []),
+    ...Object.values(a.phaseOpen),
   ].filter((x): x is ArtId => x !== null);
 const WARLORD_FRAME_MS = 180;
 const TELEGRAPH_COLOR = 0xff4a1c;
@@ -528,10 +551,11 @@ export class Renderer {
     if (b.throwT >= 0 && ph && set.phaseThrow[ph])
       art = set.phaseThrow[ph]!; // ARTILLERY CALL throw pose
     else if (b.state === 'telegraph' && set.windup) art = (ph && set.phaseWindup[ph]) || set.windup;
-    else if (b.state === 'charge' && set.charge.length)
-      art = set.charge[Math.floor((w.time * 1000) / HAMMER_CHARGE_FRAME_MS) % set.charge.length];
-    else if (set.open && bossVulnerable(b) && b.state !== 'stagger')
-      art = set.open; // visor up: hit him now
+    else if (b.state === 'charge' && set.charge.length) {
+      const run = (ph && set.phaseCharge[ph]) || set.charge;
+      art = run[Math.floor((w.time * 1000) / HAMMER_CHARGE_FRAME_MS) % run.length];
+    } else if (set.open && bossVulnerable(b) && b.state !== 'stagger')
+      art = (ph && set.phaseOpen[ph]) || set.open; // visor up: hit him now
     else if (b.burstLeft > 0 && set.fire) art = (ph && set.phaseAim[ph] && set.fire === set.aim ? set.phaseAim[ph] : null) || set.fire;
     else if (b.aimT >= 0 && set.aim) art = (ph && set.phaseAim[ph]) || set.aim;
     else if (b.moving && b.state !== 'stagger') {
