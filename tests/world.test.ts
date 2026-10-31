@@ -798,15 +798,28 @@ describe('LT. VIPER (design.md 16.11)', () => {
     tick(b, h, 0.3);
     expect(h.enemyBullets.length).toBe(0);
   });
-  it('lays 3 mines midway to the player in phase 3 that arm after 1 s and blow up on him', () => {
+  it('keeps a phase 1 mine trail of 3 every 6 s, and speeds up to 4 every 2 s on reaching phase 3', () => {
+    const h = host();
+    const b = viper(h);
+    b.burstCd = 99;
+    b.fanCd = 99;
+    b.mineCd = 6;
+    b.phase = 3;
+    tick(b, h, VIPER.phase3Mines.everySec + DT);
+    expect(h.mines.length).toBe(VIPER.phase3Mines.count);
+    tick(b, h, VIPER.phase3Mines.everySec);
+    expect(h.mines.length).toBe(2 * VIPER.phase3Mines.count);
+    expect(h.adds).toEqual([]);
+  });
+  it('lays 4 mines midway to the player in phase 3 every 2 s, no Runners, that arm after 1 s and blow up on him', () => {
     const h = host();
     const b = viper(h);
     b.phase = 3;
     b.burstCd = 99;
     b.fanCd = 99;
     tick(b, h, DT);
-    expect(h.mines.length).toBe(VIPER.mines.count);
-    expect(h.adds).toEqual([[VIPER.adds.count, 'runner']]);
+    expect(h.mines.length).toBe(VIPER.phase3Mines.count);
+    expect(h.adds).toEqual([]);
     for (const m of h.mines) expect(Math.hypot(m.x, m.y)).toBeLessThan(Math.hypot(b.x, b.y)); // midway: nearer the player than him
     const m = h.mines[1];
     h.player.x = m.x;
@@ -817,7 +830,7 @@ describe('LT. VIPER (design.md 16.11)', () => {
     expect(h.hits.length).toBe(0); // not armed yet
     tick(b, h, 0.6);
     expect(h.hits).toContain(VIPER.mines.damage * BOSSES[1].damageScale);
-    expect(h.mines.length).toBe(VIPER.mines.count - 1);
+    expect(h.mines.length).toBe(VIPER.phase3Mines.count - 1);
   });
   it('mines left alone go off after 10 s', () => {
     const h = host();
