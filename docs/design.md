@@ -700,7 +700,19 @@ So a high-DPS build still has to *play the mechanic* (it can't facetank and shre
 - **VIPER — actually evasive.** He was stopping at hold distance *inside* gun range and soaking bullets. Now: hold distance wider than the arena so he **always flees** until a wall corners him; a **much smaller hitbox** (radius 26→16); and his **mines laid midway** between him and the player (not behind him), so you cross the minefield to reach him.
 - **THE WARLORD — ramped HP** (20k→45k) so a strong build can't delete him before ARTILLERY CALL (phase 2) even fires.
 
-Still playtest-tuned, and the fixed HP tuned to a strong build raises the floor for weak ones — the skill mechanics (dodge, chase, survive) are meant to carry the fight length, with HP and the 3:00 enrage as backstops. Shield visual for Hammer's armor window (shield up = guarded, down = exposed) is still an art task; `bossVulnerable()` is exposed for it.
+Still playtest-tuned, and the fixed HP tuned to a strong build raises the floor for weak ones — the skill mechanics (dodge, chase, survive) are meant to carry the fight length, with HP and the 3:00 enrage as backstops. ~~Shield visual for Hammer's armor window~~ — superseded by the HAMMER redesign below (no shield).
+
+**HAMMER redesign and boss art direction (Esteban, 2026-10-30 – 10-31).** Documents what shipped in #59, #62–#64 and #66.
+
+- **All bosses are drawn straight top-down**, like the standard mobs, with the weapon pointing right at rotation 0, and **rotate freely** (no mirror, no tilt cap). This keeps the gunners' barrels on the aim line. Each boss has a pivot and, for gunners, per-frame muzzle pixels in `docs/art/*_meta.json`. **Hit radius comes from the boss table, not the canvas**: the larger art doesn't change the fight.
+- **Bullets leave the drawn barrel.** VIPER's and the Warlord's rounds spawn at the muzzle offset rotated with facing (VIPER 93 px ahead, the Warlord 106 px), so the bullet you see is the bullet that hits. A player hugging closer than the barrel isn't hit by that round, which is the fair way for it to fail.
+- **LT. HAMMER is a bomb-suit breacher with a sledge** (the MG and shield are gone; the Heavies and the Warlord carry shields). His guard tell is a silhouette, readable from overhead:
+  - **Guarded** (idle, walk, windup, charge): visor down, sledge held across his body; in the charge it's **cocked back over his shoulder**, head trailing, ready to come down.
+  - **Open** (the `guard.recoverSec` 1.5 s window): the sledge head **planted ahead** in the ground, both hands on the haft, **visor up** with his face showing. Sledge behind = slam coming; sledge in the ground = hit him.
+  - **He stays planted for the whole open window** (no walking while `vulnT > 0`; his charge timer keeps counting). First lever if he feels soft: `guard.recoverSec` 1.5 → 1.2 s.
+  - The slam leaves a **ground crack decal** (`fx/hammer_slam_crack_00`) where the charge stops, under the slam ring; it lasts 2.5 s, then fades over 1 s.
+  - **Per-phase art for every pose**: phases 2 and 3 have their own idle, walk, windup, charge and open frames (scuffed suit and cracked helmet, then torn suit, cracked visor and a missing forearm guard), so he never snaps back to clean mid-attack. All phases are tan with a dark ink edge to read on sand.
+- Playtest 3 (Esteban, 2026-10-31): **HAMMER is a good challenge**; keep his numbers.
 
 ### 16.16 The arena as each boss's signature; VIPER in a big arena (Esteban, 2026-10-29)
 
@@ -719,3 +731,9 @@ So the loop is: **tracer → hunt → close → a few shots → smoke-break → 
 - Camera follow + clamp in `cameraAt`; scaled rect in `lockArena`; arena-edge walls in the renderer's `drawBand`. All reduce to today's behaviour at scale 1.
 - New VIPER state (`breakT`/`breakLeft`/`breakX`/`breakY`), a `smokes` effect (visual only), and a `tracer` flag on his bullets. Rendered as a fading cloud and a streak.
 - Tuning levers: `arenaScale`, `holdPx`, `break.*` (range/sec/speed/dur), `smoke.*`, `tracerLen`. Start **visible-but-fast** on the break; add brief concealment in the smoke if playtests show you can still chase him down.
+
+**VIPER tuning, playtest 3 (Esteban, 2026-10-31, shipped in #67).**
+- **Faster rounds:** the sniper round goes 340 → **480 px/s** (lands in ~0.6 s at `holdPx` 300); the 0.2 s aim lock stays as the fair tell. The phase 2 fan goes 100 → **140 px/s**.
+- **Phase 3: mines instead of Runners.** The Runner adds were too scattered to threaten, so they're gone; instead he lays **4 mines every 2 s** (`phase3Mines`, vs. 3 every 6 s in phases 1–2), starting as soon as phase 3 begins. Mines still last 10 s, so the ground fills up and reaching him means picking a path.
+- **Tracer recolour:** a 3 px red-orange (`0xe82a10`) streak around a 1 px warm-white core, 70 px, fading over its last 40%. It reads on sand at the higher speed and stays in the reserved danger colour.
+- The sim bots die to HAMMER at ~5:20, so the sim can't measure VIPER or the Warlord; Esteban's runs are the test.
